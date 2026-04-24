@@ -8,6 +8,7 @@ from django.db.models import Sum
 from django.shortcuts import render, get_object_or_404
 from django.utils import timezone
 from django.db.models import Sum, Q
+from django.db import transaction
 from rest_framework.authtoken.models import Token
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -1100,6 +1101,7 @@ def get_order_items(request):
                 if item.equipment_location:
                     items_list.append({
                         'id': item.id,
+                        'order_id': order.id,  # Добавляем ID заказа
                         'location_id': item.equipment_location.id_locations.id,
                         'location_name': item.equipment_location.id_locations.name,
                         'equipment_id': item.equipment_location.id_equipments.id,
@@ -1109,11 +1111,12 @@ def get_order_items(request):
                         'is_common': False,
                         'date_start': order.date_time_start.isoformat(),
                         'date_end': order.date_time_end.isoformat() if order.date_time_end else None,
-                        'order_comment': order.comment or ''  # Добавляем комментарий к заказу
+                        'order_comment': order.comment or ''
                     })
                 elif item.common_equipment_location:
                     items_list.append({
                         'id': item.id,
+                        'order_id': order.id,  # Добавляем ID заказа
                         'location_id': order.id_location.id if order.id_location else None,
                         'location_name': order.id_location.name if order.id_location else 'Не указана',
                         'equipment_id': item.common_equipment_location.id_equipments.id,
@@ -1123,7 +1126,7 @@ def get_order_items(request):
                         'is_common': True,
                         'date_start': order.date_time_start.isoformat(),
                         'date_end': order.date_time_end.isoformat() if order.date_time_end else None,
-                        'order_comment': order.comment or ''  # Добавляем комментарий к заказу
+                        'order_comment': order.comment or ''
                     })
         
         return JsonResponse({
@@ -1623,3 +1626,215 @@ def get_application_detail(request, app_id):
             'success': False,
             'error': str(e)
         }, status=400)
+        
+
+# ========== РЕДАКТИРОВАНИЕ ЗАКАЗОВ ==========
+
+@login_required
+def get_order_details(request, order_id):
+    """
+    Получение деталей заказа для редактирования
+    """
+    try:
+        order = Order.objects.get(id=order_id, id_user=request.user)
+        
+        items = OrderItem.objects.filter(order=order)
+        equipment_list = []
+        
+        for item in items:
+            if item.equipment_location:
+                equipment_list.append({
+                    'equipment_id': item.equipment_location.id_equipments.id,
+                    'equipment_name': item.equipment_location.id_equipments.name,
+                    'type_name': item.equipment_location.id_types_equipments.name,
+                    'quantity': item.quantity,
+                    'is_common': False,
+                    'max_quantity': item.equipment_location.quantity
+                })
+            elif item.common_equipment_location:
+                equipment_list.append({
+                    'equipment_id': item.common_equipment_location.id_equipments.id,
+                    'equipment_name': item.common_equipment_location.id_equipments.name,
+                    'type_name': item.common_equipment_location.id_types_equipments.name,
+                    'quantity': item.quantity,
+                    'is_common': True,
+                    'max_quantity': item.common_equipment_location.quantity
+                })
+        
+        return JsonResponse({
+            'success': True,
+            'order': {
+                'id': order.id,
+                'location_id': order.id_location.id if order.id_location else None,
+                'location_name': order.id_location.name if order.id_location else 'Общее оборудование',
+                'date_time_start': order.date_time_start.isoformat() if order.date_time_start else None,
+                'date_time_end': order.date_time_end.isoformat() if order.date_time_end else None,
+                'comment': order.comment or '',
+                'equipment': equipment_list
+            }
+        })
+    except Order.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Заказ не найден'}, status=404)
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+@login_required
+@csrf_exempt
+@require_http_methods(["POST"])
+def update_order(request, order_id):
+    """
+    Обновление заказа (оборудование, даты, комментарий)
+    """
+    try:
+        data = json.loads(request.body)
+        order = Order.objects.get(id=order_id, id_user=request.user)
+        
+        # Проверяем статус заявки
+        if order.id_application and order.id_application.status in ['completed', 'cancelled']:
+            return JsonResponse({
+                'success': False,
+                'error': 'Нельзя редактировать завершенную или отмененную заявку'
+            }, status=400)
+        
+        with transaction.atomic():
+            # Обновляем даты
+            if 'date_time_start' in data:
+                order.date_time_start = data['date_time_start']
+            if 'date_time_end' in data:
+                order.date_time_end = data['date_time_end']
+            
+            # Обновляем комментарий
+            if 'comment' in data:
+                order.comment = data['comment']
+            
+            order.save()
+            
+            # Обновляем оборудование
+            if 'equipment' in data:
+                OrderItem.objects.filter(order=order).delete()
+                
+                for eq_data in data['equipment']:
+                    if eq_data.get('quantity', 0) > 0:
+                        if eq_data.get('is_common', False):
+                            common_equipment = CommonEquipmentLocation.objects.filter(
+                                id_equipments_id=eq_data['equipment_id']
+                            ).first()
+                            if common_equipment:
+                                OrderItem.objects.create(
+                                    order=order,
+                                    common_equipment_location=common_equipment,
+                                    quantity=min(eq_data['quantity'], common_equipment.quantity)
+                                )
+                        else:
+                            if order.id_location:
+                                equipment_location = EquipmentLocation.objects.filter(
+                                    id_locations_id=order.id_location.id,
+                                    id_equipments_id=eq_data['equipment_id']
+                                ).first()
+                                if equipment_location:
+                                    OrderItem.objects.create(
+                                        order=order,
+                                        equipment_location=equipment_location,
+                                        quantity=min(eq_data['quantity'], equipment_location.quantity)
+                                    )
+            
+            # Логируем изменение
+            HistoryService.add_entry(
+                request.user,
+                f"Редактирован заказ #{order.id} для локации {order.id_location.name if order.id_location else 'Общее оборудование'}"
+            )
+        
+        return JsonResponse({'success': True, 'message': 'Заказ успешно обновлен'})
+    
+    except Order.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Заказ не найден'}, status=404)
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+@login_required
+@csrf_exempt
+@require_http_methods(["DELETE"])
+def cancel_order(request, order_id):
+    """Отмена заказа"""
+    try:
+        order = Order.objects.get(id=order_id, id_user=request.user)
+        
+        if order.id_application:
+            if order.id_application.status == 'completed':
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Нельзя отменить завершенную заявку'
+                }, status=400)
+            
+            order.id_application.status = 'cancelled'
+            order.id_application.save()
+            
+            HistoryService.add_entry(
+                request.user,
+                f"Отменена заявка #{order.id_application.id} - {order.id_application.name[:50]}"
+            )
+        
+        return JsonResponse({'success': True, 'message': 'Заявка отменена'})
+    
+    except Order.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Заказ не найден'}, status=404)
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+@login_required
+@csrf_exempt
+@require_http_methods(["POST"])
+def duplicate_order(request, order_id):
+    """Дублирование заказа"""
+    try:
+        original_order = Order.objects.get(id=order_id, id_user=request.user)
+        
+        with transaction.atomic():
+            new_application = Application.objects.create(
+                name=f"Копия: {original_order.id_application.name if original_order.id_application else 'Заказ'}",
+                id_user=request.user,
+                comment=f"Создано из заказа #{original_order.id}",
+                status='new'
+            )
+            
+            new_order = Order.objects.create(
+                id_user=request.user,
+                id_application=new_application,
+                id_location=original_order.id_location,
+                date_time_start=original_order.date_time_start,
+                date_time_end=original_order.date_time_end,
+                comment=original_order.comment
+            )
+            
+            for item in OrderItem.objects.filter(order=original_order):
+                if item.equipment_location:
+                    OrderItem.objects.create(
+                        order=new_order,
+                        equipment_location=item.equipment_location,
+                        quantity=item.quantity
+                    )
+                elif item.common_equipment_location:
+                    OrderItem.objects.create(
+                        order=new_order,
+                        common_equipment_location=item.common_equipment_location,
+                        quantity=item.quantity
+                    )
+            
+            HistoryService.add_entry(
+                request.user,
+                f"Создана копия заказа #{original_order.id} -> #{new_order.id}"
+            )
+        
+        return JsonResponse({
+            'success': True,
+            'message': 'Копия заказа создана',
+            'new_order_id': new_order.id
+        })
+    
+    except Order.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Заказ не найден'}, status=404)
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)

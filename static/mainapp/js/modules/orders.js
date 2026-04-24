@@ -4,6 +4,11 @@ import { state } from './state.js';
 import { escapeHtml, formatDate, showNotification } from './utils.js';
 import { api } from './api.js';
 
+// Глобальные переменные для редактирования
+let currentEditingOrderId = null;
+let currentEditingOrderData = null;
+let currentAvailableEquipment = [];
+
 // Загрузка заявок
 export const loadOrders = async () => {
     $('#ordersContainer').html('<div class="loading">Загрузка...</div>');
@@ -19,7 +24,7 @@ export const loadOrders = async () => {
     }
 };
 
-// Отображение заявок
+// Отображение заявок с кнопками редактирования
 export const displayOrders = (orders) => {
     if (!orders?.length) {
         $('#ordersContainer').html('<div class="no-orders">Нет заявок</div>');
@@ -29,9 +34,11 @@ export const displayOrders = (orders) => {
     let html = '<div class="orders-container">';
     
     orders.forEach(order => {
-        // Используем статус из БД
-        const statusClass = order.status === 'completed' ? 'completed' : 'active';
-        const statusText = order.status_display || order.status;
+        const statusClass = order.status === 'completed' ? 'completed' : 
+                           (order.status === 'cancelled' ? 'cancelled' : 'active');
+        const statusText = order.status_display || 
+                          (order.status === 'cancelled' ? 'Отменена' : 
+                           (order.status === 'completed' ? 'Завершена' : 'Активна'));
         const startDate = order.date_time_start ? new Date(order.date_time_start).toLocaleString('ru-RU') : 'Не указана';
         const endDate = order.date_time_end ? new Date(order.date_time_end).toLocaleString('ru-RU') : 'Не завершен';
         const isChecked = state.selectedOrders.has(order.id) ? 'checked' : '';
@@ -43,7 +50,8 @@ export const displayOrders = (orders) => {
                     <div class="order-header-content">
                         <input type="checkbox" class="order-checkbox" data-id="${order.id}" ${isChecked} onclick="event.stopPropagation()">
                         <div class="order-info" onclick="toggleOrderBody(${order.id})">
-                            <h3>Заявка №${order.id} - ${escapeHtml(order.application_name || 'Без названия')}</h3>
+                            <h3>📋 Заявка №${order.id} - ${escapeHtml(order.application_name || 'Без названия')}</h3>
+                            <div class="order-date">📅 ${startDate} - ${endDate}</div>
                             <span class="order-status ${statusClass}">${statusText}</span>
                         </div>
                     </div>
@@ -60,7 +68,7 @@ export const displayOrders = (orders) => {
     
     $('#ordersContainer').html(html + '</div>');
     
-    // Добавляем обработчики для чекбоксов
+    // Обработчики чекбоксов
     $('.order-checkbox').on('change', function() {
         const applicationId = parseInt($(this).data('id'));
         if ($(this).is(':checked')) {
@@ -79,6 +87,410 @@ export const displayOrders = (orders) => {
     });
     
     updateSelectionInfo();
+};
+
+// Функции для работы с заказами (добавить в orders.js)
+const openEditOrderModal = async (orderId) => {
+    console.log('Открытие редактирования заказа:', orderId);
+    currentEditingOrderId = orderId;
+    
+    showNotification('Загрузка данных заказа...', 'info');
+    
+    try {
+        const response = await api.getOrderDetails(orderId);
+        
+        if (response.success) {
+            currentEditingOrderData = response.order;
+            displayEditOrderModal(response.order);
+        } else {
+            showNotification(response.error || 'Ошибка загрузки заказа', 'error');
+        }
+    } catch (error) {
+        console.error('Ошибка:', error);
+        showNotification('Ошибка загрузки данных заказа', 'error');
+    }
+};
+
+// Отображение модального окна редактирования (обновленная версия)
+const displayEditOrderModal = (order) => {
+    const startDate = order.date_time_start ? order.date_time_start.slice(0, 16) : '';
+    const endDate = order.date_time_end ? order.date_time_end.slice(0, 16) : '';
+    
+    let equipmentHtml = '<div class="edit-equipment-list">';
+    
+    if (order.equipment && order.equipment.length > 0) {
+        order.equipment.forEach((eq, index) => {
+            const commonBadge = eq.is_common ? '<span class="common-badge-small">🌍 Общее</span>' : '';
+            
+            equipmentHtml += `
+                <div class="edit-equipment-item" data-eq-id="${eq.equipment_id}" data-eq-index="${index}" data-is-common="${eq.is_common}">
+                    <div class="edit-equipment-info">
+                        <div class="edit-equipment-name">
+                            ${escapeHtml(eq.equipment_name)}
+                            ${commonBadge}
+                        </div>
+                        <div class="edit-equipment-type">${escapeHtml(eq.type_name)}</div>
+                        <div class="edit-equipment-available">
+                            📦 Всего: ${eq.max_quantity || eq.quantity} шт.
+                        </div>
+                    </div>
+                    <div class="edit-equipment-control">
+                        <input type="number" 
+                               min="0" 
+                               max="${eq.max_quantity || eq.quantity}" 
+                               value="${eq.quantity}" 
+                               class="edit-qty-input" 
+                               data-eq-id="${eq.equipment_id}"
+                               data-is-common="${eq.is_common}"
+                               data-max="${eq.max_quantity || eq.quantity}">
+                        <button class="remove-equipment-btn" data-eq-id="${eq.equipment_id}" title="Удалить">🗑️</button>
+                    </div>
+                </div>
+            `;
+        });
+    } else {
+        equipmentHtml += '<div class="text-center" style="padding: 1rem; color: #94a3b8;">Нет оборудования</div>';
+    }
+    
+    equipmentHtml += '</div>';
+    
+    const modalContent = `
+        <div class="edit-location-info">
+            <p><strong>📍 Локация:</strong> ${escapeHtml(order.location_name)}</p>
+            <div class="date-fields" style="margin-top: 1rem; padding: 0;">
+                <div class="date-field">
+                    <label>📅 Дата начала</label>
+                    <input type="datetime-local" id="editDateStart" class="date-input" value="${startDate}">
+                </div>
+                <div class="date-field">
+                    <label>⏰ Дата окончания</label>
+                    <input type="datetime-local" id="editDateEnd" class="date-input" value="${endDate}">
+                </div>
+            </div>
+        </div>
+        <div class="edit-comment-section">
+            <label>💬 Комментарий к заказу</label>
+            <textarea id="editComment" class="edit-comment-input" rows="3" placeholder="Введите комментарий...">${escapeHtml(order.comment || '')}</textarea>
+        </div>
+        <div class="edit-equipment-header">
+            <h4>🔧 Оборудование</h4>
+            <button id="addMoreEquipmentBtn" class="add-equipment-btn">➕ Добавить оборудование</button>
+        </div>
+        ${equipmentHtml}
+    `;
+    
+    $('#editOrderContent').html(modalContent);
+    $('#editOrderModal').show();
+    
+    bindEditModalHandlers();
+};
+
+// Привязка обработчиков
+const bindEditModalHandlers = () => {
+    // Кнопка сохранения
+    $('#saveEditBtn').off('click').on('click', () => {
+        saveEditedOrder();
+    });
+    
+    // Обработчики изменения количества
+    $('.edit-qty-input').off('change').on('change', function() {
+        let val = parseInt($(this).val());
+        const max = parseInt($(this).data('max'));
+        if (isNaN(val)) val = 0;
+        if (val < 0) val = 0;
+        if (val > max) val = max;
+        $(this).val(val);
+    });
+    
+    // Удаление оборудования
+    $('.remove-equipment-btn').off('click').click(function() {
+        $(this).closest('.edit-equipment-item').remove();
+        showNotification('Оборудование удалено', 'info');
+        
+        if ($('.edit-equipment-item').length === 0) {
+            $('.edit-equipment-list').html('<div class="text-center" style="padding: 1rem; color: #94a3b8;">Нет оборудования</div>');
+        }
+    });
+    
+    // Добавление оборудования
+    $('#addMoreEquipmentBtn').off('click').click(() => {
+        loadAvailableEquipmentForOrder();
+    });
+};
+
+// Сохранение отредактированного заказа
+const saveEditedOrder = async () => {
+    if (!currentEditingOrderId) return;
+    
+    const newDateStart = $('#editDateStart').val();
+    const newDateEnd = $('#editDateEnd').val();
+    const newComment = $('#editComment').val();
+    
+    if (!newDateStart || !newDateEnd) {
+        showNotification('Пожалуйста, выберите даты', 'error');
+        return;
+    }
+    
+    const startDate = new Date(newDateStart);
+    const endDate = new Date(newDateEnd);
+    const now = new Date();
+    
+    if (startDate < now) {
+        showNotification('Дата начала не может быть в прошлом', 'error');
+        return;
+    }
+    
+    if (endDate <= startDate) {
+        showNotification('Дата окончания должна быть позже даты начала', 'error');
+        return;
+    }
+    
+    const equipment = [];
+    let hasError = false;
+    
+    $('.edit-equipment-item').each(function() {
+        const eqId = $(this).data('eq-id');
+        const quantity = parseInt($(this).find('.edit-qty-input').val());
+        const isCommon = $(this).data('is-common') === true;
+        const maxQty = parseInt($(this).find('.edit-qty-input').data('max'));
+        
+        if (isNaN(quantity)) {
+            hasError = true;
+            return false;
+        }
+        
+        if (quantity < 0) {
+            showNotification('Количество не может быть отрицательным', 'error');
+            hasError = true;
+            return false;
+        }
+        
+        if (quantity > maxQty) {
+            showNotification(`Доступно только ${maxQty} шт.`, 'error');
+            hasError = true;
+            return false;
+        }
+        
+        if (quantity > 0) {
+            equipment.push({
+                equipment_id: eqId,
+                quantity: quantity,
+                is_common: isCommon || false
+            });
+        }
+    });
+    
+    if (hasError) return;
+    
+    if (equipment.length === 0) {
+        showNotification('Добавьте хотя бы одно оборудование', 'warning');
+        return;
+    }
+    
+    const saveBtn = $('#saveEditBtn');
+    const originalText = saveBtn.text();
+    saveBtn.prop('disabled', true).text('Сохранение...');
+    
+    try {
+        const response = await api.updateOrder(currentEditingOrderId, {
+            date_time_start: newDateStart,
+            date_time_end: newDateEnd,
+            comment: newComment,
+            equipment: equipment
+        });
+        
+        if (response.success) {
+            showNotification('Заказ успешно обновлен', 'success');
+            $('#editOrderModal').hide();
+            loadOrders();
+        } else {
+            showNotification(response.error || 'Ошибка при обновлении', 'error');
+        }
+    } catch (error) {
+        console.error('Ошибка:', error);
+        showNotification('Ошибка при сохранении изменений', 'error');
+    } finally {
+        saveBtn.prop('disabled', false).text(originalText);
+    }
+};
+
+const cancelOrder = async (orderId) => {
+    if (confirm('Вы уверены, что хотите отменить этот заказ?')) {
+        try {
+            const response = await api.cancelOrder(orderId);
+            if (response.success) {
+                showNotification('Заказ отменен', 'success');
+                loadOrders(); // Перезагружаем список заявок
+            } else {
+                showNotification(response.error || 'Ошибка при отмене', 'error');
+            }
+        } catch (error) {
+            console.error('Ошибка:', error);
+            showNotification('Ошибка при отмене заказа', 'error');
+        }
+    }
+};
+
+const duplicateOrder = async (orderId) => {
+    showNotification('Создание копии заказа...', 'info');
+    
+    try {
+        const response = await api.duplicateOrder(orderId);
+        if (response.success) {
+            showNotification('Копия заказа создана', 'success');
+            loadOrders();
+        } else {
+            showNotification(response.error || 'Ошибка при создании копии', 'error');
+        }
+    } catch (error) {
+        console.error('Ошибка:', error);
+        showNotification('Ошибка при создании копии', 'error');
+    }
+};
+
+// Загрузка доступного оборудования
+const loadAvailableEquipmentForOrder = async () => {
+    if (!currentEditingOrderData) return;
+    
+    try {
+        const response = await api.getEquipment(currentEditingOrderData.location_id, []);
+        
+        if (response.success && response.equipment) {
+            displayAvailableEquipmentModal(response.equipment);
+        } else {
+            showNotification('Ошибка загрузки оборудования', 'error');
+        }
+    } catch (error) {
+        console.error('Ошибка:', error);
+        showNotification('Ошибка загрузки оборудования', 'error');
+    }
+};
+
+// Отображение доступного оборудования
+const displayAvailableEquipmentModal = (equipment) => {
+    const addedIds = [];
+    $('.edit-equipment-item').each(function() {
+        addedIds.push(parseInt($(this).data('eq-id')));
+    });
+    
+    let html = '<div class="available-equipment-list">';
+    let hasAvailable = false;
+    
+    equipment.forEach(eq => {
+        if (!addedIds.includes(eq.equipment_id)) {
+            hasAvailable = true;
+            html += `
+                <div class="available-equipment-item" data-eq-id="${eq.equipment_id}">
+                    <div class="available-equipment-info">
+                        <div class="available-equipment-name">${escapeHtml(eq.name)}</div>
+                        <div class="available-equipment-type">${escapeHtml(eq.type_name)}</div>
+                        <div class="available-equipment-stock">📦 Доступно: ${eq.quantity} шт.</div>
+                    </div>
+                    <div class="available-equipment-actions">
+                        <label>Кол-во:</label>
+                        <input type="number" 
+                               min="0" 
+                               max="${eq.quantity}" 
+                               value="1" 
+                               class="equipment-select-qty"
+                               data-max="${eq.quantity}"
+                               data-name="${escapeHtml(eq.name)}"
+                               data-eq-id="${eq.equipment_id}"
+                               data-type-name="${escapeHtml(eq.type_name)}">
+                    </div>
+                </div>
+            `;
+        }
+    });
+    
+    if (!hasAvailable) {
+        html = '<div class="text-center" style="padding: 2rem;">Все оборудование уже добавлено</div>';
+    }
+    html += '</div>';
+    
+    $('#addEquipmentContent').html(html);
+    $('#addEquipmentModal').show();
+    
+    $('#confirmAddEquipmentBtn').off('click').one('click', () => {
+        addSelectedEquipmentToOrder();
+    });
+};
+
+// Добавление выбранного оборудования
+const addSelectedEquipmentToOrder = () => {
+    const selectedItems = [];
+    
+    $('.available-equipment-item').each(function() {
+        const eqId = $(this).data('eq-id');
+        const qty = parseInt($(this).find('.equipment-select-qty').val());
+        const name = $(this).find('.available-equipment-name').text();
+        const typeName = $(this).find('.available-equipment-type').text();
+        const maxQty = parseInt($(this).find('.equipment-select-qty').data('max'));
+        
+        if (qty > 0) {
+            selectedItems.push({
+                equipment_id: eqId,
+                equipment_name: name,
+                type_name: typeName,
+                quantity: qty,
+                max_quantity: maxQty,
+                is_common: false
+            });
+        }
+    });
+    
+    if (!selectedItems.length) {
+        showNotification('Выберите оборудование для добавления', 'warning');
+        return;
+    }
+    
+    if ($('.edit-equipment-list').text().includes('Нет оборудования')) {
+        $('.edit-equipment-list').html('');
+    }
+    
+    selectedItems.forEach(eq => {
+        if ($(`.edit-equipment-item[data-eq-id="${eq.equipment_id}"]`).length === 0) {
+            const newItemHtml = `
+                <div class="edit-equipment-item" data-eq-id="${eq.equipment_id}" data-is-common="false">
+                    <div class="edit-equipment-info">
+                        <div class="edit-equipment-name">
+                            ${escapeHtml(eq.equipment_name)}
+                        </div>
+                        <div class="edit-equipment-type">${escapeHtml(eq.type_name)}</div>
+                        <div class="edit-equipment-available">📦 Всего: ${eq.max_quantity} шт.</div>
+                    </div>
+                    <div class="edit-equipment-control">
+                        <input type="number" 
+                               min="0" 
+                               max="${eq.max_quantity}" 
+                               value="${eq.quantity}" 
+                               class="edit-qty-input" 
+                               data-eq-id="${eq.equipment_id}"
+                               data-max="${eq.max_quantity}">
+                        <button class="remove-equipment-btn" data-eq-id="${eq.equipment_id}" title="Удалить">🗑️</button>
+                    </div>
+                </div>
+            `;
+            $('.edit-equipment-list').append(newItemHtml);
+        }
+    });
+    
+    // Привязываем обработчики к новым элементам
+    $('.edit-qty-input').off('change').on('change', function() {
+        let val = parseInt($(this).val());
+        const max = parseInt($(this).data('max'));
+        if (isNaN(val)) val = 0;
+        if (val < 0) val = 0;
+        if (val > max) val = max;
+        $(this).val(val);
+    });
+    
+    $('.remove-equipment-btn').off('click').click(function() {
+        $(this).closest('.edit-equipment-item').remove();
+    });
+    
+    $('#addEquipmentModal').hide();
+    showNotification(`Добавлено ${selectedItems.length} позиций`, 'success');
 };
 
 // Загрузка позиций заказа
@@ -115,77 +527,147 @@ const getAllEquipmentFromTypes = (typesMap) => {
     return Array.from(equipmentMap.values()).sort((a, b) => a.name.localeCompare(b.name));
 };
 
-// Отображение позиций заказа в виде таблицы по типам
-export const displayOrderItems = (orderId, items) => {
+// Отображение позиций заказа в виде таблицы по типам с кнопками для каждого заказа
+export const displayOrderItems = (applicationId, items) => {
     if (!items?.length) {
-        $(`#order-items-${orderId}`).html('<div class="no-orders">Нет позиций в заявке</div>');
+        $(`#order-items-${applicationId}`).html('<div class="no-orders">Нет позиций в заявке</div>');
         return;
     }
     
-    // Группируем по локациям
-    const locationsMap = new Map();
+    // Группируем по заказам (Order)
+    const ordersMap = new Map();
     
     items.forEach(item => {
-        let locationId = item.location_id;
-        let locationName = item.location_name;
-        let dateStart = item.date_start;
-        let dateEnd = item.date_end;
-        let orderComment = item.order_comment || ''; // Комментарий к заказу
+        const currentOrderId = item.order_id;
         
-        if (!locationId) {
-            console.warn('Нет location_id для элемента:', item);
-            return;
-        }
-        
-        if (!locationsMap.has(locationId)) {
-            locationsMap.set(locationId, {
-                location_id: locationId,
-                location_name: locationName,
-                date_start: dateStart,
-                date_end: dateEnd,
-                order_comment: orderComment, // Добавляем комментарий к заказу
+        if (!ordersMap.has(currentOrderId)) {
+            ordersMap.set(currentOrderId, {
+                order_id: currentOrderId,
+                location_id: item.location_id,
+                location_name: item.location_name,
+                date_start: item.date_start,
+                date_end: item.date_end,
+                order_comment: item.order_comment || '',
                 typesMap: new Map()
             });
-        } else {
-            // Если комментарий есть у любой позиции, сохраняем его
-            const existing = locationsMap.get(locationId);
-            if (orderComment && !existing.order_comment) {
-                existing.order_comment = orderComment;
-            }
         }
         
-        const location = locationsMap.get(locationId);
+        const orderData = ordersMap.get(currentOrderId);
         const typeName = item.type_name;
         
-        if (!location.typesMap.has(typeName)) {
-            location.typesMap.set(typeName, []);
+        if (!orderData.typesMap.has(typeName)) {
+            orderData.typesMap.set(typeName, []);
         }
         
         const equipmentName = item.is_common ? `🌍 ${item.equipment_name}` : item.equipment_name;
         
-        location.typesMap.get(typeName).push({
+        orderData.typesMap.get(typeName).push({
             name: equipmentName,
             quantity: item.quantity,
-            is_common: item.is_common || false
+            is_common: item.is_common || false,
+            equipment_id: item.equipment_id,
+            type_name: item.type_name
         });
     });
     
     let html = '';
     
-    for (const [_, location] of locationsMap) {
-        const startDate = new Date(location.date_start).toLocaleString('ru-RU');
-        const endDate = location.date_end ? new Date(location.date_end).toLocaleString('ru-RU') : 'Не завершен';
+    for (const [_, orderData] of ordersMap) {
+        const startDate = orderData.date_start ? new Date(orderData.date_start).toLocaleString('ru-RU') : 'Не указана';
+        const endDate = orderData.date_end ? new Date(orderData.date_end).toLocaleString('ru-RU') : 'Не завершен';
         
-        html += generateLocationCard(
-            location.location_name, 
-            startDate, 
-            endDate, 
-            location.typesMap,
-            location.order_comment // Передаем комментарий к заказу
+        html += generateLocationCardWithButtons(
+            orderData.order_id,
+            orderData.location_name,
+            startDate,
+            endDate,
+            orderData.typesMap,
+            orderData.order_comment
         );
     }
     
-    $(`#order-items-${orderId}`).html(html);
+    $(`#order-items-${applicationId}`).html(html);
+    
+    // Привязываем обработчики кнопок после добавления в DOM
+    bindOrderCardButtons();
+};
+
+// Генерация карточки локации с кнопками действий
+const generateLocationCardWithButtons = (orderId, locationName, startDate, endDate, typesMap, orderComment) => {
+    const allTypes = Array.from(typesMap.keys());
+    const maxRows = getMaxRows(typesMap);
+    
+    const commentHtml = orderComment ? `
+        <div class="order-comment-inline">
+            <span class="comment-label">Комментарий:</span>
+            <span class="comment-text">${escapeHtml(orderComment)}</span>
+        </div>
+    ` : '';
+    
+    // Кнопки действий для конкретного заказа
+    const actionButtons = `
+        <div class="order-card-actions">
+            <button class="order-edit-btn-small" data-order-id="${orderId}" title="Редактировать заказ">
+                ✏️ Редактировать
+            </button>
+            <button class="order-cancel-btn-small" data-order-id="${orderId}" title="Отменить заказ">
+                🚫 Отменить
+            </button>
+            <button class="order-duplicate-btn-small" data-order-id="${orderId}" title="Создать копию">
+                📋 Копировать
+            </button>
+        </div>
+    `;
+    
+    return `
+        <div class="location-order-card" data-order-id="${orderId}">
+            <div class="location-order-header">
+                <div class="location-order-info">
+                    <span class="location-name">📍 ${escapeHtml(locationName)}</span>
+                    <span class="location-dates">📅 ${startDate} - ${endDate}</span>
+                </div>
+                ${actionButtons}
+            </div>
+            <div class="equipment-matrix">
+                <table class="equipment-matrix-table">
+                    <thead>
+                        <tr>
+                            ${allTypes.map(type => `<th class="type-col">${escapeHtml(type)}</th>`).join('')}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${generateTableRows(typesMap, allTypes, maxRows)}
+                    </tbody>
+                </table>
+            </div>
+            ${commentHtml}
+        </div>
+    `;
+};
+
+// Привязка обработчиков кнопок в карточках заказов
+const bindOrderCardButtons = () => {
+    // Кнопка "Редактировать"
+    $('.order-edit-btn-small').off('click').on('click', function(e) {
+        e.stopPropagation();
+        const orderId = $(this).data('order-id');
+        console.log('Редактирование заказа:', orderId);
+        openEditOrderModal(orderId);
+    });
+    
+    // Кнопка "Отменить"
+    $('.order-cancel-btn-small').off('click').on('click', function(e) {
+        e.stopPropagation();
+        const orderId = $(this).data('order-id');
+        cancelOrder(orderId);
+    });
+    
+    // Кнопка "Копировать"
+    $('.order-duplicate-btn-small').off('click').on('click', function(e) {
+        e.stopPropagation();
+        const orderId = $(this).data('order-id');
+        duplicateOrder(orderId);
+    });
 };
 
 // Генерация карточки локации

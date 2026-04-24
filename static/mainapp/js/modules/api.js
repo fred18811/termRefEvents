@@ -141,6 +141,28 @@ export const api = {
         url: '/api/history/clear/',
         method: 'DELETE',
         data: { days: days }
+    }),
+
+     // ========== РЕДАКТИРОВАНИЕ ЗАКАЗОВ ==========
+    getOrderDetails: (orderId) => $.get(`/api/order/${orderId}/`),
+    
+    updateOrder: (orderId, data) => $.ajax({
+        url: `/api/order/${orderId}/update/`,
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify(data)
+    }),
+    
+    cancelOrder: (orderId) => $.ajax({
+        url: `/api/order/${orderId}/cancel/`,
+        method: 'DELETE',
+        contentType: 'application/json'
+    }),
+    
+    duplicateOrder: (orderId) => $.ajax({
+        url: `/api/order/${orderId}/duplicate/`,
+        method: 'POST',
+        contentType: 'application/json'
     })
 };
 

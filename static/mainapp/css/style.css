@@ -1269,15 +1269,60 @@ nav {
     box-shadow: var(--shadow-md);
 }
 
-.location-order-header {
+..location-order-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
     flex-wrap: wrap;
-    gap: 0.5rem;
+    gap: 1rem;
     margin-bottom: 1rem;
     padding-bottom: 0.75rem;
-    border-bottom: 1px solid var(--gray-200);
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.location-order-info {
+    flex: 1;
+}
+
+.order-card-actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-shrink: 0;
+}
+
+.order-edit-btn-small,
+.order-cancel-btn-small,
+.order-duplicate-btn-small {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    cursor: pointer;
+    padding: 0.3rem 0.7rem;
+    border-radius: 20px;
+    transition: all 0.3s ease;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: #4a5568;
+}
+
+.order-edit-btn-small:hover {
+    background: rgba(0, 57, 166, 0.1);
+    border-color: #0039a6;
+    color: #0039a6;
+    transform: translateY(-1px);
+}
+
+.order-cancel-btn-small:hover {
+    background: rgba(218, 41, 28, 0.1);
+    border-color: #da291c;
+    color: #da291c;
+    transform: translateY(-1px);
+}
+
+.order-duplicate-btn-small:hover {
+    background: rgba(40, 167, 69, 0.1);
+    border-color: #28a745;
+    color: #28a745;
+    transform: translateY(-1px);
 }
 
 .location-name {
@@ -1313,6 +1358,26 @@ nav {
 
 .equipment-table tr:last-child td {
     border-bottom: none;
+}
+
+/* Адаптив */
+@media (max-width: 768px) {
+    .location-order-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .order-card-actions {
+        width: 100%;
+        justify-content: flex-start;
+    }
+    
+    .order-edit-btn-small,
+    .order-cancel-btn-small,
+    .order-duplicate-btn-small {
+        padding: 0.25rem 0.5rem;
+        font-size: 0.7rem;
+    }
 }
 
 /* ========== 17. ROOMS SECTION (карточки на главной) ========== */
@@ -2758,5 +2823,60 @@ nav {
         font-size: 0.5rem;
         padding: 0.1rem 0.25rem;
         min-width: 30px;
+    }
+}
+
+/* Кнопки действий в заказах */
+.order-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-shrink: 0;
+}
+
+.order-edit-btn,
+.order-cancel-btn,
+.order-duplicate-btn {
+    background: rgba(255, 255, 255, 0.15);
+    border: none;
+    color: white;
+    cursor: pointer;
+    padding: 0.4rem 0.8rem;
+    border-radius: 20px;
+    transition: all 0.3s ease;
+    font-size: 0.8rem;
+    font-weight: 500;
+}
+
+.order-edit-btn:hover {
+    background: rgba(0, 57, 166, 0.9);
+    transform: translateY(-1px);
+}
+
+.order-cancel-btn:hover {
+    background: rgba(218, 41, 28, 0.9);
+    transform: translateY(-1px);
+}
+
+.order-duplicate-btn:hover {
+    background: rgba(40, 167, 69, 0.9);
+    transform: translateY(-1px);
+}
+
+.order-status.cancelled {
+    background: #6c757d;
+}
+
+@media (max-width: 768px) {
+    .order-actions {
+        flex-wrap: wrap;
+        gap: 0.3rem;
+    }
+    
+    .order-edit-btn,
+    .order-cancel-btn,
+    .order-duplicate-btn {
+        padding: 0.3rem 0.6rem;
+        font-size: 0.7rem;
     }
 }

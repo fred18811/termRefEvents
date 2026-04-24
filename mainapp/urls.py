@@ -6,7 +6,7 @@ from . import views
 app_name = 'mainapp'
 
 urlpatterns = [
-    # Главная страница (без декоратора, проверка в view)
+    # Главная страница
     path('', views.index, name='index'),
     
     # Авторизация
@@ -28,6 +28,12 @@ urlpatterns = [
     path('api/get-order-items/', views.get_order_items, name='get_order_items'),
     path('api/export-orders-to-excel/', views.export_orders_to_excel, name='export_orders_to_excel'),
     
+    # ========== РЕДАКТИРОВАНИЕ ЗАКАЗОВ (ДОБАВИТЬ ЭТИ СТРОКИ) ==========
+    path('api/order/<int:order_id>/', views.get_order_details, name='get_order_details'),
+    path('api/order/<int:order_id>/update/', views.update_order, name='update_order'),
+    path('api/order/<int:order_id>/cancel/', views.cancel_order, name='cancel_order'),
+    path('api/order/<int:order_id>/duplicate/', views.duplicate_order, name='duplicate_order'),
+    
     # API для помещений
     path('api/get-rooms/', views.get_rooms, name='get_rooms'),
     path('api/get-room-details/', views.get_room_details, name='get_room_details'),
@@ -35,7 +41,7 @@ urlpatterns = [
     # Экспорт
     path('api/export-to-excel/', views.export_to_excel, name='export_to_excel'),
     
-    # Заявок
+    # Заявки
     path('api/applications/', views.get_applications, name='get_applications'),
     path('api/applications/create/', views.create_application, name='create_application'),
     path('api/applications/<int:app_id>/', views.get_application_detail, name='get_application_detail'),
