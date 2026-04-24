@@ -1,0 +1,150 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ room.name }} - Управление оборудованием</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.css" />
+    <link rel="stylesheet" href="{% static 'mainapp/css/style.css' %}">
+</head>
+<body>
+    <div class="room-detail-page">
+        <a href="/" class="back-button" onclick="event.preventDefault(); history.back();">
+            ← Назад
+        </a>
+        
+        <div class="room-header">
+            <h1>{{ room.name }}</h1>
+            <div class="room-meta">
+                <span>📐 Размер: {{ room.size }}</span>
+            </div>
+        </div>
+        
+        <!-- Карусель фотографий с описанием -->
+        {% if photos %}
+        <div class="swiper room-swiper">
+            <div class="swiper-wrapper">
+                {% for photo in photos %}
+                <div class="swiper-slide">
+                    <img src="{{ photo.photo.url }}" alt="{{ photo.name }}">
+                    {% if photo.is_main %}
+                    <div class="main-badge">⭐ Главное фото</div>
+                    {% endif %}
+                    {% if photo.description %}
+                    <div class="slide-caption">
+                        <h3>{{ photo.name }}</h3>
+                        <p>{{ photo.description }}</p>
+                    </div>
+                    {% elif photo.name %}
+                    <div class="slide-caption">
+                        <h3>{{ photo.name }}</h3>
+                        {% if not photo.description %}
+                        <p>Нет описания</p>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+            <div class="swiper-button-prev"></div>
+            <div class="swiper-button-next"></div>
+            <div class="swiper-pagination"></div>
+        </div>
+        {% else %}
+        <div class="no-photos">
+            <p>📷 Нет фотографий для этого помещения</p>
+        </div>
+        {% endif %}
+        
+        <!-- Описание помещения -->
+        <div class="room-description-block">
+            <h2>📝 Описание помещения</h2>
+            <div class="description-content">
+                {% if room.description %}
+                    {{ room.description|safe|linebreaks }}
+                {% else %}
+                    <p class="no-description">Описание для этого помещения пока не добавлено.</p>
+                {% endif %}
+            </div>
+        </div>
+        
+        <!-- Оборудование в помещении -->
+        <div class="equipment-section-detail">
+            <h2>🔧 Оборудование в помещении</h2>
+            
+            <div class="equipment-stats">
+                <div class="stat-card">
+                    <div class="stat-number">{{ equipment_count }}</div>
+                    <div class="stat-label">Видов оборудования</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">{{ total_quantity }}</div>
+                    <div class="stat-label">Всего единиц</div>
+                </div>
+            </div>
+            
+            {% if equipment_list %}
+            <table class="equipment-table-detail">
+                <thead>
+                    <tr>
+                        <th>Оборудование</th>
+                        <th>Тип</th>
+                        <th>Количество</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for eq in equipment_list %}
+                    <tr>
+                        <td class="equipment-name">{{ eq.name }}</td>
+                        <td>{{ eq.type }}</td>
+                        <td><span class="quantity-badge">{{ eq.quantity }} шт.</span></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p class="no-equipment">Нет оборудования в этом помещении</p>
+            {% endif %}
+        </div>
+    </div>
+    
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.js"></script>
+    <script>
+        // Инициализация Swiper карусели с автопрокруткой
+        const swiper = new Swiper('.room-swiper', {
+            loop: true,
+            navigation: {
+                nextEl: '.swiper-button-next',
+                prevEl: '.swiper-button-prev',
+            },
+            pagination: {
+                el: '.swiper-pagination',
+                type: 'progressbar',
+                clickable: true,
+            },
+            autoplay: {
+                delay: 5000,
+                disableOnInteraction: false,
+                pauseOnMouseEnter: true,
+            },
+            effect: 'slide',
+            speed: 800,
+            grabCursor: true,
+        });
+        
+        // Приостановка автопрокрутки при наведении на описание
+        const caption = document.querySelector('.slide-caption');
+        if (caption) {
+            caption.addEventListener('mouseenter', () => {
+                swiper.autoplay.stop();
+            });
+            caption.addEventListener('mouseleave', () => {
+                swiper.autoplay.start();
+            });
+        }
+    </script>
+</body>
+</html>

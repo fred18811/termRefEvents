@@ -1,0 +1,260 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Управление оборудованием и заказами">
+    <title>Управление оборудованием</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/themes/material_blue.css">
+    <link rel="stylesheet" href="{% static 'mainapp/css/style.css' %}">
+</head>
+<body>
+    <header>
+        <div class="container header-container">
+            <div class="logo">
+                <div class="logo-icon"><a href="/">🏢</a></div>
+                <h1>Управление оборудованием</h1>
+            </div>
+            <nav>
+                <ul class="nav-menu">
+                    <li><a href="#" data-page="main" class="nav-link active">Главная</a></li>
+                    <li><a href="#" data-page="orders" class="nav-link">Заявки</a></li>
+                    <li class="dropdown">
+                        <a href="#" class="nav-link">Галерея ▼</a>
+                        <ul class="dropdown-menu">
+                            <li><a href="#" data-gallery="rooms" class="gallery-link">Помещения</a></li>
+                            <li><a href="#" data-gallery="furniture">Мебель</a></li>
+                            <li><a href="#" data-gallery="equipment">Оборудование</a></li>
+                        </ul>
+                    </li>
+                </ul>
+            </nav>
+            
+            <!-- Блок информации о пользователе -->
+            <div id="userInfo" class="user-info" style="display: none;">
+                <div class="user-details">
+                    <span id="userName" class="user-name"></span>
+                </div>
+                <button id="logoutBtn" class="btn-logout">Выйти</button>
+            </div>
+        </div>
+    </header>
+
+    <main class="container">
+        <!-- Главная страница -->
+        <div id="mainPage">
+            <!-- Первый блок: локации (слева) и фото с датами (справа) -->
+            <div class="location-section">
+                <div class="location-list">
+                    <h2>Помещения</h2>
+                    <div class="location-items" id="locationList">
+                        {% for location in locations %}
+                        <div class="location-item" data-id="{{ location.id }}" data-name="{{ location.name }}">
+                            <span>{{ location.name }}</span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                <div class="location-photo-section">
+                    <div class="date-fields">
+                        <div class="date-field">
+                            <label>Дата начала</label>
+                            <input type="text" id="dateStart" class="date-input" placeholder="Выберите дату и время" disabled>
+                            <small class="date-hint">Сначала выберите локацию</small>
+                        </div>
+                        <div class="date-field">
+                            <label>Дата окончания</label>
+                            <input type="text" id="dateEnd" class="date-input" placeholder="Выберите дату и время" disabled>
+                            <small class="date-hint">Сначала выберите локацию</small>
+                        </div>
+                    </div>
+                    <div id="dateError" class="date-error" style="display: none;">
+                        <span>⚠️ Выбранные даты заняты!</span>
+                    </div>
+                    <div class="location-photo" id="locationPhoto">
+                        <div class="photo-placeholder">📷 Выберите локацию</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Второй блок: типы оборудования и оборудование -->
+            <div class="equipment-section">
+                <div class="types-list">
+                    <h2>Типы оборудования</h2>
+                    <div class="type-items" id="typeList">
+                        {% for type in type_equipments %}
+                        <label class="type-item">
+                            <input type="checkbox" value="{{ type.id }}">
+                            <span>{{ type.name }}</span>
+                        </label>
+                        {% endfor %}
+                    </div>
+                </div>
+                <div class="equipment-list">
+                    <div class="equipment-header">
+                        <h2>Оборудование</h2>
+                        <div class="equipment-search">
+                            <input type="text" id="searchEquipment" class="search-equipment-input" placeholder="Поиск оборудования...">
+                        </div>
+                    </div>
+                    <div id="equipmentContainer" class="info-message">📍 Выберите локацию, даты и типы оборудования</div>
+                </div>
+            </div>
+
+            <!-- Блок комментария -->
+            <div class="comment-section">
+                <div class="comment-field">
+                    <label>Комментарий</label>
+                    <textarea id="orderComment" class="comment-input" rows="3" placeholder="Введите дополнительную информацию (необязательно)..."></textarea>
+                    <small class="comment-hint">Вы можете добавить любую дополнительную информацию</small>
+                </div>
+            </div>
+
+            <!-- Кнопки действий -->
+            <div class="action-buttons">
+                <button id="addButton" class="btn btn-danger">Добавить в заявку</button>
+            </div>
+
+            <!-- Блок "Текущий заказ" -->
+            <div id="cartContainer" class="cart-container">
+                <div class="cart-header">
+                    <h3>Текущая заявка</h3>
+                    <span id="cartCount" class="cart-count">0</span>
+                </div>
+                
+                <!-- Поле названия заявки внутри блока текущего заказа -->
+                <div class="application-name-field">
+                    <label for="applicationName">Название заявки</label>
+                    <input type="text" id="applicationName" class="application-name-input" placeholder="Введите название заявки" required>
+                    <small class="field-hint">Укажите название для заявки (обязательно)</small>
+                </div>
+                
+                <div id="cartItemsList" class="cart-items-list">
+                    <div class="cart-empty">Нет заявок</div>
+                </div>
+                
+                <div class="cart-footer">
+                    <button id="saveOrderFromCartBtn" class="btn-save-order-cart">Сохранить заявку</button>
+                    <button id="clearCartBtn" class="btn-clear-cart">Очистить список</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Страница заказов -->
+        <div id="ordersPage" style="display: none;">
+            <div class="page-header">
+                <h2>Текущие заявки</h2>
+                <div class="button-group">
+                    <button id="selectAllBtn" class="btn btn-sm btn-success">✅ Выделить все</button>
+                    <button id="deselectAllBtn" class="btn btn-sm btn-secondary">❌ Снять</button>
+                    <button id="exportOrdersBtn" class="btn btn-sm btn-primary">Выгрузить в Excel</button>
+                    <button id="refreshOrdersBtn" class="btn btn-sm btn-info">Обновить</button>
+                </div>
+            </div>
+            <div id="ordersContainer" class="orders-container">Загрузка...</div>
+        </div>
+
+        <!-- Страница помещений -->
+        <div id="roomsPage" style="display: none;">
+            <div class="page-header">
+                <h2>Наши помещения</h2>
+                <div class="filter-group">
+                    <input type="text" id="searchRooms" placeholder="Поиск помещений..." class="search-input">
+                    <select id="sortRooms" class="sort-select">
+                        <option value="name">По названию</option>
+                        <option value="size">По размеру</option>
+                    </select>
+                </div>
+            </div>
+            <div id="roomsContainer" class="rooms-grid">Загрузка...</div>
+        </div>
+    </main>
+
+    <!-- Модальное окно подтверждения -->
+    <div id="confirmModal" class="modal">
+        <div class="modal-content">
+            <span class="modal-close">&times;</span>
+            <h3>Подтверждение</h3>
+            <div id="confirmMessage"></div>
+            <div class="modal-buttons">
+                <button id="confirmYes" class="btn btn-sm btn-success">Да</button>
+                <button id="confirmNo" class="btn btn-sm btn-secondary">Отмена</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно деталей помещения -->
+    <div id="roomModal" class="modal">
+        <div class="modal-content modal-large">
+            <span class="modal-close">&times;</span>
+            <h3 id="roomModalTitle"></h3>
+            <div id="roomModalContent"></div>
+        </div>
+    </div>
+
+    <!-- Модальное окно редактирования заказа -->
+    <div id="editOrderModal" class="modal">
+        <div class="modal-content modal-large">
+            <span class="modal-close">&times;</span>
+            <h3>✏️ Редактирование заказа</h3>
+            <div id="editOrderContent"></div>
+            <div class="modal-buttons">
+                <button id="saveEditBtn" class="btn btn-sm btn-primary">💾 Сохранить изменения</button>
+                <button id="cancelEditBtn" class="btn btn-sm btn-secondary">Отмена</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно добавления оборудования -->
+    <div id="addEquipmentModal" class="modal">
+        <div class="modal-content modal-large">
+            <span class="modal-close">&times;</span>
+            <h3>➕ Добавить оборудование</h3>
+            <div id="addEquipmentContent"></div>
+            <div class="modal-buttons">
+                <button id="confirmAddEquipmentBtn" class="btn btn-sm btn-primary">➕ Добавить</button>
+                <button id="cancelAddEquipmentBtn" class="btn btn-sm btn-secondary">Отмена</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно авторизации -->
+    <div id="authModal" class="modal">
+        <div class="modal-content auth-modal">
+            <div class="auth-header">
+                <div class="auth-logo">
+                    <div class="logo-icon"><a href="/">🏢</a></div>
+                    <h2>Управление оборудованием</h2>
+                </div>
+                <p class="auth-subtitle">Войдите в систему для продолжения работы</p>
+            </div>
+            
+            <form id="loginForm" class="auth-form">
+                {% csrf_token %}
+                <div class="form-group">
+                    <label for="username">Логин</label>
+                    <input type="text" id="username" name="username" class="auth-input" placeholder="Введите логин" required autocomplete="username">
+                </div>
+                <div class="form-group">
+                    <label for="password">Пароль</label>
+                    <input type="password" id="password" name="password" class="auth-input" placeholder="Введите пароль" required autocomplete="current-password">
+                </div>
+                <div id="authError" class="auth-error" style="display: none;"></div>
+                <button type="submit" class="btn btn-primary btn-block">Войти</button>
+            </form>
+            
+            <div class="auth-footer">
+                <p>Демо-доступ: admin / admin</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/ru.js"></script>
+    <script type="module" src="{% static 'mainapp/js/main.js' %}"></script>
+</body>
+</html>
