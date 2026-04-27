@@ -1,8 +1,10 @@
 from django.db import models
-from django.contrib.auth.models import User
+from django.db.models.signals import post_migrate
+from django.contrib.auth.models import User, Group, Permission
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.core.exceptions import ValidationError
 from django.core.validators import FileExtensionValidator
+from django.dispatch import receiver
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
@@ -511,3 +513,35 @@ class OrderItem(models.Model):
             return self.common_equipment_location.id_types_equipments.name
         return "Не указано"
     
+    
+@receiver(post_migrate)
+def create_default_groups_and_permissions(sender, **kwargs):
+    """Создание групп и прав по умолчанию после миграции"""
+    if sender.name == 'mainapp':
+        # Создаем группы
+        view_group, _ = Group.objects.get_or_create(name='ViewApplications')
+        edit_group, _ = Group.objects.get_or_create(name='EditApplications')
+        
+        # Создаем права (если нужно)
+        from django.contrib.contenttypes.models import ContentType
+        from .models import Application
+        
+        content_type = ContentType.objects.get_for_model(Application)
+        
+        # Право на просмотр всех заявок
+        view_perm, _ = Permission.objects.get_or_create(
+            codename='view_all_applications',
+            name='Can view all applications',
+            content_type=content_type
+        )
+        
+        # Право на редактирование всех заявок
+        edit_perm, _ = Permission.objects.get_or_create(
+            codename='edit_all_applications',
+            name='Can edit all applications',
+            content_type=content_type
+        )
+        
+        # Назначаем права группам
+        view_group.permissions.add(view_perm)
+        edit_group.permissions.add(view_perm, edit_perm)

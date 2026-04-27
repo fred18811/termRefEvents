@@ -1160,26 +1160,39 @@ def export_to_excel(request):
         return JsonResponse({'success': False, 'error': str(e)}, status=400)
  
 
+def user_can_view_all_applications(user):
+    """Проверка, может ли пользователь видеть все заявки"""
+    return user.is_superuser or user.groups.filter(name='ViewApplications').exists() or user.groups.filter(name='EditApplications').exists()
+
+def user_can_edit_all_applications(user):
+    """Проверка, может ли пользователь редактировать все заявки"""
+    return user.is_superuser or user.groups.filter(name='EditApplications').exists()
+
+
 @login_required
 def get_orders(request):
-    """Получить список заявок текущего пользователя"""
+    """Получить список заявок с учетом прав пользователя"""
     try:
-        # Получаем заявки (Applications)
-        applications = Application.objects.filter(id_user=request.user).order_by('-created_at')
+        # Проверяем, может ли пользователь видеть все заявки
+        if user_can_view_all_applications(request.user):
+            applications = Application.objects.all().order_by('-created_at')
+        else:
+            applications = Application.objects.filter(id_user=request.user).order_by('-created_at')
+        
         apps_list = []
         
         for app in applications:
-            # Получаем связанные заказы
             orders = Order.objects.filter(id_application=app)
-            
-            # Определяем общие даты (берем из первого заказа)
             first_order = orders.first()
+            
             date_time_start = first_order.date_time_start if first_order else None
             date_time_end = first_order.date_time_end if first_order else None
             
-            # Определяем статус из поля модели Application
             status_display = dict(Application._meta.get_field('status').choices).get(app.status, app.status)
             is_active = app.status == 'new' or app.status == 'in_progress'
+            
+            # Проверяем, может ли пользователь редактировать эту заявку
+            can_edit = (app.id_user == request.user) or user_can_edit_all_applications(request.user)
             
             apps_list.append({
                 'id': app.id,
@@ -1191,12 +1204,20 @@ def get_orders(request):
                 'status_display': status_display,
                 'comment': app.comment or '',
                 'total_orders': orders.count(),
-                'total_quantity': sum(order.total_quantity for order in orders)
+                'total_quantity': sum(order.total_quantity for order in orders),
+                'can_edit': can_edit,  # Добавляем флаг возможности редактирования
+                'user_id': app.id_user.id,  # ID владельца
+                'user_name': app.id_user.username  # Имя владельца
             })
         
         return JsonResponse({
             'success': True,
-            'orders': apps_list
+            'orders': apps_list,
+            'user_permissions': {
+                'can_view_all': user_can_view_all_applications(request.user),
+                'can_edit_all': user_can_edit_all_applications(request.user),
+                'is_superuser': request.user.is_superuser
+            }
         })
     except Exception as e:
         return JsonResponse({
@@ -1207,7 +1228,7 @@ def get_orders(request):
 
 @login_required
 def get_order_items(request):
-    """Получить позиции заявки (все заказы в заявке)"""
+    """Получить позиции заявки с проверкой прав"""
     try:
         application_id = request.GET.get('order_id')
         if not application_id:
@@ -1216,7 +1237,15 @@ def get_order_items(request):
                 'error': 'Не указан ID заявки'
             }, status=400)
         
-        application = Application.objects.get(id=application_id, id_user=request.user)
+        application = Application.objects.get(id=application_id)
+        
+        # Проверка прав доступа к заявке
+        if application.id_user != request.user and not user_can_view_all_applications(request.user):
+            return JsonResponse({
+                'success': False,
+                'error': 'У вас нет прав для просмотра этой заявки'
+            }, status=403)
+        
         orders = Order.objects.filter(id_application=application)
         
         items_list = []
@@ -1226,7 +1255,7 @@ def get_order_items(request):
                 if item.equipment_location:
                     items_list.append({
                         'id': item.id,
-                        'order_id': order.id,  # Добавляем ID заказа
+                        'order_id': order.id,
                         'location_id': item.equipment_location.id_locations.id,
                         'location_name': item.equipment_location.id_locations.name,
                         'equipment_id': item.equipment_location.id_equipments.id,
@@ -1241,7 +1270,7 @@ def get_order_items(request):
                 elif item.common_equipment_location:
                     items_list.append({
                         'id': item.id,
-                        'order_id': order.id,  # Добавляем ID заказа
+                        'order_id': order.id,
                         'location_id': order.id_location.id if order.id_location else None,
                         'location_name': order.id_location.name if order.id_location else 'Не указана',
                         'equipment_id': item.common_equipment_location.id_equipments.id,
@@ -1256,7 +1285,8 @@ def get_order_items(request):
         
         return JsonResponse({
             'success': True,
-            'items': items_list
+            'items': items_list,
+            'can_edit': (application.id_user == request.user) or user_can_edit_all_applications(request.user)
         })
     except Application.DoesNotExist:
         return JsonResponse({
@@ -1778,11 +1808,16 @@ def get_application_detail(request, app_id):
 
 @login_required
 def get_order_details(request, order_id):
-    """
-    Получение деталей заказа для редактирования
-    """
+    """Получение деталей заказа для редактирования с проверкой прав"""
     try:
-        order = Order.objects.get(id=order_id, id_user=request.user)
+        order = Order.objects.get(id=order_id)
+        
+        # Проверка прав доступа к заказу
+        if order.id_user != request.user and not user_can_edit_all_applications(request.user):
+            return JsonResponse({
+                'success': False, 
+                'error': 'У вас нет прав для редактирования этого заказа'
+            }, status=403)
         
         items = OrderItem.objects.filter(order=order)
         equipment_list = []
@@ -1816,7 +1851,8 @@ def get_order_details(request, order_id):
                 'date_time_start': order.date_time_start.isoformat() if order.date_time_start else None,
                 'date_time_end': order.date_time_end.isoformat() if order.date_time_end else None,
                 'comment': order.comment or '',
-                'equipment': equipment_list
+                'equipment': equipment_list,
+                'can_edit': (order.id_user == request.user) or user_can_edit_all_applications(request.user)
             }
         })
     except Order.DoesNotExist:
@@ -1829,14 +1865,18 @@ def get_order_details(request, order_id):
 @csrf_exempt
 @require_http_methods(["POST"])
 def update_order(request, order_id):
-    """
-    Обновление заказа (оборудование, даты, комментарий)
-    """
+    """Обновление заказа с проверкой прав"""
     try:
         data = json.loads(request.body)
-        order = Order.objects.get(id=order_id, id_user=request.user)
+        order = Order.objects.get(id=order_id)
         
-        # Проверяем статус заявки
+        # Проверка прав на редактирование
+        if order.id_user != request.user and not user_can_edit_all_applications(request.user):
+            return JsonResponse({
+                'success': False,
+                'error': 'У вас нет прав для редактирования этого заказа'
+            }, status=403)
+        
         if order.id_application and order.id_application.status in ['completed', 'cancelled']:
             return JsonResponse({
                 'success': False,
@@ -1844,22 +1884,16 @@ def update_order(request, order_id):
             }, status=400)
         
         with transaction.atomic():
-            # Обновляем даты
             if 'date_time_start' in data:
                 order.date_time_start = data['date_time_start']
             if 'date_time_end' in data:
                 order.date_time_end = data['date_time_end']
-            
-            # Обновляем комментарий
             if 'comment' in data:
                 order.comment = data['comment']
-            
             order.save()
             
-            # Обновляем оборудование
             if 'equipment' in data:
                 OrderItem.objects.filter(order=order).delete()
-                
                 for eq_data in data['equipment']:
                     if eq_data.get('quantity', 0) > 0:
                         if eq_data.get('is_common', False):
@@ -1885,7 +1919,6 @@ def update_order(request, order_id):
                                         quantity=min(eq_data['quantity'], equipment_location.quantity)
                                     )
             
-            # Логируем изменение
             HistoryService.add_entry(
                 request.user,
                 f"Редактирован заказ #{order.id} для локации {order.id_location.name if order.id_location else 'Общее оборудование'}"
@@ -1903,9 +1936,15 @@ def update_order(request, order_id):
 @csrf_exempt
 @require_http_methods(["DELETE"])
 def cancel_order(request, order_id):
-    """Отмена заказа"""
+    """Отмена заказа с проверкой прав"""
     try:
-        order = Order.objects.get(id=order_id, id_user=request.user)
+        order = Order.objects.get(id=order_id)
+        
+        if order.id_user != request.user and not user_can_edit_all_applications(request.user):
+            return JsonResponse({
+                'success': False,
+                'error': 'У вас нет прав для отмены этого заказа'
+            }, status=403)
         
         if order.id_application:
             if order.id_application.status == 'completed':
@@ -1984,3 +2023,5 @@ def duplicate_order(request, order_id):
         return JsonResponse({'success': False, 'error': 'Заказ не найден'}, status=404)
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
+    
+    

@@ -7,7 +7,11 @@ import { api } from './api.js';
 // Глобальные переменные для редактирования
 let currentEditingOrderId = null;
 let currentEditingOrderData = null;
-let currentAvailableEquipment = [];
+let userPermissions = {
+    can_view_all: false,
+    can_edit_all: false,
+    is_superuser: false
+};
 
 // Функция для преобразования UTC даты в локальную для datetime-local input
 const formatDateTimeForInput = (isoString) => {
@@ -40,12 +44,17 @@ export const loadOrders = async () => {
     try {
         const res = await api.getOrders();
         if (res.success) {
+            // Сохраняем права пользователя
+            if (res.user_permissions) {
+                userPermissions = res.user_permissions;
+            }
             displayOrders(res.orders);
         } else {
             $('#ordersContainer').html(`<div class="no-orders">❌ ${res.error}</div>`);
         }
-    } catch {
-        $('#ordersContainer').html('<div class="no-orders">❌ Ошибка</div>');
+    } catch (error) {
+        console.error('Ошибка:', error);
+        $('#ordersContainer').html('<div class="no-orders">❌ Ошибка загрузки</div>');
     }
 };
 
@@ -69,14 +78,23 @@ export const displayOrders = (orders) => {
         const isChecked = state.selectedOrders.has(order.id) ? 'checked' : '';
         const commentHtml = order.comment ? `<div class="order-comment">💬 ${escapeHtml(order.comment)}</div>` : '';
         
+        // Определяем, может ли пользователь редактировать эту заявку
+        const canEdit = order.can_edit === true;
+        
+        // Показываем владельца заявки для администраторов
+        const ownerInfo = (userPermissions.can_view_all || userPermissions.is_superuser) && order.user_name ? 
+            `<span class="order-owner">👤 ${escapeHtml(order.user_name)}</span>` : '';
+        
         html += `
             <div class="order-card" data-id="${order.id}" id="order-${order.id}">
                 <div class="order-header">
                     <div class="order-header-content">
                         <input type="checkbox" class="order-checkbox" data-id="${order.id}" ${isChecked} onclick="event.stopPropagation()">
                         <div class="order-info" onclick="toggleOrderBody(${order.id})">
-                            <h3>Заявка №${order.id} - ${escapeHtml(order.application_name || 'Без названия')}</h3>
+                            <h3>📋 Заявка №${order.id} - ${escapeHtml(order.application_name || 'Без названия')}</h3>
+                            <div class="order-date">📅 ${startDate} - ${endDate}</div>
                             <span class="order-status ${statusClass}">${statusText}</span>
+                            ${ownerInfo}
                         </div>
                     </div>
                     <button class="order-toggle" onclick="toggleOrderBody(${order.id})">▼</button>
@@ -527,16 +545,17 @@ const addSelectedEquipmentToOrder = () => {
     showNotification(`Добавлено ${selectedItems.length} позиций`, 'success');
 };
 
-// Загрузка позиций заказа
+// Обновленная загрузка позиций заказа
 export const loadOrderItems = async (orderId) => {
     try {
         const res = await api.getOrderItems(orderId);
         if (res.success) {
-            displayOrderItems(orderId, res.items);
+            displayOrderItems(orderId, res.items, res.can_edit || false);
         } else {
             $(`#order-items-${orderId}`).html(`<div class="no-orders">❌ ${res.error}</div>`);
         }
-    } catch {
+    } catch (error) {
+        console.error('Ошибка:', error);
         $(`#order-items-${orderId}`).html('<div class="no-orders">❌ Ошибка</div>');
     }
 };
@@ -561,14 +580,13 @@ const getAllEquipmentFromTypes = (typesMap) => {
     return Array.from(equipmentMap.values()).sort((a, b) => a.name.localeCompare(b.name));
 };
 
-// Отображение позиций заказа в виде таблицы по типам с кнопками для каждого заказа
-export const displayOrderItems = (applicationId, items) => {
+// Отображение позиций заказа с кнопками (только если есть права)
+export const displayOrderItems = (applicationId, items, canEdit = false) => {
     if (!items?.length) {
         $(`#order-items-${applicationId}`).html('<div class="no-orders">Нет позиций в заявке</div>');
         return;
     }
     
-    // Группируем по заказам (Order)
     const ordersMap = new Map();
     
     items.forEach(item => {
@@ -616,18 +634,21 @@ export const displayOrderItems = (applicationId, items) => {
             startDate,
             endDate,
             orderData.typesMap,
-            orderData.order_comment
+            orderData.order_comment,
+            canEdit  // Передаем флаг возможности редактирования
         );
     }
     
     $(`#order-items-${applicationId}`).html(html);
     
-    // Привязываем обработчики кнопок после добавления в DOM
-    bindOrderCardButtons();
+    // Привязываем обработчики кнопок только если есть права на редактирование
+    if (canEdit) {
+        bindOrderCardButtons();
+    }
 };
 
-// Генерация карточки локации с кнопками действий
-const generateLocationCardWithButtons = (orderId, locationName, startDate, endDate, typesMap, orderComment) => {
+// Генерация карточки с кнопками (только если есть права)
+const generateLocationCardWithButtons = (orderId, locationName, startDate, endDate, typesMap, orderComment, canEdit) => {
     const allTypes = Array.from(typesMap.keys());
     const maxRows = getMaxRows(typesMap);
     
@@ -638,8 +659,8 @@ const generateLocationCardWithButtons = (orderId, locationName, startDate, endDa
         </div>
     ` : '';
     
-    // Кнопки действий для конкретного заказа
-    const actionButtons = `
+    // Кнопки действий только если есть права на редактирование
+    const actionButtons = canEdit ? `
         <div class="order-card-actions">
             <button class="order-edit-btn-small" data-order-id="${orderId}" title="Редактировать заказ">
                 ✏️ Редактировать
@@ -651,14 +672,14 @@ const generateLocationCardWithButtons = (orderId, locationName, startDate, endDa
                 📋 Копировать
             </button>
         </div>
-    `;
+    ` : '';
     
     return `
         <div class="location-order-card" data-order-id="${orderId}">
             <div class="location-order-header">
                 <div class="location-order-info">
-                    <span class="location-name">${escapeHtml(locationName)}</span>
-                    <span class="location-dates"><strong> ${startDate} - ${endDate}</strong></span>
+                    <span class="location-name">📍 ${escapeHtml(locationName)}</span>
+                    <span class="location-dates">📅 ${startDate} - ${endDate}</span>
                 </div>
                 ${actionButtons}
             </div>
