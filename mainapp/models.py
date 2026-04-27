@@ -1,5 +1,5 @@
 from django.db import models
-from django.db.models.signals import post_migrate
+from django.db.models.signals import post_migrate, pre_save
 from django.contrib.auth.models import User, Group, Permission
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.core.exceptions import ValidationError
@@ -8,6 +8,18 @@ from django.dispatch import receiver
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
+
+@receiver(pre_save, sender=User)
+def set_username_as_email(sender, instance, **kwargs):
+    """
+    Автоматически устанавливает username = email для обычных пользователей
+    Суперпользователи могут иметь свой username
+    """
+    # Если это не суперпользователь и email указан
+    if not instance.is_superuser and instance.email:
+        # Устанавливаем username равным email
+        instance.username = instance.email
+        
 
 class History(models.Model):
     """

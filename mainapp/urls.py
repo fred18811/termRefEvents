@@ -55,6 +55,8 @@ urlpatterns = [
     path('api/history/', views.get_user_history, name='get_user_history'),
     path('api/history/all/', views.get_all_history, name='get_all_history'),
     path('api/history/clear/', views.clear_old_history, name='clear_old_history'),
+    # Регистрация
+    # path('api/register/', views.register_view, name='register'),
 ]
 
 if settings.DEBUG:

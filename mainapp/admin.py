@@ -1,4 +1,6 @@
 from django.contrib import admin
+from django.contrib.auth.admin import UserAdmin
+from django.contrib.auth.models import User
 from django import forms
 from django.utils.html import format_html
 from django.core.exceptions import ValidationError
@@ -9,6 +11,9 @@ from .models import Location, TypeEquipment, Equipment, EquipmentLocation, Photo
 admin.site.site_header = "Управление локациями и оборудованием"
 admin.site.site_title = "Система учета оборудования"
 admin.site.index_title = "Добро пожаловать в систему управления"
+
+# Разрегистрируем стандартный UserAdmin
+admin.site.unregister(User)
 
 
 class EquipmentForm(forms.ModelForm):
@@ -229,6 +234,33 @@ class CommonEquipmentLocationForm(forms.ModelForm):
         return quantity
         
 
+@admin.register(User)
+class CustomUserAdmin(UserAdmin):
+    list_display = ('id', 'email', 'username', 'first_name', 'last_name', 'is_staff', 'is_superuser')
+    list_display_links = ('id', 'email')
+    search_fields = ('email', 'username', 'first_name', 'last_name')
+    ordering = ('email',)
+    
+    fieldsets = (
+        (None, {'fields': ('username', 'password')}),
+        ('Персональная информация', {'fields': ('first_name', 'last_name', 'email')}),
+        ('Права доступа', {'fields': ('is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions')}),
+        ('Важные даты', {'fields': ('last_login', 'date_joined')}),
+    )
+    
+    add_fieldsets = (
+        (None, {
+            'classes': ('wide',),
+            'fields': ('email', 'password1', 'password2'),
+        }),
+    )
+    
+    def get_fieldsets(self, request, obj=None):
+        if not obj:
+            return self.add_fieldsets
+        return super().get_fieldsets(request, obj)
+    
+    
 @admin.register(History)
 class HistoryAdmin(admin.ModelAdmin):
     list_display = ['id', 'user', 'get_short_description', 'datetime']

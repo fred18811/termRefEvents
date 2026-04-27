@@ -22,6 +22,92 @@ from io import BytesIO
 from datetime import timedelta, datetime
 
 
+@csrf_exempt
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def register_view(request):
+    """Регистрация нового пользователя (по email)"""
+    try:
+        data = json.loads(request.body)
+        email = data.get('email', '').strip().lower()
+        password = data.get('password')
+        password_confirm = data.get('password_confirm')
+        first_name = data.get('first_name', '')
+        last_name = data.get('last_name', '')
+        
+        # Валидация email
+        if not email:
+            return JsonResponse({
+                'success': False,
+                'error': 'Email обязателен для заполнения'
+            }, status=400)
+        
+        try:
+            validate_email(email)
+        except ValidationError:
+            return JsonResponse({
+                'success': False,
+                'error': 'Введите корректный email адрес'
+            }, status=400)
+        
+        # Проверка пароля
+        if not password:
+            return JsonResponse({
+                'success': False,
+                'error': 'Введите пароль'
+            }, status=400)
+        
+        if password != password_confirm:
+            return JsonResponse({
+                'success': False,
+                'error': 'Пароли не совпадают'
+            }, status=400)
+        
+        if len(password) < 6:
+            return JsonResponse({
+                'success': False,
+                'error': 'Пароль должен содержать минимум 6 символов'
+            }, status=400)
+        
+        # Проверка на существующего пользователя
+        if User.objects.filter(email=email).exists():
+            return JsonResponse({
+                'success': False,
+                'error': 'Пользователь с таким email уже существует'
+            }, status=400)
+        
+        # Создаем пользователя (username будет установлен в email через сигнал)
+        user = User.objects.create_user(
+            username=email,  # временно, сигнал потом обновит
+            email=email,
+            password=password,
+            first_name=first_name,
+            last_name=last_name
+        )
+        
+        # Если сигнал не сработал, устанавливаем вручную
+        if user.username != email:
+            user.username = email
+            user.save()
+        
+        return JsonResponse({
+            'success': True,
+            'message': 'Регистрация успешна! Теперь вы можете войти.',
+            'user': {
+                'id': user.id,
+                'email': user.email,
+                'first_name': user.first_name,
+                'last_name': user.last_name
+            }
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+        
+        
 @require_http_methods(["GET"])
 @login_required
 def get_user_history(request):
@@ -119,19 +205,28 @@ def clear_old_history(request):
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def login_view(request):
-    """Авторизация пользователя"""
+    """Авторизация пользователя (по email или username)"""
     try:
         data = json.loads(request.body)
-        username = data.get('username')
+        username_or_email = data.get('username', '').strip().lower()
         password = data.get('password')
         
-        if not username or not password:
+        if not username_or_email or not password:
             return JsonResponse({
                 'success': False,
-                'error': 'Введите логин и пароль'
+                'error': 'Введите email и пароль'
             }, status=400)
         
-        user = authenticate(request, username=username, password=password)
+        # Пытаемся найти пользователя по email или username
+        user = None
+        
+        # Сначала пробуем найти по email
+        try:
+            user_obj = User.objects.get(email=username_or_email)
+            user = authenticate(request, username=user_obj.username, password=password)
+        except User.DoesNotExist:
+            # Если не нашли по email, пробуем по username
+            user = authenticate(request, username=username_or_email, password=password)
         
         if user is not None:
             login(request, user)
@@ -139,10 +234,9 @@ def login_view(request):
             # Создаем или получаем токен
             token, created = Token.objects.get_or_create(user=user)
             
-            # Устанавливаем токен в cookie
             response = JsonResponse({
                 'success': True,
-                'redirect_url': '/',  # URL для редиректа
+                'redirect_url': '/',
                 'user': {
                     'id': user.id,
                     'username': user.username,
@@ -155,7 +249,6 @@ def login_view(request):
                 }
             })
             
-            # Устанавливаем токен в cookie
             response.set_cookie(
                 'auth_token',
                 token.key,
@@ -169,7 +262,7 @@ def login_view(request):
         else:
             return JsonResponse({
                 'success': False,
-                'error': 'Неверный логин или пароль'
+                'error': 'Неверный email или пароль'
             }, status=401)
             
     except Exception as e:
