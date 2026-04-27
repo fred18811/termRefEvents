@@ -2496,6 +2496,95 @@ nav {
     background: #fee2e2 !important;
 }
 
+/* ========== ФИЛЬТРЫ ДЛЯ ЗАЯВОК ========== */
+.order-filters-panel {
+    background: white;
+    border-radius: var(--radius-xl);
+    padding: 1.25rem 1.5rem;
+    margin-bottom: 1.5rem;
+    box-shadow: var(--shadow-lg);
+    border: 1px solid rgba(0, 57, 166, 0.08);
+}
+
+.filter-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.filter-row:last-child {
+    margin-bottom: 0;
+}
+
+.filter-group-search {
+    display: flex;
+    gap: 0.75rem;
+    flex: 2;
+    align-items: center;
+}
+
+.filter-group-search .search-input {
+    flex: 1;
+    min-width: 200px;
+}
+
+.filter-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex: 1;
+    min-width: 180px;
+}
+
+.filter-item label {
+    font-weight: 600;
+    color: var(--color-blue);
+    font-size: 0.85rem;
+    white-space: nowrap;
+}
+
+.filter-item .sort-select {
+    flex: 1;
+    min-width: 120px;
+}
+
+.btn-clear-filters {
+    background: linear-gradient(135deg, var(--color-gray), #5a6268);
+    border: none;
+    color: white;
+    padding: 0.6rem 1.2rem;
+    border-radius: 40px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-weight: 500;
+    transition: all 0.3s ease;
+    white-space: nowrap;
+}
+
+.btn-clear-filters:hover {
+    background: linear-gradient(135deg, #5a6268, #4e555b);
+    transform: translateY(-1px);
+}
+
+.order-owner {
+    font-size: 0.7rem;
+    background: rgba(255, 255, 255, 0.2);
+    padding: 0.2rem 0.5rem;
+    border-radius: 20px;
+    margin-left: 0.5rem;
+}
+
+.search-result-count {
+    background: var(--color-blue);
+    color: white;
+    padding: 0.3rem 0.8rem;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    margin-left: 0.5rem;
+}
+
 /* ========== 23. SCROLLBAR ========== */
 ::-webkit-scrollbar {
     width: 10px;
@@ -2878,5 +2967,53 @@ nav {
     .order-duplicate-btn {
         padding: 0.3rem 0.6rem;
         font-size: 0.7rem;
+    }
+}
+
+
+/* Адаптив для фильтров */
+@media (max-width: 768px) {
+    .order-filters-panel {
+        padding: 1rem;
+    }
+    
+    .filter-row {
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+    
+    .filter-group-search {
+        flex-direction: column;
+    }
+    
+    .filter-item {
+        width: 100%;
+    }
+    
+    .btn-clear-filters {
+        width: 100%;
+        text-align: center;
+    }
+    
+    .filter-item label {
+        min-width: 80px;
+    }
+}
+
+@media (max-width: 480px) {
+    .order-filters-panel {
+        padding: 0.75rem;
+    }
+    
+    .filter-item {
+        flex-wrap: wrap;
+    }
+    
+    .filter-item label {
+        width: 100%;
+    }
+    
+    .filter-item .sort-select {
+        width: 100%;
     }
 }

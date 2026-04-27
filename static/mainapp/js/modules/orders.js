@@ -1,7 +1,7 @@
 'use strict';
 
 import { state } from './state.js';
-import { escapeHtml, formatDate, showNotification } from './utils.js';
+import { escapeHtml, formatDate, showNotification, debounce  } from './utils.js';
 import { api } from './api.js';
 
 // Глобальные переменные для редактирования
@@ -11,6 +11,12 @@ let userPermissions = {
     can_view_all: false,
     can_edit_all: false,
     is_superuser: false
+};
+let allOrders = [];
+let currentFilters = {
+    search: '',
+    status: 'all',
+    user: 'all'
 };
 
 // Функция для преобразования UTC даты в локальную для datetime-local input
@@ -44,11 +50,12 @@ export const loadOrders = async () => {
     try {
         const res = await api.getOrders();
         if (res.success) {
-            // Сохраняем права пользователя
             if (res.user_permissions) {
                 userPermissions = res.user_permissions;
             }
-            displayOrders(res.orders);
+            allOrders = res.orders;
+            applyFiltersAndDisplay();
+            initOrderFilters();
         } else {
             $('#ordersContainer').html(`<div class="no-orders">❌ ${res.error}</div>`);
         }
@@ -58,10 +65,156 @@ export const loadOrders = async () => {
     }
 };
 
-// Отображение заявок с кнопками редактирования
+// Применение фильтров и отображение
+const applyFiltersAndDisplay = () => {
+    let filteredOrders = [...allOrders];
+    
+    // Фильтр по поисковому запросу (название заявки)
+    if (currentFilters.search) {
+        const searchLower = currentFilters.search.toLowerCase();
+        filteredOrders = filteredOrders.filter(order => 
+            order.application_name && order.application_name.toLowerCase().includes(searchLower)
+        );
+    }
+    
+    // Фильтр по статусу
+    if (currentFilters.status !== 'all') {
+        filteredOrders = filteredOrders.filter(order => order.status === currentFilters.status);
+    }
+    
+    // Фильтр по пользователю (только для тех, у кого есть права)
+    if (currentFilters.user !== 'all' && (userPermissions.can_view_all || userPermissions.is_superuser)) {
+        filteredOrders = filteredOrders.filter(order => order.user_name === currentFilters.user);
+    }
+    
+    // Обновляем счетчик результатов
+    updateSearchResultCount(filteredOrders.length, allOrders.length);
+    
+    displayOrders(filteredOrders);
+};
+
+// Обновление счетчика результатов поиска
+const updateSearchResultCount = (found, total) => {
+    const existingCount = $('#searchResultCount');
+    if (found !== total) {
+        if (existingCount.length) {
+            existingCount.text(`Найдено: ${found} из ${total}`);
+        } else {
+            $('.filter-group').prepend(`<span id="searchResultCount" class="search-result-count">Найдено: ${found} из ${total}</span>`);
+        }
+    } else {
+        existingCount.remove();
+    }
+};
+
+// Обработчик поиска с debounce
+const handleOrderSearch = debounce((query) => {
+    currentFilters.search = query;
+    applyFiltersAndDisplay();
+}, 300);
+
+// Очистка всех фильтров
+export const clearAllFilters = () => {
+    currentFilters = {
+        search: '',
+        status: 'all',
+        user: 'all'
+    };
+    $('#orderSearchInput').val('');
+    $('#orderStatusFilter').val('all');
+    $('#orderUserFilter').val('all');
+    applyFiltersAndDisplay();
+    showNotification('Фильтры очищены', 'info');
+};
+
+// Инициализация фильтров в DOM
+export const initOrderFilters = () => {
+    // Создаем панель фильтров, если её нет
+    if (!$('#orderFiltersPanel').length) {
+        const filterPanel = `
+            <div id="orderFiltersPanel" class="order-filters-panel">
+                <div class="filter-row">
+                    <div class="filter-group-search">
+                        <input type="text" id="orderSearchInput" class="search-input" placeholder="🔍 Поиск по названию заявки...">
+                        <button id="clearFiltersBtn" class="btn-clear-filters" title="Очистить все фильтры">✖ Очистить</button>
+                    </div>
+                </div>
+                <div class="filter-row">
+                    <div class="filter-item">
+                        <label>📊 Статус:</label>
+                        <select id="orderStatusFilter" class="sort-select">
+                            <option value="all">Все статусы</option>
+                            <option value="new">🟢 Новые</option>
+                            <option value="in_progress">🟡 В работе</option>
+                            <option value="completed">⚪ Завершенные</option>
+                            <option value="cancelled">🔴 Отмененные</option>
+                        </select>
+                    </div>
+                    <div id="userFilterContainer" class="filter-item" style="${(userPermissions.can_view_all || userPermissions.is_superuser) ? '' : 'display: none;'}">
+                        <label>👤 Пользователь:</label>
+                        <select id="orderUserFilter" class="sort-select">
+                            <option value="all">Все пользователи</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        `;
+        $('.page-header').after(filterPanel);
+        
+        // Заполняем список пользователей
+        if (userPermissions.can_view_all || userPermissions.is_superuser) {
+            populateUserFilter();
+        }
+    }
+    
+    // Привязываем обработчики
+    $('#orderSearchInput').off('input').on('input', function() {
+        handleOrderSearch($(this).val());
+    });
+    
+    $('#orderStatusFilter').off('change').on('change', function() {
+        currentFilters.status = $(this).val();
+        applyFiltersAndDisplay();
+    });
+    
+    $('#orderUserFilter').off('change').on('change', function() {
+        currentFilters.user = $(this).val();
+        applyFiltersAndDisplay();
+    });
+    
+    $('#clearFiltersBtn').off('click').on('click', function() {
+        clearAllFilters();
+    });
+};
+
+// Заполнение списка пользователей
+const populateUserFilter = () => {
+    const users = new Set();
+    allOrders.forEach(order => {
+        if (order.user_name) {
+            users.add(order.user_name);
+        }
+    });
+    
+    const userSelect = $('#orderUserFilter');
+    const currentValue = userSelect.val();
+    
+    userSelect.empty();
+    userSelect.append('<option value="all">👥 Все пользователи</option>');
+    
+    Array.from(users).sort().forEach(user => {
+        userSelect.append(`<option value="${escapeHtml(user)}">👤 ${escapeHtml(user)}</option>`);
+    });
+    
+    if (currentValue && currentValue !== 'all') {
+        userSelect.val(currentValue);
+    }
+};
+
+// Обновленная функция displayOrders (с учетом фильтров)
 export const displayOrders = (orders) => {
     if (!orders?.length) {
-        $('#ordersContainer').html('<div class="no-orders">Нет заявок</div>');
+        $('#ordersContainer').html('<div class="no-orders">🔍 Нет заявок, соответствующих фильтрам</div>');
         return;
     }
     
@@ -73,17 +226,32 @@ export const displayOrders = (orders) => {
         const statusText = order.status_display || 
                           (order.status === 'cancelled' ? 'Отменена' : 
                            (order.status === 'completed' ? 'Завершена' : 'Активна'));
+        
+        // Получаем статус иконку
+        let statusIcon = '';
+        switch(order.status) {
+            case 'new': statusIcon = '🟢'; break;
+            case 'in_progress': statusIcon = '🟡'; break;
+            case 'completed': statusIcon = '⚪'; break;
+            case 'cancelled': statusIcon = '🔴'; break;
+            default: statusIcon = '📋';
+        }
+        
         const startDate = order.date_time_start ? new Date(order.date_time_start).toLocaleString('ru-RU') : 'Не указана';
         const endDate = order.date_time_end ? new Date(order.date_time_end).toLocaleString('ru-RU') : 'Не завершен';
         const isChecked = state.selectedOrders.has(order.id) ? 'checked' : '';
         const commentHtml = order.comment ? `<div class="order-comment">💬 ${escapeHtml(order.comment)}</div>` : '';
         
-        // Определяем, может ли пользователь редактировать эту заявку
         const canEdit = order.can_edit === true;
-        
-        // Показываем владельца заявки для администраторов
         const ownerInfo = (userPermissions.can_view_all || userPermissions.is_superuser) && order.user_name ? 
             `<span class="order-owner">👤 ${escapeHtml(order.user_name)}</span>` : '';
+        
+        // Подсветка поискового запроса в названии
+        let displayName = escapeHtml(order.application_name || 'Без названия');
+        if (currentFilters.search) {
+            const regex = new RegExp(`(${escapeRegex(currentFilters.search)})`, 'gi');
+            displayName = displayName.replace(regex, '<span class="highlight">$1</span>');
+        }
         
         html += `
             <div class="order-card" data-id="${order.id}" id="order-${order.id}">
@@ -91,9 +259,9 @@ export const displayOrders = (orders) => {
                     <div class="order-header-content">
                         <input type="checkbox" class="order-checkbox" data-id="${order.id}" ${isChecked} onclick="event.stopPropagation()">
                         <div class="order-info" onclick="toggleOrderBody(${order.id})">
-                            <h3>📋 Заявка №${order.id} - ${escapeHtml(order.application_name || 'Без названия')}</h3>
+                            <h3>📋 Заявка №${order.id} - ${displayName}</h3>
                             <div class="order-date">📅 ${startDate} - ${endDate}</div>
-                            <span class="order-status ${statusClass}">${statusText}</span>
+                            <span class="order-status ${statusClass}">${statusIcon} ${statusText}</span>
                             ${ownerInfo}
                         </div>
                     </div>
@@ -129,6 +297,11 @@ export const displayOrders = (orders) => {
     });
     
     updateSelectionInfo();
+};
+
+// Экранирование для регулярного выражения
+const escapeRegex = (string) => {
+    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 };
 
 // Функции для работы с заказами (добавить в orders.js)
@@ -545,18 +718,18 @@ const addSelectedEquipmentToOrder = () => {
     showNotification(`Добавлено ${selectedItems.length} позиций`, 'success');
 };
 
-// Обновленная загрузка позиций заказа
+// Обновленная функция loadOrderItems (добавлена передача can_edit)
 export const loadOrderItems = async (orderId) => {
     try {
         const res = await api.getOrderItems(orderId);
         if (res.success) {
             displayOrderItems(orderId, res.items, res.can_edit || false);
         } else {
-            $(`#order-items-${orderId}`).html(`<div class="no-orders">❌ ${res.error}</div>`);
+            $(`#order-items-${orderId}`).html(`<div class="no-orders">❌ ${escapeHtml(res.error)}</div>`);
         }
     } catch (error) {
         console.error('Ошибка:', error);
-        $(`#order-items-${orderId}`).html('<div class="no-orders">❌ Ошибка</div>');
+        $(`#order-items-${orderId}`).html('<div class="no-orders">❌ Ошибка загрузки позиций</div>');
     }
 };
 

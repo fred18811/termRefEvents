@@ -354,6 +354,11 @@ export const initEventHandlers = () => {
             $('[data-page]').removeClass('active');
             $(this).addClass('active');
             loadOrders();
+            setTimeout(() => {
+                if (typeof initOrderFilters === 'function') {
+                    initOrderFilters();
+                }
+            }, 100);
         }
     });
     
