@@ -1269,7 +1269,7 @@ nav {
     box-shadow: var(--shadow-md);
 }
 
-..location-order-header {
+.location-order-header {
     display: flex;
     justify-content: space-between;
     align-items: center;

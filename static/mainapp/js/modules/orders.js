@@ -9,6 +9,31 @@ let currentEditingOrderId = null;
 let currentEditingOrderData = null;
 let currentAvailableEquipment = [];
 
+// Функция для преобразования UTC даты в локальную для datetime-local input
+const formatDateTimeForInput = (isoString) => {
+    if (!isoString) return '';
+    
+    try {
+        // Создаем дату из ISO строки
+        const date = new Date(isoString);
+        
+        // Проверяем, что дата валидна
+        if (isNaN(date.getTime())) return '';
+        
+        // Получаем локальные компоненты даты и времени
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        const hours = String(date.getHours()).padStart(2, '0');
+        const minutes = String(date.getMinutes()).padStart(2, '0');
+        
+        return `${year}-${month}-${day}T${hours}:${minutes}`;
+    } catch (error) {
+        console.error('Ошибка форматирования даты:', error);
+        return '';
+    }
+};
+
 // Загрузка заявок
 export const loadOrders = async () => {
     $('#ordersContainer').html('<div class="loading">Загрузка...</div>');
@@ -50,8 +75,7 @@ export const displayOrders = (orders) => {
                     <div class="order-header-content">
                         <input type="checkbox" class="order-checkbox" data-id="${order.id}" ${isChecked} onclick="event.stopPropagation()">
                         <div class="order-info" onclick="toggleOrderBody(${order.id})">
-                            <h3>📋 Заявка №${order.id} - ${escapeHtml(order.application_name || 'Без названия')}</h3>
-                            <div class="order-date">📅 ${startDate} - ${endDate}</div>
+                            <h3>Заявка №${order.id} - ${escapeHtml(order.application_name || 'Без названия')}</h3>
                             <span class="order-status ${statusClass}">${statusText}</span>
                         </div>
                     </div>
@@ -111,10 +135,20 @@ const openEditOrderModal = async (orderId) => {
     }
 };
 
-// Отображение модального окна редактирования (обновленная версия)
+// Отображение модального окна редактирования (исправленная версия)
 const displayEditOrderModal = (order) => {
-    const startDate = order.date_time_start ? order.date_time_start.slice(0, 16) : '';
-    const endDate = order.date_time_end ? order.date_time_end.slice(0, 16) : '';
+    // Правильное преобразование дат из UTC в локальное время
+    const startDate = formatDateTimeForInput(order.date_time_start);
+    const endDate = formatDateTimeForInput(order.date_time_end);
+    
+    console.log('Исходные даты из API:', {
+        date_time_start: order.date_time_start,
+        date_time_end: order.date_time_end
+    });
+    console.log('Преобразованные даты для input:', {
+        startDate: startDate,
+        endDate: endDate
+    });
     
     let equipmentHtml = '<div class="edit-equipment-list">';
     
@@ -623,8 +657,8 @@ const generateLocationCardWithButtons = (orderId, locationName, startDate, endDa
         <div class="location-order-card" data-order-id="${orderId}">
             <div class="location-order-header">
                 <div class="location-order-info">
-                    <span class="location-name">📍 ${escapeHtml(locationName)}</span>
-                    <span class="location-dates">📅 ${startDate} - ${endDate}</span>
+                    <span class="location-name">${escapeHtml(locationName)}</span>
+                    <span class="location-dates"><strong> ${startDate} - ${endDate}</strong></span>
                 </div>
                 ${actionButtons}
             </div>

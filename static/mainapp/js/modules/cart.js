@@ -9,6 +9,27 @@ import { showConfirm } from './modal.js';
 let currentEditIndex = null;
 let availableEquipment = [];
 
+const formatDateTimeForInput = (isoString) => {
+    if (!isoString) return '';
+    
+    try {
+        const date = new Date(isoString);
+        
+        if (isNaN(date.getTime())) return '';
+        
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        const hours = String(date.getHours()).padStart(2, '0');
+        const minutes = String(date.getMinutes()).padStart(2, '0');
+        
+        return `${year}-${month}-${day}T${hours}:${minutes}`;
+    } catch (error) {
+        console.error('Ошибка форматирования даты:', error);
+        return '';
+    }
+};
+
 // Обновление отображения корзины
 export const updateCartDisplay = () => {
     console.log('updateCartDisplay вызван, корзина:', state.orderCart.length);
@@ -174,21 +195,30 @@ const loadAvailableEquipment = async (locationId, dateStart = null, dateEnd = nu
 };
 
 // Открытие модального окна редактирования
-const openEditModal = async (index) => {
+export const openEditModal = async (index) => {
     currentEditIndex = index;
     const item = state.orderCart[index];
     
     if (!item) return;
     
-    console.log('Редактирование заказа:', item);
+    console.log('Редактирование заказа из корзины:', item);
     console.log('Комментарий из заказа:', item.comment);
     
     // Загружаем актуальную информацию о доступности оборудования
     await loadAvailableEquipment(item.location_id);
     
-    // Получаем актуальные даты из заказа
-    const startDate = new Date(item.date_start).toISOString().slice(0, 16);
-    const endDate = new Date(item.date_end).toISOString().slice(0, 16);
+    // ПРАВИЛЬНОЕ ФОРМАТИРОВАНИЕ ДАТ - используем функцию formatDateTimeForInput
+    const startDate = formatDateTimeForInput(item.date_start);
+    const endDate = formatDateTimeForInput(item.date_end);
+    
+    console.log('Исходные даты из корзины:', {
+        date_start: item.date_start,
+        date_end: item.date_end
+    });
+    console.log('Преобразованные даты для input:', {
+        startDate: startDate,
+        endDate: endDate
+    });
     
     // Загружаем актуальное доступное количество для каждого оборудования
     const availabilityResponse = await api.checkEquipmentAvailability(
