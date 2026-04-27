@@ -119,8 +119,8 @@ const updateDisplayWithSearch = () => {
         checkAvailabilityWithData(filteredBySearch);
     } else {
         const message = currentSearchQuery 
-            ? `<div class="info-message">🔍 Ничего не найдено по запросу "${escapeHtml(currentSearchQuery)}"</div>`
-            : '<div class="info-message">🔍 Выберите типы оборудования для отображения</div>';
+            ? `<div class="info-message">Ничего не найдено по запросу "${escapeHtml(currentSearchQuery)}"</div>`
+            : '<div class="info-message">Выберите типы оборудования для отображения</div>';
         $('#equipmentContainer').html(message);
     }
 };
@@ -475,7 +475,7 @@ export const addToCart = () => {
     $('#searchEquipment').val('');
     $('.location-item').removeClass('active');
     $('.type-item input').prop('checked', false);
-    $('#locationPhoto').html('<div class="photo-placeholder">📷 Выберите локацию</div>');
+    // $('#locationPhoto').html('<div class="photo-placeholder">📷 Выберите локацию</div>');
     $('#equipmentContainer').html('<div class="info-message">📍 Выберите локацию, даты и типы оборудования</div>');
     $('#orderComment').val('');
     
