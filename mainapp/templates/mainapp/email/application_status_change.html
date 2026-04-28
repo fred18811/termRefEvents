@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Изменение статуса заявки</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background-color: #f5f7fc;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+        }
+        .header {
+            background: linear-gradient(135deg, #0039a6, #da291c);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        .content {
+            padding: 30px;
+        }
+        .status-change {
+            background: #f8fafc;
+            padding: 20px;
+            text-align: center;
+            border-radius: 12px;
+            margin: 20px 0;
+        }
+        .old-status {
+            color: #64748b;
+            text-decoration: line-through;
+        }
+        .arrow {
+            font-size: 24px;
+            margin: 10px 0;
+        }
+        .new-status {
+            font-size: 24px;
+            font-weight: bold;
+            color: #28a745;
+        }
+        .footer {
+            background: #f8fafc;
+            padding: 20px;
+            text-align: center;
+            font-size: 12px;
+            color: #64748b;
+        }
+        .button {
+            display: inline-block;
+            background: linear-gradient(135deg, #0039a6, #da291c);
+            color: white;
+            text-decoration: none;
+            padding: 12px 24px;
+            border-radius: 40px;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📝 Изменение статуса заявки</h1>
+            <p>Заявка #{{ application_id }} изменила статус</p>
+        </div>
+        
+        <div class="content">
+            <div class="status-change">
+                <div class="old-status">{{ old_status }}</div>
+                <div class="arrow">↓</div>
+                <div class="new-status">{{ new_status }}</div>
+            </div>
+            
+            <p><strong>Заявка:</strong> {{ application_name }}</p>
+            <p><strong>Кто изменил:</strong> {{ changed_by }}</p>
+            <p><strong>Пользователь:</strong> {{ user.get_full_name|default:user.username }}</p>
+            
+            <div style="text-align: center;">
+                <a href="{{ admin_url }}/admin/mainapp/application/{{ application_id }}/change/" class="button">
+                    📋 Перейти к заявке
+                </a>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <p>Это автоматическое сообщение, пожалуйста, не отвечайте на него.</p>
+        </div>
+    </div>
+</body>
+</html>

@@ -1,3 +1,4 @@
+from django.contrib.auth.models import User
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render
@@ -20,6 +21,7 @@ import openpyxl
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 from io import BytesIO
 from datetime import timedelta, datetime
+from .email_utils import EmailService
 
 
 @csrf_exempt
@@ -848,16 +850,49 @@ def save_order(request):
         # Получаем application_id
         application_id = data.get('application_id')
         application = None
+        is_new_application = False  # Флаг, что заявка только что создана
+        
         if application_id:
             try:
                 application = Application.objects.get(id=application_id, id_user=request.user)
-                print(f"Найдена заявка №{application.id}")
+                print(f"Найдена существующая заявка №{application.id}")
             except Application.DoesNotExist:
                 print(f"Заявка с ID {application_id} не найдена")
                 return JsonResponse({
                     'success': False,
                     'error': 'Заявка не найдена'
                 }, status=404)
+        else:
+            # ========== ВОТ ЗДЕСЬ СОЗДАЕТСЯ НОВАЯ ЗАЯВКА ==========
+            # Получаем название заявки из данных (оно должно быть передано)
+            application_name = data.get('application_name')
+            if not application_name:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Не указано название заявки'
+                }, status=400)
+            
+            application_comment = data.get('application_comment', '')
+            
+            # Создаем новую заявку
+            application = Application.objects.create(
+                name=application_name,
+                id_user=request.user,
+                comment=application_comment,
+                status='new'
+            )
+            is_new_application = True
+            print(f"Создана новая заявка №{application.id}")
+            
+            # ========== ВОТ ЗДЕСЬ ОТПРАВЛЯЕТСЯ УВЕДОМЛЕНИЕ ==========
+            # Отправляем уведомление о новой заявке
+            try:
+                from .email_utils import EmailService
+                EmailService.send_new_application_notification(application, request.user)
+                print(f"Уведомление о новой заявке #{application.id} отправлено")
+            except Exception as e:
+                print(f"Ошибка отправки уведомления: {e}")
+                # Не блокируем создание заявки, если письмо не отправилось
         
         # Получаем location_id (если есть)
         location_id = data.get('location_id')
@@ -909,7 +944,6 @@ def save_order(request):
                         continue
                     
                     # Проверяем доступность с учетом отмененных заказов
-                    # Исключаем заказы со статусом 'cancelled'
                     busy_quantity = OrderItem.objects.filter(
                         common_equipment_location=common_equipment,
                         order__date_time_start__lt=date_end,
@@ -917,16 +951,15 @@ def save_order(request):
                     ).exclude(
                         order__date_time_end__isnull=True
                     ).exclude(
-                        order__id_application__status='cancelled'  # Исключаем отмененные
+                        order__id_application__status='cancelled'
                     ).aggregate(total=Sum('quantity'))['total'] or 0
                     
-                    # Активные заказы без даты окончания (исключая отмененные)
                     active_busy = OrderItem.objects.filter(
                         common_equipment_location=common_equipment,
                         order__date_time_end__isnull=True,
                         order__date_time_start__lt=date_end
                     ).exclude(
-                        order__id_application__status='cancelled'  # Исключаем отмененные
+                        order__id_application__status='cancelled'
                     ).aggregate(total=Sum('quantity'))['total'] or 0
                     
                     total_busy = busy_quantity + active_busy
@@ -969,7 +1002,6 @@ def save_order(request):
                         print(f"    ✗ EquipmentLocation не найден: location_id={item_location_id}, equipment_id={equipment_id}")
                         continue
                     
-                    # Проверяем доступность с учетом отмененных заказов
                     busy_quantity = OrderItem.objects.filter(
                         equipment_location=equipment_location,
                         order__date_time_start__lt=date_end,
@@ -977,16 +1009,15 @@ def save_order(request):
                     ).exclude(
                         order__date_time_end__isnull=True
                     ).exclude(
-                        order__id_application__status='cancelled'  # Исключаем отмененные
+                        order__id_application__status='cancelled'
                     ).aggregate(total=Sum('quantity'))['total'] or 0
                     
-                    # Активные заказы без даты окончания (исключая отмененные)
                     active_busy = OrderItem.objects.filter(
                         equipment_location=equipment_location,
                         order__date_time_end__isnull=True,
                         order__date_time_start__lt=date_end
                     ).exclude(
-                        order__id_application__status='cancelled'  # Исключаем отмененные
+                        order__id_application__status='cancelled'
                     ).aggregate(total=Sum('quantity'))['total'] or 0
                     
                     total_busy = busy_quantity + active_busy
@@ -1025,6 +1056,9 @@ def save_order(request):
         
         if items_added == 0:
             order.delete()
+            # Если заявка была только что создана, но заказ не добавился, удаляем заявку
+            if is_new_application:
+                application.delete()
             return JsonResponse({
                 'success': False,
                 'error': 'Не удалось добавить ни одной позиции'
@@ -1836,6 +1870,13 @@ def create_application(request):
             comment=comment,
             status='new'
         )
+        
+        # Отправляем уведомление о новой заявке
+        try:
+            EmailService.send_new_application_notification(application, request.user)
+        except Exception as e:
+            print(f"Ошибка отправки уведомления: {e}")
+            # Не блокируем создание заявки, если письмо не отправилось
         
         return JsonResponse({
             'success': True,

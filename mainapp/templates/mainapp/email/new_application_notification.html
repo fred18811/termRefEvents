@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Новая заявка</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background-color: #f5f7fc;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+        }
+        .header {
+            background: linear-gradient(135deg, #0039a6, #da291c);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 24px;
+        }
+        .content {
+            padding: 30px;
+        }
+        .info-block {
+            background: #f8fafc;
+            border-left: 4px solid #0039a6;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 8px;
+        }
+        .info-block h3 {
+            margin: 0 0 10px 0;
+            color: #0039a6;
+        }
+        .location-item {
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 12px;
+        }
+        .location-name {
+            font-weight: bold;
+            color: #0039a6;
+            font-size: 16px;
+        }
+        .location-dates {
+            color: #64748b;
+            font-size: 12px;
+            margin-top: 5px;
+        }
+        .badge {
+            display: inline-block;
+            background: #28a745;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .footer {
+            background: #f8fafc;
+            padding: 20px;
+            text-align: center;
+            font-size: 12px;
+            color: #64748b;
+            border-top: 1px solid #e2e8f0;
+        }
+        .button {
+            display: inline-block;
+            background: linear-gradient(135deg, #0039a6, #da291c);
+            color: white;
+            text-decoration: none;
+            padding: 12px 24px;
+            border-radius: 40px;
+            margin-top: 20px;
+        }
+        hr {
+            border: none;
+            border-top: 1px solid #e2e8f0;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔔 Новая заявка</h1>
+            <p>Поступила новая заявка на оборудование</p>
+        </div>
+        
+        <div class="content">
+            <div class="info-block">
+                <h3>📋 Информация о заявке</h3>
+                <p><strong>Номер заявки:</strong> #{{ application_id }}</p>
+                <p><strong>Название:</strong> {{ application_name }}</p>
+                <p><strong>Статус:</strong> <span class="badge">{{ status_display }}</span></p>
+                <p><strong>Дата создания:</strong> {{ created_at|date:"d.m.Y H:i" }}</p>
+            </div>
+            
+            <div class="info-block">
+                <h3>👤 Информация о пользователе</h3>
+                <p><strong>Имя:</strong> {{ user_full_name }}</p>
+                <p><strong>Email:</strong> {{ user_email }}</p>
+            </div>
+            
+            {% if application_comment %}
+            <div class="info-block">
+                <h3>💬 Комментарий к заявке</h3>
+                <p>{{ application_comment }}</p>
+            </div>
+            {% endif %}
+            
+            <div class="info-block">
+                <h3>📍 Локации и оборудование ({{ locations_count }})</h3>
+                {% for location in locations_info %}
+                <div class="location-item">
+                    <div class="location-name">{{ location.name }}</div>
+                    <div class="location-dates">
+                        📅 {{ location.date_start|date:"d.m.Y H:i" }} - 
+                        {% if location.date_end %}
+                            {{ location.date_end|date:"d.m.Y H:i" }}
+                        {% else %}
+                            Не завершен
+                        {% endif %}
+                    </div>
+                    <div style="margin-top: 8px; font-size: 13px;">
+                        <span>📦 Позиций: {{ location.items_count }}</span>
+                        &nbsp;|&nbsp;
+                        <span>🔧 Всего единиц: {{ location.total_quantity }}</span>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            
+            <hr>
+            
+            <div style="text-align: center;">
+                <a href="{{ admin_url }}/admin/mainapp/application/{{ application_id }}/change/" class="button">
+                    📋 Перейти к заявке
+                </a>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <p>Это автоматическое сообщение, пожалуйста, не отвечайте на него.</p>
+            <p>Система управления оборудованием</p>
+        </div>
+    </div>
+</body>
+</html>

@@ -557,3 +557,12 @@ def create_default_groups_and_permissions(sender, **kwargs):
         # Назначаем права группам
         view_group.permissions.add(view_perm)
         edit_group.permissions.add(view_perm, edit_perm)
+        
+        
+@receiver(post_migrate)
+def create_mail_receiver_group(sender, **kwargs):
+    """Создание группы MailReciver после миграции"""
+    if sender.name == 'mainapp':
+        group, created = Group.objects.get_or_create(name='MailReciver')
+        if created:
+            print(f'Группа "{group.name}" создана')
