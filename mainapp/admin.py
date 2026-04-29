@@ -5,7 +5,8 @@ from django import forms
 from django.utils.html import format_html
 from django.core.exceptions import ValidationError
 from django.db import models
-from .models import Location, TypeEquipment, Equipment, EquipmentLocation, Photo, Order, OrderItem, CommonEquipmentLocation, Application, History  
+from .models import Location, TypeEquipment, Equipment, EquipmentLocation, Photo,\
+    Order, OrderItem, CommonEquipmentLocation, Application, History,Feedback  
 
 # Настройка заголовков админ-панели
 admin.site.site_header = "Управление локациями и оборудованием"
@@ -626,3 +627,69 @@ class PhotoAdmin(admin.ModelAdmin):
         # Если это главное фото, убеждаемся что другие фото этой локации не главные
         if obj.is_main:
             Photo.objects.filter(id_location=obj.id_location, is_main=True).exclude(id=obj.id).update(is_main=False)
+
+
+@admin.register(Feedback)
+class FeedbackAdmin(admin.ModelAdmin):
+    list_display = ['id', 'id_user', 'get_short_name', 'get_application_display', 'get_short_comment', 'created_at']
+    list_display_links = ['id', 'id_user']
+    list_filter = ['created_at', 'id_user']
+    search_fields = ['id_user__username', 'id_user__email', 'id_application__name', 'name', 'comment']
+    readonly_fields = ['created_at']
+    date_hierarchy = 'created_at'
+    list_per_page = 20
+    ordering = ['-created_at']
+    autocomplete_fields = ['id_user', 'id_application']
+    
+    fieldsets = (
+        ('Информация об отзыве', {
+            'fields': ('id_user', 'id_application', 'name', 'comment')
+        }),
+        ('Системная информация', {
+            'fields': ('created_at',),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def get_application_display(self, obj):
+        if obj.id_application:
+            return f"Заявка #{obj.id_application.id} - {obj.id_application.name[:50]}"
+        return "— (Общий отзыв)"
+    get_application_display.short_description = 'Заявка'
+    
+    def get_short_name(self, obj):
+        return obj.get_short_name()
+    get_short_name.short_description = 'Название'
+    
+    def get_short_comment(self, obj):
+        return obj.get_short_comment()
+    get_short_comment.short_description = 'Комментарий'
+    
+    # Добавляем действие для экспорта в CSV
+    actions = ['export_to_csv']
+    
+    def export_to_csv(self, request, queryset):
+        import csv
+        from django.http import HttpResponse
+        
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="feedback_export.csv"'
+        
+        writer = csv.writer(response)
+        writer.writerow(['ID', 'Пользователь', 'Email пользователя', 'Название отзыва', 'ID заявки', 'Название заявки', 'Комментарий', 'Дата создания'])
+        
+        for obj in queryset:
+            writer.writerow([
+                obj.id,
+                obj.id_user.username,
+                obj.id_user.email,
+                obj.name or '',
+                obj.id_application.id if obj.id_application else '',
+                obj.id_application.name[:100] if obj.id_application and obj.id_application.name else '',
+                obj.comment,
+                obj.created_at.strftime('%d.%m.%Y %H:%M:%S')
+            ])
+        
+        self.message_user(request, f'Экспортировано {queryset.count()} записей')
+        return response
+    export_to_csv.short_description = 'Экспорт в CSV'

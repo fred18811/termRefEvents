@@ -3017,3 +3017,59 @@ nav {
         width: 100%;
     }
 }
+
+/* Кнопка обратной связи */
+.btn-feedback {
+    background: linear-gradient(135deg, #0039a6, #da291c);
+    color: white;
+    border: none;
+    padding: 0.5rem 1rem;
+    border-radius: 40px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-left: auto;
+    margin-right: 1rem;
+}
+
+.btn-feedback:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 57, 166, 0.3);
+}
+
+/* Адаптив для кнопки обратной связи */
+@media (max-width: 992px) {
+    .btn-feedback {
+        margin-left: 0;
+        margin-right: 0;
+        order: 2;
+    }
+}
+
+@media (max-width: 768px) {
+    .btn-feedback {
+        padding: 0.4rem 0.8rem;
+        font-size: 0.8rem;
+        margin-top: 0.5rem;
+    }
+}
+
+/* Стили для формы обратной связи */
+.feedback-form {
+    margin-top: 1rem;
+}
+
+.required {
+    color: #da291c;
+}
+
+.field-hint {
+    font-size: 0.7rem;
+    color: #64748b;
+    margin-top: 0.25rem;
+    display: block;
+}

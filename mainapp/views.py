@@ -10,10 +10,13 @@ from django.shortcuts import render, get_object_or_404
 from django.utils import timezone
 from django.db.models import Sum, Q
 from django.db import transaction
+from django.core.mail import send_mail
+from django.core.mail import EmailMultiAlternatives
 from rest_framework.authtoken.models import Token
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
-from .models import Location, TypeEquipment, EquipmentLocation, Photo, Order, OrderItem, CommonEquipmentLocation, Application, History
+from .models import Location, TypeEquipment, EquipmentLocation, Photo, Order,\
+    OrderItem, CommonEquipmentLocation, Application, History, Feedback
 from .history_utils import HistoryService
 from django.contrib.admin.views.decorators import staff_member_required
 import json
@@ -24,6 +27,110 @@ from datetime import timedelta, datetime
 from .email_utils import EmailService
 
 
+@login_required
+@csrf_exempt
+@require_http_methods(["POST"])
+def create_feedback(request):
+    """
+    Создание отзыва/обратной связи и отправка email уведомления
+    """
+    try:
+        data = json.loads(request.body)
+        name = data.get('name', '').strip()
+        comment = data.get('comment', '').strip()
+        
+        if not comment:
+            return JsonResponse({
+                'success': False,
+                'error': 'Текст сообщения не может быть пустым'
+            }, status=400)
+        
+        # Создаем отзыв
+        feedback = Feedback.objects.create(
+            id_user=request.user,
+            name=name if name else None,
+            comment=comment
+        )
+        
+        # Логируем действие
+        HistoryService.add_entry(
+            request.user,
+            f"Добавлен отзыв #{feedback.id}: {name if name else 'Без темы'}"
+        )
+        
+        # ========== ОТПРАВКА EMAIL УВЕДОМЛЕНИЯ ==========
+        try:
+            from .email_utils import EmailService
+            
+            # Формируем тему письма
+            if name:
+                subject = f"📝 Обратная связь от {request.user.username}: {name[:50]}"
+            else:
+                subject = f"📝 Обратная связь от {request.user.username}"
+            
+            # Формируем HTML письмо
+            from django.template.loader import render_to_string
+            from django.utils.html import strip_tags
+            from django.conf import settings
+            
+            context = {
+                'feedback_id': feedback.id,
+                'user': request.user,
+                'user_name': request.user.get_full_name() or request.user.username,
+                'user_email': request.user.email,
+                'feedback_name': name if name else 'Без темы',
+                'feedback_comment': comment,
+                'created_at': feedback.created_at,
+                'admin_url': getattr(settings, 'SITE_URL', 'http://127.0.0.1:8000')
+            }
+            
+            html_message = render_to_string('mainapp/email/feedback_notification.html', context)
+            plain_message = strip_tags(html_message)
+            
+            # Отправляем всем получателям из группы MailReciver
+            receivers = EmailService.get_mail_receivers()
+            
+            if receivers:
+                for receiver in receivers:
+                    try:
+                        send_mail(
+                            subject=subject,
+                            message=plain_message,
+                            from_email=settings.DEFAULT_FROM_EMAIL,
+                            recipient_list=[receiver.email],
+                            html_message=html_message,
+                            fail_silently=False
+                        )
+                        print(f"Уведомление о反馈 отправлено на {receiver.email}")
+                    except Exception as e:
+                        print(f"Ошибка отправки на {receiver.email}: {e}")
+            else:
+                print("Нет получателей в группе MailReciver")
+                
+        except Exception as e:
+            print(f"Ошибка отправки email уведомления: {e}")
+            # Не блокируем создание отзыва, если письмо не отправилось
+        
+        return JsonResponse({
+            'success': True,
+            'message': 'Спасибо за обратную связь! Ваше сообщение отправлено.',
+            'feedback': {
+                'id': feedback.id,
+                'name': feedback.name,
+                'comment': feedback.comment,
+                'created_at': feedback.created_at.isoformat(),
+                'created_at_formatted': feedback.created_at.strftime('%d.%m.%Y %H:%M:%S')
+            }
+        })
+        
+    except Exception as e:
+        print(f"Ошибка создания отзыва: {str(e)}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+        
+        
 @csrf_exempt
 @api_view(['POST'])
 @permission_classes([AllowAny])
@@ -346,7 +453,104 @@ def get_user_info(request):
         }
     })
             
-            
+
+@login_required
+def get_application_feedback(request, app_id):
+    """
+    Получение всех отзывов по заявке
+    """
+    try:
+        application = Application.objects.get(id=app_id)
+        
+        # Проверка прав доступа
+        if application.id_user != request.user and not user_can_view_all_applications(request.user):
+            return JsonResponse({
+                'success': False,
+                'error': 'У вас нет прав для просмотра отзывов к этой заявке'
+            }, status=403)
+        
+        feedbacks = Feedback.objects.filter(id_application=application).order_by('-created_at')
+        
+        return JsonResponse({
+            'success': True,
+            'application_id': application.id,
+            'application_name': application.name,
+            'feedbacks': [
+                {
+                    'id': f.id,
+                    'name': f.name,
+                    'user_id': f.id_user.id,
+                    'user_name': f.id_user.username,
+                    'comment': f.comment,
+                    'created_at': f.created_at.isoformat(),
+                    'created_at_formatted': f.created_at.strftime('%d.%m.%Y %H:%M:%S')
+                }
+                for f in feedbacks
+            ],
+            'total': feedbacks.count()
+        })
+        
+    except Application.DoesNotExist:
+        return JsonResponse({
+            'success': False,
+            'error': 'Заявка не найдена'
+        }, status=404)
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@login_required
+def get_all_feedback(request):
+    """
+    Получение всех отзывов (для администраторов и пользователей с правами)
+    """
+    try:
+        # Проверяем права
+        if not user_can_view_all_applications(request.user):
+            # Обычные пользователи видят только свои отзывы
+            feedbacks = Feedback.objects.filter(id_user=request.user).order_by('-created_at')
+        else:
+            # Администраторы и менеджеры видят все отзывы
+            feedbacks = Feedback.objects.all().order_by('-created_at')
+        
+        limit = int(request.GET.get('limit', 50))
+        offset = int(request.GET.get('offset', 0))
+        
+        total = feedbacks.count()
+        feedbacks_page = feedbacks[offset:offset+limit]
+        
+        return JsonResponse({
+            'success': True,
+            'feedbacks': [
+                {
+                    'id': f.id,
+                    'name': f.name,
+                    'user_id': f.id_user.id,
+                    'user_name': f.id_user.username,
+                    'user_email': f.id_user.email,
+                    'application_id': f.id_application.id if f.id_application else None,
+                    'application_name': f.id_application.name if f.id_application else None,
+                    'comment': f.comment,
+                    'created_at': f.created_at.isoformat(),
+                    'created_at_formatted': f.created_at.strftime('%d.%m.%Y %H:%M:%S')
+                }
+                for f in feedbacks_page
+            ],
+            'total': total,
+            'limit': limit,
+            'offset': offset
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+        
+                    
 @login_required        
 def get_rooms(request):
     """Получить список всех помещений с главным фото"""

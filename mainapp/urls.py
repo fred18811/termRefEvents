@@ -57,6 +57,11 @@ urlpatterns = [
     path('api/history/clear/', views.clear_old_history, name='clear_old_history'),
     # Регистрация
     # path('api/register/', views.register_view, name='register'),
+    
+    # ========== ОБРАТНАЯ СВЯЗЬ (FEEDBACK) ==========
+    path('api/feedback/create/', views.create_feedback, name='create_feedback'),
+    path('api/feedback/application/<int:app_id>/', views.get_application_feedback, name='get_application_feedback'),
+    path('api/feedback/all/', views.get_all_feedback, name='get_all_feedback'), 
 ]
 
 if settings.DEBUG:

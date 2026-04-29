@@ -2,6 +2,7 @@
 import { initApp } from './modules/events.js';
 import { checkAuth, initAuth } from './modules/auth.js';
 import { showNotification } from './modules/utils.js';
+import { initFeedback } from './modules/feedback.js';
 
 // Запуск приложения после проверки авторизации
 $(document).ready(async function() {
@@ -14,6 +15,7 @@ $(document).ready(async function() {
     if (isAuthenticated) {
         // Пользователь авторизован - запускаем приложение
         initApp();
+        initFeedback();  // Инициализируем обратную связь
     } else {
         // Показываем форму авторизации
         initAuth();

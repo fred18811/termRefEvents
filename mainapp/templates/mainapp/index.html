@@ -32,6 +32,9 @@
                     </li>
                 </ul>
             </nav>
+
+            <!-- Кнопка обратной связи -->
+            <button id="feedbackBtn" class="btn-feedback">📝 Обратная связь</button>
             
             <!-- Блок информации о пользователе -->
             <div id="userInfo" class="user-info" style="display: none;">
@@ -218,6 +221,31 @@
                 <button id="confirmAddEquipmentBtn" class="btn btn-sm btn-primary">➕ Добавить</button>
                 <button id="cancelAddEquipmentBtn" class="btn btn-sm btn-secondary">Отмена</button>
             </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно обратной связи -->
+    <div id="feedbackModal" class="modal">
+        <div class="modal-content">
+            <span class="modal-close">&times;</span>
+            <h3>📝 Обратная связь</h3>
+            <form id="feedbackForm" class="feedback-form">
+                <div class="form-group">
+                    <label for="feedbackName">Тема</label>
+                    <input type="text" id="feedbackName" class="auth-input" placeholder="Кратко опишите тему обращения" maxlength="300">
+                    <small class="field-hint">Необязательно, но поможет быстрее обработать обращение</small>
+                </div>
+                <div class="form-group">
+                    <label for="feedbackComment">Сообщение <span class="required">*</span></label>
+                    <textarea id="feedbackComment" class="comment-input" rows="5" placeholder="Опишите ваш вопрос, предложение или замечание..."></textarea>
+                    <small class="field-hint">Пожалуйста, опишите подробнее (обязательно)</small>
+                </div>
+                <div id="feedbackError" class="auth-error" style="display: none;"></div>
+                <div class="modal-buttons">
+                    <button type="button" id="cancelFeedbackBtn" class="btn btn-secondary">Отмена</button>
+                    <button type="submit" id="submitFeedbackBtn" class="btn btn-primary">📤 Отправить</button>
+                </div>
+            </form>
         </div>
     </div>
 

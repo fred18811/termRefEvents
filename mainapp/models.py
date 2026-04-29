@@ -524,6 +524,73 @@ class OrderItem(models.Model):
         elif self.common_equipment_location:
             return self.common_equipment_location.id_types_equipments.name
         return "Не указано"
+
+
+class Feedback(models.Model):
+    """
+    Модель для обратной связи пользователей по заявкам
+    """
+    id_user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        db_column='id_user',
+        verbose_name=_('пользователь'),
+        related_name='feedback_entries'
+    )
+    id_application = models.ForeignKey(
+        Application,
+        on_delete=models.CASCADE,
+        db_column='id_application',
+        verbose_name=_('заявка'),
+        related_name='feedback_entries',
+        null=True,
+        blank=True,
+        help_text='Заявка, к которой оставлен отзыв (может быть не указана для общего отзыва)'
+    )
+    name = models.CharField(
+        max_length=300,
+        verbose_name=_('название'),
+        blank=True,
+        null=True,
+        help_text='Название отзыва/заголовок (необязательно)'
+    )
+    comment = models.TextField(
+        verbose_name=_('комментарий'),
+        help_text='Текст обратной связи/комментария'
+    )
+    created_at = models.DateTimeField(
+        verbose_name=_('дата создания'),
+        auto_now_add=True,
+        help_text='Дата и время создания отзыва'
+    )
+    
+    class Meta:
+        db_table = 'feedback'
+        verbose_name = _('обратная связь')
+        verbose_name_plural = _('обратная связь')
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['id_user', '-created_at']),
+            models.Index(fields=['id_application']),
+            models.Index(fields=['created_at']),
+        ]
+    
+    def __str__(self):
+        if self.id_application:
+            return f"Feedback #{self.id} - {self.id_user.username} - Заявка #{self.id_application.id}"
+        return f"Feedback #{self.id} - {self.id_user.username} - Общий отзыв"
+    
+    def get_short_comment(self):
+        """Возвращает короткую версию комментария (первые 100 символов)"""
+        return self.comment[:100] + '...' if len(self.comment) > 100 else self.comment
+    get_short_comment.short_description = 'Комментарий (кратко)'
+    
+    def get_short_name(self):
+        """Возвращает короткую версию названия (первые 50 символов)"""
+        if self.name:
+            return self.name[:50] + '...' if len(self.name) > 50 else self.name
+        return '—'
+    get_short_name.short_description = 'Название'
     
     
 @receiver(post_migrate)

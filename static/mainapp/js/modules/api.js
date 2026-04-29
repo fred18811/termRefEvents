@@ -163,6 +163,23 @@ export const api = {
         url: `/api/order/${orderId}/duplicate/`,
         method: 'POST',
         contentType: 'application/json'
+    }),
+
+    // ========== ОБРАТНАЯ СВЯЗЬ ==========
+    sendFeedback: (name, comment) => $.ajax({
+        url: '/api/feedback/create/',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({
+            name: name || '',
+            comment: comment
+        })
+    }),
+    
+    // Получить все отзывы (для админки)
+    getAllFeedback: (limit = 50, offset = 0) => $.get('/api/feedback/all/', {
+        limit: limit,
+        offset: offset
     })
 };
 
