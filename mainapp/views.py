@@ -1027,7 +1027,7 @@ def save_multiple_orders(request):
 @csrf_exempt
 @require_http_methods(["POST"])
 def save_order(request):
-    """Сохранение заказа в базу данных (с привязкой к заявке и локации)"""
+    """Сохранение заказа в базу данных с проверкой доступности общего оборудования"""
     try:
         data = json.loads(request.body)
         
@@ -1057,7 +1057,7 @@ def save_order(request):
         # Получаем application_id
         application_id = data.get('application_id')
         application = None
-        is_new_application = False  # Флаг, что заявка только что создана
+        is_new_application = False
         
         if application_id:
             try:
@@ -1070,8 +1070,6 @@ def save_order(request):
                     'error': 'Заявка не найдена'
                 }, status=404)
         else:
-            # ========== ВОТ ЗДЕСЬ СОЗДАЕТСЯ НОВАЯ ЗАЯВКА ==========
-            # Получаем название заявки из данных (оно должно быть передано)
             application_name = data.get('application_name')
             if not application_name:
                 return JsonResponse({
@@ -1081,7 +1079,6 @@ def save_order(request):
             
             application_comment = data.get('application_comment', '')
             
-            # Создаем новую заявку
             application = Application.objects.create(
                 name=application_name,
                 id_user=request.user,
@@ -1091,17 +1088,15 @@ def save_order(request):
             is_new_application = True
             print(f"Создана новая заявка №{application.id}")
             
-            # ========== ВОТ ЗДЕСЬ ОТПРАВЛЯЕТСЯ УВЕДОМЛЕНИЕ ==========
-            # Отправляем уведомление о новой заявке
+            # Отправляем уведомление
             try:
                 from .email_utils import EmailService
                 EmailService.send_new_application_notification(application, request.user)
                 print(f"Уведомление о новой заявке #{application.id} отправлено")
             except Exception as e:
                 print(f"Ошибка отправки уведомления: {e}")
-                # Не блокируем создание заявки, если письмо не отправилось
         
-        # Получаем location_id (если есть)
+        # Получаем location_id
         location_id = data.get('location_id')
         location = None
         if location_id:
@@ -1115,7 +1110,7 @@ def save_order(request):
         date_start = data.get('date_time_start')
         date_end = data.get('date_time_end')
         
-        # Создаем заказ для этой локации
+        # Создаем заказ
         order = Order.objects.create(
             id_user=request.user,
             id_application=application,
@@ -1127,8 +1122,24 @@ def save_order(request):
         
         print(f"Создан заказ №{order.id} для локации {location.name if location else 'Не указана'}")
         
+        # ========== ИНИЦИАЛИЗАЦИЯ ПЕРЕМЕННЫХ ПЕРЕД ЦИКЛОМ ==========
         items_added = 0
         items_failed = 0
+        
+        # Находим ID заказов выбранной локации на эти даты (для исключения при проверке общего оборудования)
+        excluded_location_orders = []
+        if location_id:
+            excluded_location_orders = list(Order.objects.filter(
+                id_location_id=location_id,
+                date_time_start__lt=date_end,
+                date_time_end__gt=date_start
+            ).exclude(
+                id=order.id  # Исключаем текущий заказ
+            ).exclude(
+                id_application__status='cancelled'
+            ).values_list('id', flat=True))
+        
+        print(f"Исключаемые заказы локации {location_id}: {excluded_location_orders}")
         
         for idx, item in enumerate(items_data):
             try:
@@ -1150,7 +1161,8 @@ def save_order(request):
                         print(f"    ✗ Общее оборудование не найдено")
                         continue
                     
-                    # Проверяем доступность с учетом отмененных заказов
+                    # Проверяем доступность общего оборудования
+                    # Исключаем отмененные заказы и заказы выбранной локации на эти даты
                     busy_quantity = OrderItem.objects.filter(
                         common_equipment_location=common_equipment,
                         order__date_time_start__lt=date_end,
@@ -1159,26 +1171,30 @@ def save_order(request):
                         order__date_time_end__isnull=True
                     ).exclude(
                         order__id_application__status='cancelled'
+                    ).exclude(
+                        order__id_location_id=location_id  # Исключаем заказы выбранной локации
                     ).aggregate(total=Sum('quantity'))['total'] or 0
                     
+                    # Активные заказы без даты окончания
                     active_busy = OrderItem.objects.filter(
                         common_equipment_location=common_equipment,
                         order__date_time_end__isnull=True,
                         order__date_time_start__lt=date_end
                     ).exclude(
                         order__id_application__status='cancelled'
+                    ).exclude(
+                        order__id_location_id=location_id  # Исключаем заказы выбранной локации
                     ).aggregate(total=Sum('quantity'))['total'] or 0
                     
                     total_busy = busy_quantity + active_busy
                     available = common_equipment.quantity - total_busy
                     
-                    print(f"    Общее оборудование: всего={common_equipment.quantity}, занято={total_busy}, доступно={available}")
+                    print(f"    Общее оборудование: {common_equipment.id_equipments.name}")
+                    print(f"      Всего: {common_equipment.quantity}")
+                    print(f"      Занято (без учета текущей локации): {total_busy}")
+                    print(f"      Доступно: {max(available, 0)}")
                     
-                    if requested_qty > available:
-                        quantity = max(available, 0)
-                        print(f"    ! Количество уменьшено: {requested_qty} -> {quantity}")
-                    else:
-                        quantity = requested_qty
+                    quantity = min(requested_qty, max(available, 0))
                     
                     if quantity > 0:
                         OrderItem.objects.create(
@@ -1190,10 +1206,10 @@ def save_order(request):
                         print(f"    ✓ Сохранено общее оборудование: {common_equipment.id_equipments.name} x{quantity}")
                     else:
                         items_failed += 1
-                        print(f"    ✗ Недостаточно оборудования: доступно {available} шт.")
+                        print(f"    ✗ Недостаточно общего оборудования: доступно {max(available, 0)} шт.")
                         
                 else:
-                    # ========== ОБОРУДОВАНИЕ ИЗ КОНКРЕТНОЙ ЛОКАЦИИ ==========
+                    # ========== ЛОКАЦИОННОЕ ОБОРУДОВАНИЕ ==========
                     if not item_location_id:
                         items_failed += 1
                         print(f"    ✗ Не указан location_id для обычного оборудования")
@@ -1209,49 +1225,26 @@ def save_order(request):
                         print(f"    ✗ EquipmentLocation не найден: location_id={item_location_id}, equipment_id={equipment_id}")
                         continue
                     
-                    busy_quantity = OrderItem.objects.filter(
-                        equipment_location=equipment_location,
-                        order__date_time_start__lt=date_end,
-                        order__date_time_end__gt=date_start
-                    ).exclude(
-                        order__date_time_end__isnull=True
-                    ).exclude(
-                        order__id_application__status='cancelled'
-                    ).aggregate(total=Sum('quantity'))['total'] or 0
+                    # Локационное оборудование - проверяем только общее количество (не блокируем по датам)
+                    total_quantity = equipment_location.quantity
+                    quantity = min(requested_qty, total_quantity)
                     
-                    active_busy = OrderItem.objects.filter(
-                        equipment_location=equipment_location,
-                        order__date_time_end__isnull=True,
-                        order__date_time_start__lt=date_end
-                    ).exclude(
-                        order__id_application__status='cancelled'
-                    ).aggregate(total=Sum('quantity'))['total'] or 0
-                    
-                    total_busy = busy_quantity + active_busy
-                    available = equipment_location.quantity - total_busy
-                    
-                    print(f"    Оборудование локации: {equipment_location.id_equipments.name}")
-                    print(f"      Всего: {equipment_location.quantity}")
-                    print(f"      Занято: {total_busy}")
-                    print(f"      Доступно: {available}")
-                    
-                    if requested_qty > available:
-                        quantity = max(available, 0)
-                        print(f"    ! Количество уменьшено: {requested_qty} -> {quantity}")
-                    else:
-                        quantity = requested_qty
+                    print(f"    Локационное оборудование: {equipment_location.id_equipments.name}")
+                    print(f"      Всего: {total_quantity}")
+                    print(f"      Запрошено: {requested_qty}")
+                    print(f"      Сохранено: {quantity}")
                     
                     if quantity > 0:
-                        order_item = OrderItem.objects.create(
+                        OrderItem.objects.create(
                             order=order,
                             equipment_location=equipment_location,
                             quantity=quantity
                         )
                         items_added += 1
-                        print(f"    ✓ Сохранено: {equipment_location.id_equipments.name} x{quantity} (loc: {equipment_location.id_locations.name})")
+                        print(f"    ✓ Сохранено: {equipment_location.id_equipments.name} x{quantity}")
                     else:
                         items_failed += 1
-                        print(f"    ✗ Недостаточно оборудования: доступно {available} шт.")
+                        print(f"    ✗ Количество равно 0")
                     
             except Exception as e:
                 items_failed += 1
@@ -1263,7 +1256,6 @@ def save_order(request):
         
         if items_added == 0:
             order.delete()
-            # Если заявка была только что создана, но заказ не добавился, удаляем заявку
             if is_new_application:
                 application.delete()
             return JsonResponse({
@@ -1507,7 +1499,6 @@ def user_can_edit_all_applications(user):
 def get_orders(request):
     """Получить список заявок с учетом прав пользователя"""
     try:
-        # Проверяем, может ли пользователь видеть все заявки
         if user_can_view_all_applications(request.user):
             applications = Application.objects.all().order_by('-created_at')
         else:
@@ -1525,7 +1516,6 @@ def get_orders(request):
             status_display = dict(Application._meta.get_field('status').choices).get(app.status, app.status)
             is_active = app.status == 'new' or app.status == 'in_progress'
             
-            # Проверяем, может ли пользователь редактировать эту заявку
             can_edit = (app.id_user == request.user) or user_can_edit_all_applications(request.user)
             
             apps_list.append({
@@ -1533,15 +1523,17 @@ def get_orders(request):
                 'application_name': app.name,
                 'date_time_start': date_time_start.isoformat() if date_time_start else None,
                 'date_time_end': date_time_end.isoformat() if date_time_end else None,
+                'application_date_start': app.date_start.isoformat() if app.date_start else None,  # новое поле
+                'application_date_end': app.date_end.isoformat() if app.date_end else None,        # новое поле
                 'is_active': is_active,
                 'status': app.status,
                 'status_display': status_display,
                 'comment': app.comment or '',
                 'total_orders': orders.count(),
                 'total_quantity': sum(order.total_quantity for order in orders),
-                'can_edit': can_edit,  # Добавляем флаг возможности редактирования
-                'user_id': app.id_user.id,  # ID владельца
-                'user_name': app.id_user.username  # Имя владельца
+                'can_edit': can_edit,
+                'user_id': app.id_user.id,
+                'user_name': app.id_user.username
             })
         
         return JsonResponse({
@@ -1636,7 +1628,12 @@ def get_order_items(request):
         
 @login_required
 def check_equipment_availability(request):
-    """Проверка доступности оборудования на выбранные даты (исключая отмененные заказы)"""
+    """
+    Проверка доступности оборудования на выбранные даты
+    - Локационное оборудование: всегда доступно (не учитываем никакие заказы)
+    - Общее оборудование: учитываем все заказы всех пользователей,
+      НО исключаем заказы, связанные с выбранной локацией на выбранные даты
+    """
     try:
         location_id = request.GET.get('location_id')
         date_start = request.GET.get('date_start')
@@ -1648,6 +1645,7 @@ def check_equipment_availability(request):
         print(f"Локация ID: {location_id}")
         print(f"Период: {date_start} - {date_end}")
         print(f"Типы: {type_ids}")
+        print(f"Текущий пользователь: {request.user.username} (ID: {request.user.id})")
         
         if not location_id:
             return JsonResponse({
@@ -1667,7 +1665,8 @@ def check_equipment_availability(request):
         
         equipment_list = []
         
-        # ========== 1. ОБОРУДОВАНИЕ ИЗ ЛОКАЦИИ ==========
+        # ========== 1. ЛОКАЦИОННОЕ ОБОРУДОВАНИЕ ==========
+        # Всегда показываем всё оборудование как доступное
         equipment_locations = EquipmentLocation.objects.filter(
             id_locations_id=location_id
         )
@@ -1677,40 +1676,14 @@ def check_equipment_availability(request):
                 id_types_equipments_id__in=type_ids
             )
         
-        print(f"\nНайдено EquipmentLocation: {equipment_locations.count()}")
+        print(f"\nНайдено локационного оборудования: {equipment_locations.count()}")
         
         for eq_loc in equipment_locations:
             total_quantity = eq_loc.quantity
             
-            # Занятое количество в заказах на эту конкретную локацию
-            # ИСКЛЮЧАЕМ отмененные заказы (status='cancelled')
-            busy_quantity = OrderItem.objects.filter(
-                equipment_location=eq_loc,
-                order__date_time_start__lt=end_date,
-                order__date_time_end__gt=start_date,
-                order__id_application__status__in=['new', 'in_progress', 'completed']  # Только активные и завершенные
-            ).exclude(
-                order__date_time_end__isnull=True
-            ).exclude(
-                order__id_application__status='cancelled'  # Исключаем отмененные
-            ).aggregate(total=Sum('quantity'))['total'] or 0
-            
-            # Активные заказы без даты окончания (исключая отмененные)
-            active_busy = OrderItem.objects.filter(
-                equipment_location=eq_loc,
-                order__date_time_end__isnull=True,
-                order__date_time_start__lt=end_date
-            ).exclude(
-                order__id_application__status='cancelled'  # Исключаем отмененные
-            ).aggregate(total=Sum('quantity'))['total'] or 0
-            
-            total_busy = busy_quantity + active_busy
-            available = total_quantity - total_busy
-            
-            print(f"\nОборудование (локационное): {eq_loc.id_equipments.name}")
+            print(f"\nЛокационное оборудование: {eq_loc.id_equipments.name}")
             print(f"  Всего: {total_quantity}")
-            print(f"  Занято: {total_busy}")
-            print(f"  Доступно: {max(available, 0)}")
+            print(f"  Доступно: {total_quantity} (всегда доступно)")
             
             equipment_list.append({
                 'id': eq_loc.id,
@@ -1719,12 +1692,15 @@ def check_equipment_availability(request):
                 'type_id': eq_loc.id_types_equipments_id,
                 'type_name': eq_loc.id_types_equipments.name,
                 'quantity': total_quantity,
-                'available': max(available, 0),
-                'max_quantity': max(available, 0),
+                'available': total_quantity,  # Всегда всё доступно
+                'max_quantity': total_quantity,
                 'is_common': False
             })
         
         # ========== 2. ОБЩЕЕ ОБОРУДОВАНИЕ ==========
+        # Учитываем все заказы всех пользователей,
+        # НО исключаем заказы, связанные с выбранной локацией на выбранные даты
+        
         common_equipment = CommonEquipmentLocation.objects.all()
         
         if type_ids:
@@ -1732,13 +1708,25 @@ def check_equipment_availability(request):
                 id_types_equipments_id__in=type_ids
             )
         
-        print(f"\nНайдено CommonEquipment: {common_equipment.count()}")
+        print(f"\nНайдено общего оборудования: {common_equipment.count()}")
+        
+        # Находим ID всех заказов, которые нужно исключить
+        # Это заказы, которые относятся к выбранной локации и пересекаются с выбранными датами
+        excluded_order_ids = Order.objects.filter(
+            id_location_id=location_id,
+            date_time_start__lt=end_date,
+            date_time_end__gt=start_date
+        ).exclude(
+            id_application__status='cancelled'
+        ).values_list('id', flat=True)
+        
+        print(f"Исключаемые заказы (локация {location_id} на эти даты): {list(excluded_order_ids)}")
         
         for eq in common_equipment:
             total_quantity = eq.quantity
             
-            # Для общего оборудования считаем заказы ИЗ ВСЕХ ЛОКАЦИЙ
-            # ИСКЛЮЧАЕМ отмененные заказы
+            # Занятое количество в заказах на общее оборудование
+            # Исключаем отмененные заказы и заказы выбранной локации на выбранные даты
             busy_quantity = OrderItem.objects.filter(
                 common_equipment_location=eq,
                 order__date_time_start__lt=end_date,
@@ -1746,16 +1734,20 @@ def check_equipment_availability(request):
             ).exclude(
                 order__date_time_end__isnull=True
             ).exclude(
-                order__id_application__status='cancelled'  # Исключаем отмененные
+                order__id_application__status='cancelled'
+            ).exclude(
+                order__id__in=excluded_order_ids  # Исключаем заказы выбранной локации
             ).aggregate(total=Sum('quantity'))['total'] or 0
             
-            # Активные заказы без даты окончания (исключая отмененные)
+            # Активные заказы без даты окончания
             active_busy = OrderItem.objects.filter(
                 common_equipment_location=eq,
                 order__date_time_end__isnull=True,
                 order__date_time_start__lt=end_date
             ).exclude(
-                order__id_application__status='cancelled'  # Исключаем отмененные
+                order__id_application__status='cancelled'
+            ).exclude(
+                order__id__in=excluded_order_ids  # Исключаем заказы выбранной локации
             ).aggregate(total=Sum('quantity'))['total'] or 0
             
             total_busy = busy_quantity + active_busy
@@ -1763,7 +1755,7 @@ def check_equipment_availability(request):
             
             print(f"\nОбщее оборудование: {eq.id_equipments.name}")
             print(f"  Всего: {total_quantity}")
-            print(f"  Занято: {total_busy}")
+            print(f"  Занято (все заказы, кроме выбранной локации): {total_busy}")
             print(f"  Доступно: {max(available, 0)}")
             
             equipment_list.append({
@@ -1826,7 +1818,7 @@ def room_detail(request, room_id):
 
 @login_required
 def check_datetime_busy(request):
-    """Проверка, занято ли оборудование на выбранные даты (исключая отмененные заказы)"""
+    """Проверка, занято ли оборудование на выбранные даты (только для предупреждения)"""
     try:
         location_id = request.GET.get('location_id')
         date_start = request.GET.get('date_start')
@@ -1849,7 +1841,7 @@ def check_datetime_busy(request):
         total_busy = 0
         
         for eq_loc in equipment_locations:
-            # Учитываем только НЕ отмененные заказы
+            # Учитываем только НЕ отмененные заказы ДРУГИХ пользователей
             busy_quantity = OrderItem.objects.filter(
                 equipment_location=eq_loc,
                 order__date_time_start__lt=end_date,
@@ -1857,7 +1849,9 @@ def check_datetime_busy(request):
             ).exclude(
                 order__date_time_end__isnull=True
             ).exclude(
-                order__id_application__status='cancelled'  # Исключаем отмененные
+                order__id_application__status='cancelled'
+            ).exclude(
+                order__id_user=request.user  # Исключаем заказы текущего пользователя
             ).aggregate(total=Sum('quantity'))['total'] or 0
             
             active_busy = OrderItem.objects.filter(
@@ -1865,7 +1859,9 @@ def check_datetime_busy(request):
                 order__date_time_end__isnull=True,
                 order__date_time_start__lt=end_date
             ).exclude(
-                order__id_application__status='cancelled'  # Исключаем отмененные
+                order__id_application__status='cancelled'
+            ).exclude(
+                order__id_user=request.user  # Исключаем заказы текущего пользователя
             ).aggregate(total=Sum('quantity'))['total'] or 0
             
             total_busy += busy_quantity + active_busy
@@ -1878,7 +1874,7 @@ def check_datetime_busy(request):
                 'partially_busy': False,
                 'busy_count': total_busy,
                 'total_available': total_available,
-                'message': 'Локационное оборудование занято на выбранные даты'
+                'message': 'Помещение занято на выбранные даты'
             })
         elif total_busy > 0:
             return JsonResponse({
@@ -1886,13 +1882,13 @@ def check_datetime_busy(request):
                 'partially_busy': True,
                 'busy_count': total_busy,
                 'total_available': total_available,
-                'message': f'Часть локационного оборудования занята'
+                'message': f'Часть оборудования занята'
             })
         else:
             return JsonResponse({
                 'busy': False,
                 'partially_busy': False,
-                'message': 'Оборудование доступно'
+                'message': 'Помещение доступно'
             })
             
     except Exception as e:
@@ -1962,7 +1958,7 @@ def get_busy_time_slots(request):
 
 @login_required
 def get_busy_dates(request):
-    """Получить список занятых дат (исключая отмененные заказы)"""
+    """Получить список занятых дат (исключая отмененные заказы и заказы текущего пользователя)"""
     try:
         location_id = request.GET.get('location_id')
         
@@ -1974,13 +1970,15 @@ def get_busy_dates(request):
         
         busy_dates = set()
         
-        # Учитываем только НЕ отмененные заказы с завершенной датой
+        # Учитываем только НЕ отмененные заказы других пользователей
         orders = Order.objects.filter(
             id_location_id=location_id
         ).exclude(
             date_time_end__isnull=True
         ).exclude(
-            id_application__status='cancelled'  # Исключаем отмененные заявки
+            id_application__status='cancelled'
+        ).exclude(
+            id_user=request.user  # Исключаем заказы текущего пользователя
         )
         
         for order in orders:
@@ -1993,12 +1991,14 @@ def get_busy_dates(request):
                     busy_dates.add(current.isoformat())
                     current = current + timedelta(days=1)
         
-        # Активные заказы без даты окончания (исключая отмененные)
+        # Активные заказы без даты окончания (исключая отмененные и свои)
         active_orders = Order.objects.filter(
             id_location_id=location_id,
             date_time_end__isnull=True
         ).exclude(
-            id_application__status='cancelled'  # Исключаем отмененные
+            id_application__status='cancelled'
+        ).exclude(
+            id_user=request.user  # Исключаем заказы текущего пользователя
         )
         
         for order in active_orders:
@@ -2011,7 +2011,7 @@ def get_busy_dates(request):
                     busy_dates.add(current.isoformat())
                     current = current + timedelta(days=1)
         
-        print(f"Занятые даты для локации {location_id}: {busy_dates}")
+        print(f"Занятые даты для локации {location_id} (без учета своих заказов): {busy_dates}")
         
         return JsonResponse({
             'success': True,
@@ -2039,6 +2039,8 @@ def get_applications(request):
                 'id': app.id,
                 'name': app.name,
                 'created_at': app.created_at.isoformat(),
+                'date_start': app.date_start.isoformat() if app.date_start else None,  # новое поле
+                'date_end': app.date_end.isoformat() if app.date_end else None,        # новое поле
                 'status': app.status,
                 'comment': app.comment or '',
                 'status_display': dict(Application._meta.get_field('status').choices).get(app.status, app.status)

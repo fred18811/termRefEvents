@@ -76,6 +76,12 @@ class Location(models.Model):
         help_text='Подробное описание помещения. Поддерживает HTML теги.'
     )
     
+    is_event = models.BooleanField(
+        verbose_name=_('мероприятие'),
+        default=True,
+        help_text='Отметьте, если помещение используется для мероприятий'
+    )
+    
     class Meta:
         db_table = 'locations'
         verbose_name = _('помещение')
@@ -329,6 +335,19 @@ class Application(models.Model):
             ('completed', 'Завершена'),
             ('cancelled', 'Отменена'),
         ]
+    )
+    
+    date_start = models.DateTimeField(
+        verbose_name=_('дата начала заявки'),
+        blank=True,
+        null=True,
+        help_text='Дата и время начала заявки'
+    )
+    date_end = models.DateTimeField(
+        verbose_name=_('дата окончания заявки'),
+        blank=True,
+        null=True,
+        help_text='Дата и время окончания заявки'
     )
     
     class Meta:

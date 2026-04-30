@@ -3,7 +3,7 @@ import { setMinDateTime, showNotification, validateDates } from './utils.js';
 import { setupAjax } from './api.js';
 import { updateCartDisplay, saveSingleOrder, saveMultipleOrders } from './cart.js';
 import { loadLocationPhoto, updateEquipmentList, addToCart } from './location.js';
-import { loadOrders, selectAllOrders, deselectAllOrders, exportOrdersToExcel } from './orders.js';
+import { loadOrders, selectAllOrders, deselectAllOrders, exportOrdersToExcel, initOrderFilters } from './orders.js';
 import { loadRooms, filterRooms } from './rooms.js';
 import { showConfirm, closeModals } from './modal.js';
 
@@ -22,57 +22,15 @@ const clearBusyHighlight = () => {
     $('#dateError').hide();
 };
 
-// Включение/выключение полей дат
-const toggleDateFields = (enabled) => {
-    console.log('toggleDateFields вызван с параметром:', enabled);
-    
+// Включение/выключение полей дат (теперь они всегда включены)
+const initDateFields = () => {
     const dateStartInput = document.getElementById('dateStart');
     const dateEndInput = document.getElementById('dateEnd');
     
-    if (!dateStartInput || !dateEndInput) {
-        console.error('Поля дат не найдены в DOM');
-        return;
-    }
+    if (dateStartInput) dateStartInput.disabled = false;
+    if (dateEndInput) dateEndInput.disabled = false;
     
-    if (enabled) {
-        dateStartInput.disabled = false;
-        dateEndInput.disabled = false;
-        
-        if (dateStartInput.nextElementSibling) {
-            dateStartInput.nextElementSibling.disabled = false;
-        }
-        if (dateEndInput.nextElementSibling) {
-            dateEndInput.nextElementSibling.disabled = false;
-        }
-        
-        $('.date-hint').text('Выберите дату и время');
-        $('#dateError').hide();
-        
-        if (dateStartPicker) {
-            dateStartPicker.redraw();
-        }
-        if (dateEndPicker) {
-            dateEndPicker.redraw();
-        }
-    } else {
-        dateStartInput.disabled = true;
-        dateEndInput.disabled = true;
-        
-        if (dateStartInput.nextElementSibling) {
-            dateStartInput.nextElementSibling.disabled = true;
-        }
-        if (dateEndInput.nextElementSibling) {
-            dateEndInput.nextElementSibling.disabled = true;
-        }
-        
-        $('.date-hint').text('Сначала выберите локацию');
-        
-        dateStartInput.value = '';
-        dateEndInput.value = '';
-        
-        if (dateStartPicker) dateStartPicker.clear();
-        if (dateEndPicker) dateEndPicker.clear();
-    }
+    $('.date-hint').text('Выберите дату и время');
 };
 
 // Загрузка занятых дат с сервера
@@ -117,67 +75,70 @@ const loadBusyDates = async () => {
     }
 };
 
-// Функция определения заблокированных дат
+// Функция определения заблокированных дат (НЕ БЛОКИРУЕМ, только подсвечиваем)
 const getDisabledDatesFunction = () => {
     return (date) => {
-        if (!date || !(date instanceof Date)) return false;
-        try {
-            const year = date.getFullYear();
-            const month = String(date.getMonth() + 1).padStart(2, '0');
-            const day = String(date.getDate()).padStart(2, '0');
-            const dateStr = `${year}-${month}-${day}`;
-            return busyDates.has(dateStr);
-        } catch (e) {
-            return false;
-        }
+        // НЕ блокируем никакие даты, возвращаем false
+        // Чтобы можно было выбрать любую дату
+        return false;
     };
 };
 
-// Проверка занятости дат (только для локационного оборудования)
-const checkDateTimeBusyStatus = async () => {
-    if (!state.currentLocation) return true;
-    
+// Проверка занятости помещения при выборе локации
+const checkLocationBusy = async (locationId, locationName) => {
     const dateStart = $('#dateStart').val();
     const dateEnd = $('#dateEnd').val();
     
-    if (!dateStart || !dateEnd) return true;
+    if (!dateStart || !dateEnd) {
+        showNotification('Сначала выберите даты', 'warning');
+        return false;
+    }
+    
+    const dateValid = validateDates();
+    if (!dateValid.valid) {
+        showNotification(dateValid.error, 'error');
+        return false;
+    }
     
     try {
         const response = await $.ajax({
             url: '/api/check-datetime-busy/',
             method: 'GET',
             data: {
-                location_id: state.currentLocation.id,
+                location_id: locationId,
                 date_start: dateStart,
                 date_end: dateEnd
             }
         });
         
-        clearBusyHighlight();
-        
         if (response.busy) {
-            $('#dateStart, #dateEnd').addClass('busy');
-            const warningHtml = `<div class="busy-warning">⚠️ Локационное оборудование занято на выбранные даты</div>`;
-            if (!$('.busy-warning').length) {
-                $('.date-fields').append(warningHtml);
+            const confirmBusy = confirm(
+                `⚠️ ВНИМАНИЕ!\n\nПомещение "${locationName}" уже занято на выбранные даты.\n\n` +
+                `Дата начала: ${new Date(dateStart).toLocaleString('ru-RU')}\n` +
+                `Дата окончания: ${new Date(dateEnd).toLocaleString('ru-RU')}\n\n` +
+                `Вы всё равно хотите выбрать это помещение?`
+            );
+            
+            if (!confirmBusy) {
+                return false;
             }
-            showNotification('Локационное оборудование занято на выбранные даты!', 'warning');
-            return false;
+            
+            showNotification(`⚠️ Помещение "${locationName}" занято на выбранные даты`, 'warning');
         } else if (response.partially_busy) {
-            const warningHtml = `<div class="busy-warning">⚠️ Часть локационного оборудования занята</div>`;
-            if (!$('.busy-warning').length) {
-                $('.date-fields').append(warningHtml);
-            }
-            showNotification('Часть локационного оборудования занята, доступное количество уменьшено', 'warning');
+            showNotification(`⚠️ Помещение "${locationName}" занято на выбранные даты`, 'warning');
+            $('#dateError').show(); 
         }
+        
         return true;
+        
     } catch (error) {
-        console.error('Ошибка проверки занятости дат:', error);
-        return true;
+        console.error('Ошибка проверки занятости:', error);
+        showNotification('Ошибка проверки доступности помещения', 'error');
+        return false;
     }
 };
 
-// Валидация и проверка занятости дат
+// Валидация и проверка занятости дат (без блокировки)
 const validateAndCheckDates = async () => {
     const dateStart = $('#dateStart').val();
     const dateEnd = $('#dateEnd').val();
@@ -198,32 +159,69 @@ const validateAndCheckDates = async () => {
         return false;
     }
     
+    // Проверяем, есть ли занятые даты в выбранном диапазоне (только для предупреждения)
     let hasBusy = false;
     let currentDate = new Date(startDate);
     const endDateTime = new Date(endDate);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
     
     while (currentDate <= endDateTime) {
-        const year = currentDate.getFullYear();
-        const month = String(currentDate.getMonth() + 1).padStart(2, '0');
-        const day = String(currentDate.getDate()).padStart(2, '0');
-        const dateStr = `${year}-${month}-${day}`;
-        
-        if (busyDates.has(dateStr)) {
-            hasBusy = true;
-            break;
+        if (currentDate >= today) {
+            const year = currentDate.getFullYear();
+            const month = String(currentDate.getMonth() + 1).padStart(2, '0');
+            const day = String(currentDate.getDate()).padStart(2, '0');
+            const dateStr = `${year}-${month}-${day}`;
+            
+            if (busyDates.has(dateStr)) {
+                hasBusy = true;
+            }
         }
         currentDate.setDate(currentDate.getDate() + 1);
     }
     
-    if (hasBusy) {
+    if (hasBusy && state.currentLocation) {
         $('#dateStart, #dateEnd').addClass('busy');
         $('#dateError').show();
-        showNotification('Выбранные даты заняты! Пожалуйста, выберите другие даты.', 'error');
-        return false;
     } else {
         $('#dateStart, #dateEnd').removeClass('busy');
         $('#dateError').hide();
     }
+    
+    // Всегда возвращаем true, чтобы можно было выбрать любые даты
+    return true;
+};
+
+// Обработчик выбора локации
+const handleLocationSelect = async (locationId, locationName) => {
+    const dateStart = $('#dateStart').val();
+    const dateEnd = $('#dateEnd').val();
+    
+    if (!dateStart || !dateEnd) {
+        showNotification('Сначала выберите даты', 'warning');
+        return false;
+    }
+    
+    // Проверяем занятость помещения
+    const isAvailable = await checkLocationBusy(locationId, locationName);
+    
+    if (!isAvailable) return false;
+    
+    // Снимаем активный класс со всех локаций
+    $('.location-item').removeClass('active');
+    // Добавляем активный класс выбранной локации
+    $(`.location-item[data-id="${locationId}"]`).addClass('active');
+    
+    state.currentLocation = { id: locationId, name: locationName };
+    
+    // Загружаем фото
+    loadLocationPhoto(locationId);
+    
+    // Загружаем занятые даты для календаря
+    await loadBusyDates();
+    
+    // Обновляем список оборудования
+    await updateEquipmentList();
     
     return true;
 };
@@ -249,17 +247,24 @@ const initDateStartPicker = () => {
         time_24hr: true,
         minDate: minDate,
         minuteIncrement: 30,
-        disable: [getDisabledDatesFunction()],
+        disable: [getDisabledDatesFunction()], // Не блокируем даты
         onDayCreate: (dObj, dStr, fp, dayElem) => {
             try {
                 if (dayElem && dayElem.dateObj) {
-                    const year = dayElem.dateObj.getFullYear();
-                    const month = String(dayElem.dateObj.getMonth() + 1).padStart(2, '0');
-                    const day = String(dayElem.dateObj.getDate()).padStart(2, '0');
-                    const dateStr = `${year}-${month}-${day}`;
-                    if (busyDates.has(dateStr)) {
-                        dayElem.classList.add('busy-day');
-                        dayElem.title = 'Дата занята';
+                    const dateObj = dayElem.dateObj;
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    
+                    if (dateObj >= today) {
+                        const year = dateObj.getFullYear();
+                        const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+                        const day = String(dateObj.getDate()).padStart(2, '0');
+                        const dateStr = `${year}-${month}-${day}`;
+                        
+                        if (busyDates.has(dateStr)) {
+                            dayElem.classList.add('busy-day');
+                            dayElem.title = 'Дата занята (можно выбрать, но помещение будет занято)';
+                        }
                     }
                 }
             } catch (e) {}
@@ -272,6 +277,7 @@ const initDateStartPicker = () => {
                     await validateAndCheckDates();
                 }
                 if (state.currentLocation && dateEnd) {
+                    await checkLocationBusy(state.currentLocation.id, state.currentLocation.name);
                     updateEquipmentList();
                 }
             }
@@ -298,17 +304,24 @@ const initDateEndPicker = () => {
         time_24hr: true,
         minDate: minDate,
         minuteIncrement: 30,
-        disable: [getDisabledDatesFunction()],
+        disable: [getDisabledDatesFunction()], // Не блокируем даты
         onDayCreate: (dObj, dStr, fp, dayElem) => {
             try {
                 if (dayElem && dayElem.dateObj) {
-                    const year = dayElem.dateObj.getFullYear();
-                    const month = String(dayElem.dateObj.getMonth() + 1).padStart(2, '0');
-                    const day = String(dayElem.dateObj.getDate()).padStart(2, '0');
-                    const dateStr = `${year}-${month}-${day}`;
-                    if (busyDates.has(dateStr)) {
-                        dayElem.classList.add('busy-day');
-                        dayElem.title = 'Дата занята';
+                    const dateObj = dayElem.dateObj;
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    
+                    if (dateObj >= today) {
+                        const year = dateObj.getFullYear();
+                        const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+                        const day = String(dateObj.getDate()).padStart(2, '0');
+                        const dateStr = `${year}-${month}-${day}`;
+                        
+                        if (busyDates.has(dateStr)) {
+                            dayElem.classList.add('busy-day');
+                            dayElem.title = 'Дата занята (можно выбрать, но помещение будет занято)';
+                        }
                     }
                 }
             } catch (e) {}
@@ -321,6 +334,7 @@ const initDateEndPicker = () => {
                     await validateAndCheckDates();
                 }
                 if (state.currentLocation && dateStart) {
+                    await checkLocationBusy(state.currentLocation.id, state.currentLocation.name);
                     updateEquipmentList();
                 }
             }
@@ -334,8 +348,10 @@ export const initEventHandlers = () => {
     
     setupAjax();
     
+    // Инициализируем календари
     initDateStartPicker();
     initDateEndPicker();
+    initDateFields();
     
     // Переключение страниц
     $('[data-page]').click(function(e) {
@@ -379,7 +395,7 @@ export const initEventHandlers = () => {
         }
     });
     
-    // Выбор локации
+    // Выбор локации (с проверкой дат)
     $('.location-item').click(async function() {
         const id = $(this).data('id');
         const name = $(this).data('name');
@@ -387,40 +403,34 @@ export const initEventHandlers = () => {
         console.log('Выбрана локация:', id, name);
         
         if (state.selectedLocations.has(id.toString())) {
-            showNotification('⚠️ Эта локация уже добавлена в заказ', 'warning');
+            showNotification('⚠️ Это помещение уже добавлено в заказ', 'warning');
             return;
         }
         
-        $('.location-item').removeClass('active');
-        $(this).addClass('active');
-        state.currentLocation = { id, name };
-        
-        toggleDateFields(true);
-        await loadBusyDates();
-        loadLocationPhoto(id);
-        clearBusyHighlight();
-        $('#equipmentContainer').html('<div class="info-message">📅 Выберите дату начала и окончания</div>');
+        await handleLocationSelect(id, name);
     });
     
     // Обработчик изменения дат
     $('#dateStart, #dateEnd').on('change', async function() {
         console.log('Даты изменены');
         
-        if (state.currentLocation) {
-            const dateStart = $('#dateStart').val();
-            const dateEnd = $('#dateEnd').val();
-            
-            if (dateStart && dateEnd) {
-                const dateValid = validateDates();
-                if (dateValid.valid) {
-                    await checkDateTimeBusyStatus();
+        const dateStart = $('#dateStart').val();
+        const dateEnd = $('#dateEnd').val();
+        
+        if (dateStart && dateEnd) {
+            const dateValid = validateDates();
+            if (dateValid.valid) {
+                if (state.currentLocation) {
+                    await checkLocationBusy(state.currentLocation.id, state.currentLocation.name);
                     await updateEquipmentList();
                 } else {
-                    $('#equipmentContainer').html(`<div class="info-message">⚠️ ${dateValid.error}</div>`);
+                    showNotification('Теперь выберите помещение', 'info');
                 }
             } else {
-                $('#equipmentContainer').html('<div class="info-message">📅 Выберите дату начала и окончания</div>');
+                $('#equipmentContainer').html(`<div class="info-message">⚠️ ${dateValid.error}</div>`);
             }
+        } else {
+            $('#equipmentContainer').html('<div class="info-message">📅 Выберите дату начала и окончания</div>');
         }
     });
     
@@ -470,8 +480,6 @@ export const initEventHandlers = () => {
         if ($(e.target).is('.modal')) closeModals();
     });
     
-    // Изначально поля дат отключены
-    toggleDateFields(false);
     bindCartButtons();
 
     // Обработчики для модального окна добавления оборудования
@@ -506,12 +514,9 @@ export const initApp = () => {
 };
 
 const bindCartButtons = () => {
-    // Небольшая задержка для гарантии, что DOM загружен
     setTimeout(() => {
-        // Кнопка сохранения заказа
         const saveBtn = document.getElementById('saveOrderFromCartBtn');
         if (saveBtn) {
-            // Удаляем старые обработчики
             const newSaveBtn = saveBtn.cloneNode(true);
             saveBtn.parentNode.replaceChild(newSaveBtn, saveBtn);
             
@@ -522,14 +527,12 @@ const bindCartButtons = () => {
                 if (typeof window.saveSingleOrder === 'function') {
                     await window.saveSingleOrder();
                 } else {
-                    // Динамический импорт
                     const module = await import('./cart.js');
                     await module.saveSingleOrder();
                 }
             });
         }
         
-        // Кнопка очистки корзины
         const clearBtn = document.getElementById('clearCartBtn');
         if (clearBtn) {
             const newClearBtn = clearBtn.cloneNode(true);

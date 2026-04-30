@@ -302,19 +302,23 @@ class HistoryAdmin(admin.ModelAdmin):
 # ========== Регистрация Application ==========
 @admin.register(Application)
 class ApplicationAdmin(admin.ModelAdmin):
-    list_display = ['id', 'name_preview', 'id_user', 'created_at', 'status', 'get_status_display']
+    list_display = ['id', 'name_preview', 'id_user', 'created_at', 'date_start', 'date_end', 'status', 'get_status_display']
     list_display_links = ['id', 'name_preview']
-    list_filter = ['status', 'created_at', 'id_user']
+    list_filter = ['status', 'created_at', 'date_start', 'date_end', 'id_user']
     search_fields = ['name', 'comment', 'id_user__username']
     list_per_page = 20
     ordering = ['-created_at']
     autocomplete_fields = ['id_user']
     readonly_fields = ['created_at']
-    list_editable = ['status']  # Позволяет редактировать статус прямо в списке
+    list_editable = ['status']
     
     fieldsets = (
         ('Основная информация', {
             'fields': ('name', 'id_user', 'status')
+        }),
+        ('Даты заявки', {
+            'fields': ('date_start', 'date_end'),
+            'description': 'Укажите даты начала и окончания заявки (необязательно)'
         }),
         ('Дополнительно', {
             'fields': ('comment', 'created_at')
@@ -330,10 +334,10 @@ class ApplicationAdmin(admin.ModelAdmin):
     def get_status_display(self, obj):
         """Отображение статуса в виде цветного бейджа"""
         colors = {
-            'new': '#28a745',      # зеленый
-            'in_progress': '#ffc107', # желтый
-            'completed': '#6c757d',   # серый
-            'cancelled': '#da291c',   # красный
+            'new': '#28a745',
+            'in_progress': '#ffc107',
+            'completed': '#6c757d',
+            'cancelled': '#da291c',
         }
         color = colors.get(obj.status, '#6c757d')
         return format_html(
@@ -474,16 +478,16 @@ class LocationForm(forms.ModelForm):
 @admin.register(Location)
 class LocationAdmin(admin.ModelAdmin):
     form = LocationForm
-    list_display = ['id', 'name', 'size', 'description_preview']
+    list_display = ['id', 'name', 'size', 'is_event', 'description_preview']
     list_display_links = ['id', 'name']
-    list_filter = ['size']
+    list_filter = ['size', 'is_event']
     search_fields = ['name', 'description']
     list_per_page = 20
     ordering = ['name']
     
     fieldsets = (
         ('Основная информация', {
-            'fields': ('name', 'size'),
+            'fields': ('name', 'size', 'is_event'),
         }),
         ('Описание (поддерживается HTML)', {
             'fields': ('description',),

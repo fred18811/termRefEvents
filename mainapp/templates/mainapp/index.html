@@ -32,7 +32,7 @@
                     </li>
                 </ul>
             </nav>
-
+            
             <!-- Кнопка обратной связи -->
             <button id="feedbackBtn" class="btn-feedback">📝 Обратная связь</button>
             
@@ -49,7 +49,26 @@
     <main class="container">
         <!-- Главная страница -->
         <div id="mainPage">
-            <!-- Первый блок: локации (слева) и фото с датами (справа) -->
+            <!-- Блок выбора дат (сверху) -->
+            <div class="date-section">
+                <div class="date-fields">
+                    <div class="date-field">
+                        <label>📅 Дата начала</label>
+                        <input type="text" id="dateStart" class="date-input" placeholder="Выберите дату и время">
+                        <small class="date-hint">Выберите дату начала</small>
+                    </div>
+                    <div class="date-field">
+                        <label>⏰ Дата окончания</label>
+                        <input type="text" id="dateEnd" class="date-input" placeholder="Выберите дату и время">
+                        <small class="date-hint">Выберите дату окончания</small>
+                    </div>
+                </div>
+                <div id="dateError" class="date-error" style="display: none;">
+                    <span>⚠️ Выбранные даты заняты!</span>
+                </div>
+            </div>
+
+            <!-- Блок локаций и фото -->
             <div class="location-section">
                 <div class="location-list">
                     <h2>Помещения</h2>
@@ -62,28 +81,13 @@
                     </div>
                 </div>
                 <div class="location-photo-section">
-                    <div class="date-fields">
-                        <div class="date-field">
-                            <label>Дата начала</label>
-                            <input type="text" id="dateStart" class="date-input" placeholder="Выберите дату и время" disabled>
-                            <small class="date-hint">Сначала выберите локацию</small>
-                        </div>
-                        <div class="date-field">
-                            <label>Дата окончания</label>
-                            <input type="text" id="dateEnd" class="date-input" placeholder="Выберите дату и время" disabled>
-                            <small class="date-hint">Сначала выберите локацию</small>
-                        </div>
-                    </div>
-                    <div id="dateError" class="date-error" style="display: none;">
-                        <span>⚠️ Выбранные даты заняты!</span>
-                    </div>
                     <div class="location-photo" id="locationPhoto">
-                        <div class="photo-placeholder"></div>
+                        <div class="photo-placeholder">📷 Выберите помещение</div>
                     </div>
                 </div>
             </div>
 
-            <!-- Второй блок: типы оборудования и оборудование -->
+            <!-- Блок типов оборудования и оборудования -->
             <div class="equipment-section">
                 <div class="types-list">
                     <h2>Типы оборудования</h2>
@@ -103,7 +107,7 @@
                             <input type="text" id="searchEquipment" class="search-equipment-input" placeholder="Поиск оборудования...">
                         </div>
                     </div>
-                    <div id="equipmentContainer" class="info-message">📍 Выберите локацию, даты и типы оборудования</div>
+                    <div id="equipmentContainer" class="info-message">📍 Сначала выберите даты, затем помещение</div>
                 </div>
             </div>
 
@@ -263,8 +267,8 @@
             <form id="loginForm" class="auth-form">
                 {% csrf_token %}
                 <div class="form-group">
-                    <label for="username">Логин</label>
-                    <input type="text" id="username" name="username" class="auth-input" placeholder="Введите логин" required autocomplete="username">
+                    <label for="username">Email</label>
+                    <input type="email" id="username" name="username" class="auth-input" placeholder="example@mail.ru" required autocomplete="email">
                 </div>
                 <div class="form-group">
                     <label for="password">Пароль</label>
@@ -273,6 +277,53 @@
                 <div id="authError" class="auth-error" style="display: none;"></div>
                 <button type="submit" class="btn btn-primary btn-block">Войти</button>
             </form>
+            
+            <div class="auth-footer">
+                <p>Нет аккаунта? <a href="#" id="showRegisterBtn">Зарегистрироваться</a></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно регистрации -->
+    <div id="registerModal" class="modal" style="display: none;">
+        <div class="modal-content auth-modal">
+            <div class="auth-header">
+                <div class="auth-logo">
+                    <div class="logo-icon">🏢</div>
+                    <h2>Регистрация</h2>
+                </div>
+                <p class="auth-subtitle">Создайте новый аккаунт</p>
+            </div>
+            
+            <form id="registerForm" class="auth-form">
+                {% csrf_token %}
+                <div class="form-group">
+                    <label for="regEmail">Email <span class="required">*</span></label>
+                    <input type="email" id="regEmail" class="auth-input" placeholder="example@mail.ru" required>
+                </div>
+                <div class="form-group">
+                    <label for="regFirstName">Имя</label>
+                    <input type="text" id="regFirstName" class="auth-input" placeholder="Ваше имя">
+                </div>
+                <div class="form-group">
+                    <label for="regLastName">Фамилия</label>
+                    <input type="text" id="regLastName" class="auth-input" placeholder="Ваша фамилия">
+                </div>
+                <div class="form-group">
+                    <label for="regPassword">Пароль <span class="required">*</span></label>
+                    <input type="password" id="regPassword" class="auth-input" placeholder="Минимум 6 символов" required>
+                </div>
+                <div class="form-group">
+                    <label for="regPasswordConfirm">Подтверждение пароля <span class="required">*</span></label>
+                    <input type="password" id="regPasswordConfirm" class="auth-input" placeholder="Повторите пароль" required>
+                </div>
+                <div id="regError" class="auth-error" style="display: none;"></div>
+                <button type="submit" class="btn btn-primary btn-block">Зарегистрироваться</button>
+            </form>
+            
+            <div class="auth-footer">
+                <p>Уже есть аккаунт? <a href="#" id="showLoginBtn">Войти</a></p>
+            </div>
         </div>
     </div>
 

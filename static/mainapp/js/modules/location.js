@@ -271,7 +271,7 @@ export const updateEquipmentList = async () => {
     console.log('updateEquipmentList вызван');
     
     if (!state.currentLocation) {
-        $('#equipmentContainer').html('<div class="info-message">📍 Выберите локацию</div>');
+        $('#equipmentContainer').html('<div class="info-message">📍 Выберите помещение</div>');
         return;
     }
     
