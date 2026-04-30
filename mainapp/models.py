@@ -1,6 +1,7 @@
 from django.db import models
 from django.db.models.signals import post_migrate, pre_save
 from django.contrib.auth.models import User, Group, Permission
+from django.contrib.contenttypes.models import ContentType
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.core.exceptions import ValidationError
 from django.core.validators import FileExtensionValidator
@@ -602,7 +603,6 @@ def create_default_groups_and_permissions(sender, **kwargs):
         edit_group, _ = Group.objects.get_or_create(name='EditApplications')
         
         # Создаем права (если нужно)
-        from django.contrib.contenttypes.models import ContentType
         from .models import Application
         
         content_type = ContentType.objects.get_for_model(Application)
@@ -625,6 +625,29 @@ def create_default_groups_and_permissions(sender, **kwargs):
         view_group.permissions.add(view_perm)
         edit_group.permissions.add(view_perm, edit_perm)
         
+        # ========== ПРАВА ДЛЯ DEPARTMENT ==========
+        from .models import Department
+        
+        dept_content_type = ContentType.objects.get_for_model(Department)
+        
+        # Право на просмотр подразделений
+        view_dept_perm, _ = Permission.objects.get_or_create(
+            codename='view_department',
+            name='Can view department',
+            content_type=dept_content_type
+        )
+        
+        # Право на изменение подразделений
+        change_dept_perm, _ = Permission.objects.get_or_create(
+            codename='change_department',
+            name='Can change department',
+            content_type=dept_content_type
+        )
+        
+        # Назначаем права группам (только для админов и менеджеров)
+        edit_group.permissions.add(view_dept_perm, change_dept_perm)
+        view_group.permissions.add(view_dept_perm)
+                
         
 @receiver(post_migrate)
 def create_mail_receiver_group(sender, **kwargs):
@@ -633,3 +656,89 @@ def create_mail_receiver_group(sender, **kwargs):
         group, created = Group.objects.get_or_create(name='MailReciver')
         if created:
             print(f'Группа "{group.name}" создана')
+            
+            
+class Department(models.Model):
+    """
+    Модель подразделения (без привязки к пользователю)
+    """
+    name = models.CharField(
+        max_length=255,
+        verbose_name=_('название подразделения'),
+        unique=True,
+        help_text='Название подразделения (например, "Отдел продаж", "IT-отдел")'
+    )
+    description = models.TextField(
+        verbose_name=_('описание'),
+        blank=True,
+        null=True,
+        help_text='Дополнительное описание подразделения'
+    )
+    created_at = models.DateTimeField(
+        verbose_name=_('дата создания'),
+        auto_now_add=True,
+        help_text='Дата и время создания записи'
+    )
+    updated_at = models.DateTimeField(
+        verbose_name=_('дата обновления'),
+        auto_now=True,
+        help_text='Дата и время последнего обновления'
+    )
+    
+    class Meta:
+        db_table = 'departments'
+        verbose_name = _('подразделение')
+        verbose_name_plural = _('подразделения')
+        ordering = ['name']
+        indexes = [
+            models.Index(fields=['name']),
+        ]
+    
+    def __str__(self):
+        return self.name
+
+    
+class UserDepartment(models.Model):
+    """
+    Модель связи пользователя с подразделением (многие-ко-многим)
+    """
+    id_user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        db_column='id_user',
+        verbose_name=_('пользователь'),
+        related_name='user_departments',
+        help_text='Пользователь'
+    )
+    id_department = models.ForeignKey(
+        Department,
+        on_delete=models.CASCADE,
+        db_column='id_department',
+        verbose_name=_('подразделение'),
+        related_name='department_users',
+        help_text='Подразделение'
+    )
+    is_head = models.BooleanField(
+        verbose_name=_('руководитель'),
+        default=False,
+        help_text='Является ли пользователь руководителем подразделения'
+    )
+    created_at = models.DateTimeField(
+        verbose_name=_('дата создания'),
+        auto_now_add=True,
+        help_text='Дата и время создания связи'
+    )
+    
+    class Meta:
+        db_table = 'user_departments'
+        verbose_name = _('связь пользователя с подразделением')
+        verbose_name_plural = _('связи пользователей с подразделениями')
+        ordering = ['id_department', 'id_user']
+        indexes = [
+            models.Index(fields=['id_user']),
+            models.Index(fields=['id_department']),
+        ]
+        unique_together = [['id_user', 'id_department']]  # Один пользователь может быть в подразделении только один раз
+    
+    def __str__(self):
+        return f"{self.id_user.username} → {self.id_department.name}"

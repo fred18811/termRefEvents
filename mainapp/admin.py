@@ -6,7 +6,8 @@ from django.utils.html import format_html
 from django.core.exceptions import ValidationError
 from django.db import models
 from .models import Location, TypeEquipment, Equipment, EquipmentLocation, Photo,\
-    Order, OrderItem, CommonEquipmentLocation, Application, History,Feedback  
+    Order, OrderItem, CommonEquipmentLocation, Application, History,Feedback,\
+        Department, UserDepartment  
 
 # Настройка заголовков админ-панели
 admin.site.site_header = "Управление локациями и оборудованием"
@@ -17,6 +18,16 @@ admin.site.index_title = "Добро пожаловать в систему уп
 admin.site.unregister(User)
 
 
+class UserDepartmentInline(admin.TabularInline):
+    """Inline для отображения пользователей в подразделении"""
+    model = UserDepartment
+    extra = 1
+    fields = ['id_user', 'is_head']
+    autocomplete_fields = ['id_user']
+    verbose_name = 'Пользователь'
+    verbose_name_plural = 'Пользователи подразделения'
+    
+    
 class EquipmentForm(forms.ModelForm):
     class Meta:
         model = Equipment
@@ -237,7 +248,7 @@ class CommonEquipmentLocationForm(forms.ModelForm):
 
 @admin.register(User)
 class CustomUserAdmin(UserAdmin):
-    list_display = ('id', 'email', 'username', 'first_name', 'last_name', 'is_staff', 'is_superuser')
+    list_display = ('id', 'email', 'username', 'first_name', 'last_name', 'get_departments', 'is_staff', 'is_superuser')
     list_display_links = ('id', 'email')
     search_fields = ('email', 'username', 'first_name', 'last_name')
     ordering = ('email',)
@@ -255,6 +266,13 @@ class CustomUserAdmin(UserAdmin):
             'fields': ('email', 'password1', 'password2'),
         }),
     )
+    
+    inlines = [UserDepartmentInline]
+    
+    def get_departments(self, obj):
+        departments = obj.user_departments.all()
+        return ', '.join([ud.id_department.name for ud in departments])
+    get_departments.short_description = 'Подразделения'
     
     def get_fieldsets(self, request, obj=None):
         if not obj:
@@ -687,6 +705,115 @@ class FeedbackAdmin(admin.ModelAdmin):
                 obj.id_application.id if obj.id_application else '',
                 obj.id_application.name[:100] if obj.id_application and obj.id_application.name else '',
                 obj.comment,
+                obj.created_at.strftime('%d.%m.%Y %H:%M:%S')
+            ])
+        
+        self.message_user(request, f'Экспортировано {queryset.count()} записей')
+        return response
+    export_to_csv.short_description = 'Экспорт в CSV'
+    
+
+@admin.register(Department)
+class DepartmentAdmin(admin.ModelAdmin):
+    list_display = ['id', 'name', 'get_user_count', 'created_at', 'updated_at']
+    list_display_links = ['id', 'name']
+    list_filter = ['created_at']
+    search_fields = ['name', 'description']
+    list_per_page = 20
+    ordering = ['name']
+    readonly_fields = ['created_at', 'updated_at']
+    
+    fieldsets = (
+        ('Информация о подразделении', {
+            'fields': ('name', 'description'),
+        }),
+        ('Системная информация', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def get_user_count(self, obj):
+        return obj.department_users.count()
+    get_user_count.short_description = 'Количество сотрудников'
+    
+    actions = ['export_to_csv']
+    
+    def export_to_csv(self, request, queryset):
+        import csv
+        from django.http import HttpResponse
+        
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="departments_export.csv"'
+        
+        writer = csv.writer(response)
+        writer.writerow(['ID', 'Подразделение', 'Описание', 'Кол-во сотрудников', 'Дата создания', 'Дата обновления'])
+        
+        for obj in queryset:
+            writer.writerow([
+                obj.id,
+                obj.name,
+                obj.description or '',
+                obj.department_users.count(),
+                obj.created_at.strftime('%d.%m.%Y %H:%M:%S'),
+                obj.updated_at.strftime('%d.%m.%Y %H:%M:%S')
+            ])
+        
+        self.message_user(request, f'Экспортировано {queryset.count()} записей')
+        return response
+    export_to_csv.short_description = 'Экспорт в CSV'
+
+
+@admin.register(UserDepartment)
+class UserDepartmentAdmin(admin.ModelAdmin):
+    list_display = ['id', 'get_user_display', 'get_department_display', 'is_head', 'created_at']
+    list_display_links = ['id']
+    list_filter = ['is_head', 'created_at', 'id_department']
+    search_fields = ['id_user__username', 'id_user__email', 'id_department__name']
+    list_per_page = 20
+    ordering = ['id_department', 'id_user']
+    autocomplete_fields = ['id_user', 'id_department']
+    readonly_fields = ['created_at']
+    
+    fieldsets = (
+        ('Связь пользователя с подразделением', {
+            'fields': ('id_user', 'id_department', 'is_head'),
+        }),
+        ('Системная информация', {
+            'fields': ('created_at',),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def get_user_display(self, obj):
+        return obj.id_user.get_full_name() or obj.id_user.username
+    get_user_display.short_description = 'Пользователь'
+    get_user_display.admin_order_field = 'id_user__username'
+    
+    def get_department_display(self, obj):
+        return obj.id_department.name
+    get_department_display.short_description = 'Подразделение'
+    get_department_display.admin_order_field = 'id_department__name'
+    
+    actions = ['export_to_csv']
+    
+    def export_to_csv(self, request, queryset):
+        import csv
+        from django.http import HttpResponse
+        
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="user_departments_export.csv"'
+        
+        writer = csv.writer(response)
+        writer.writerow(['ID', 'Пользователь', 'Email', 'Подразделение', 'Руководитель', 'Дата создания'])
+        
+        for obj in queryset:
+            writer.writerow([
+                obj.id,
+                obj.id_user.username,
+                obj.id_user.email,
+                obj.id_department.name,
+                'Да' if obj.is_head else 'Нет',
                 obj.created_at.strftime('%d.%m.%Y %H:%M:%S')
             ])
         

@@ -61,7 +61,12 @@ urlpatterns = [
     # ========== ОБРАТНАЯ СВЯЗЬ (FEEDBACK) ==========
     path('api/feedback/create/', views.create_feedback, name='create_feedback'),
     path('api/feedback/application/<int:app_id>/', views.get_application_feedback, name='get_application_feedback'),
-    path('api/feedback/all/', views.get_all_feedback, name='get_all_feedback'), 
+    path('api/feedback/all/', views.get_all_feedback, name='get_all_feedback'),
+    
+    # ========== ПОДРАЗДЕЛЕНИЯ (DEPARTMENT) ==========
+    path('api/departments/', views.get_departments, name='get_departments'),
+    path('api/departments/<int:dept_id>/', views.get_department_detail, name='get_department_detail'),
+    path('api/user/department/', views.get_user_department, name='get_user_department'), 
 ]
 
 if settings.DEBUG:

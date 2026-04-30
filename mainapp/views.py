@@ -12,11 +12,14 @@ from django.db.models import Sum, Q
 from django.db import transaction
 from django.core.mail import send_mail
 from django.core.mail import EmailMultiAlternatives
+from django.core.validators import validate_email
+from django.core.exceptions import ValidationError
 from rest_framework.authtoken.models import Token
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from .models import Location, TypeEquipment, EquipmentLocation, Photo, Order,\
-    OrderItem, CommonEquipmentLocation, Application, History, Feedback
+    OrderItem, CommonEquipmentLocation, Application, History, Feedback, Department,\
+        UserDepartment
 from .history_utils import HistoryService
 from django.contrib.admin.views.decorators import staff_member_required
 import json
@@ -101,7 +104,7 @@ def create_feedback(request):
                             html_message=html_message,
                             fail_silently=False
                         )
-                        print(f"Уведомление о反馈 отправлено на {receiver.email}")
+                        print(f"Уведомление отправлено на {receiver.email}")
                     except Exception as e:
                         print(f"Ошибка отправки на {receiver.email}: {e}")
             else:
@@ -2361,5 +2364,206 @@ def duplicate_order(request, order_id):
         return JsonResponse({'success': False, 'error': 'Заказ не найден'}, status=404)
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
+    
+    
+# ========== ПОДРАЗДЕЛЕНИЯ (DEPARTMENT) - ТОЛЬКО ПРОСМОТР ==========
+
+@login_required
+def get_departments(request):
+    """
+    Получить список всех подразделений
+    """
+    try:
+        departments = Department.objects.all()
+        
+        limit = int(request.GET.get('limit', 100))
+        offset = int(request.GET.get('offset', 0))
+        
+        total = departments.count()
+        departments_page = departments[offset:offset+limit]
+        
+        return JsonResponse({
+            'success': True,
+            'departments': [
+                {
+                    'id': d.id,
+                    'name': d.name,
+                    'description': d.description,
+                    'user_count': d.department_users.count(),
+                    'created_at': d.created_at.isoformat(),
+                    'created_at_formatted': d.created_at.strftime('%d.%m.%Y %H:%M:%S'),
+                    'updated_at': d.updated_at.isoformat(),
+                    'updated_at_formatted': d.updated_at.strftime('%d.%m.%Y %H:%M:%S')
+                }
+                for d in departments_page
+            ],
+            'total': total,
+            'limit': limit,
+            'offset': offset
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@login_required
+def get_department_detail(request, dept_id):
+    """
+    Получить детали подразделения по ID
+    """
+    try:
+        department = Department.objects.get(id=dept_id)
+        
+        # Получаем пользователей подразделения
+        users = []
+        for ud in department.department_users.all():
+            users.append({
+                'user_id': ud.id_user.id,
+                'username': ud.id_user.username,
+                'email': ud.id_user.email,
+                'full_name': ud.id_user.get_full_name() or ud.id_user.username,
+                'is_head': ud.is_head
+            })
+        
+        return JsonResponse({
+            'success': True,
+            'department': {
+                'id': department.id,
+                'name': department.name,
+                'description': department.description,
+                'user_count': len(users),
+                'users': users,
+                'created_at': department.created_at.isoformat(),
+                'created_at_formatted': department.created_at.strftime('%d.%m.%Y %H:%M:%S'),
+                'updated_at': department.updated_at.isoformat(),
+                'updated_at_formatted': department.updated_at.strftime('%d.%m.%Y %H:%M:%S')
+            }
+        })
+        
+    except Department.DoesNotExist:
+        return JsonResponse({
+            'success': False,
+            'error': 'Подразделение не найдено'
+        }, status=404)
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@login_required
+def get_user_departments(request):
+    """
+    Получить подразделения текущего пользователя
+    """
+    try:
+        user_departments = UserDepartment.objects.filter(id_user=request.user)
+        
+        departments = []
+        for ud in user_departments:
+            departments.append({
+                'id': ud.id_department.id,
+                'name': ud.id_department.name,
+                'description': ud.id_department.description,
+                'is_head': ud.is_head,
+                'joined_at': ud.created_at.isoformat(),
+                'joined_at_formatted': ud.created_at.strftime('%d.%m.%Y %H:%M:%S')
+            })
+        
+        return JsonResponse({
+            'success': True,
+            'departments': departments,
+            'total': len(departments)
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+        
+
+@login_required
+def get_user_departments_by_id(request, user_id):
+    """
+    Получить подразделения пользователя по ID
+    (только для администраторов или для своего пользователя)
+    """
+    try:
+        # Проверка прав: можно смотреть только свои подразделения или админу
+        if request.user.id != user_id and not request.user.is_superuser and not user_can_view_all_applications(request.user):
+            return JsonResponse({
+                'success': False,
+                'error': 'У вас нет прав для просмотра подразделений другого пользователя'
+            }, status=403)
+        
+        user = User.objects.get(id=user_id)
+        user_departments = UserDepartment.objects.filter(id_user=user)
+        
+        departments = []
+        for ud in user_departments:
+            departments.append({
+                'id': ud.id_department.id,
+                'name': ud.id_department.name,
+                'description': ud.id_department.description,
+                'is_head': ud.is_head,
+                'joined_at': ud.created_at.isoformat(),
+                'joined_at_formatted': ud.created_at.strftime('%d.%m.%Y %H:%M:%S')
+            })
+        
+        return JsonResponse({
+            'success': True,
+            'user_id': user.id,
+            'username': user.username,
+            'departments': departments,
+            'total': len(departments)
+        })
+        
+    except User.DoesNotExist:
+        return JsonResponse({
+            'success': False,
+            'error': 'Пользователь не найден'
+        }, status=404)
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+        
+                
+@login_required
+def get_user_department(request):
+    """
+    Получить подразделение текущего пользователя
+    """
+    try:
+        department = Department.objects.filter(id_user=request.user).first()
+        
+        if not department:
+            return JsonResponse({
+                'success': True,
+                'department': None,
+                'message': 'Пользователь не привязан к подразделению'
+            })
+        
+        return JsonResponse({
+            'success': True,
+            'department': {
+                'id': department.id,
+                'name': department.name,
+                'created_at': department.created_at.isoformat(),
+                'created_at_formatted': department.created_at.strftime('%d.%m.%Y %H:%M:%S')
+            }
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
     
     
