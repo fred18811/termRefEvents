@@ -30,17 +30,17 @@ export const loadLocationPhoto = async (id) => {
     }
 };
 
-// Получение текущих дат в зависимости от типа помещения
+// Получение текущих дат (только из видимой формы)
 const getCurrentDates = () => {
-    if (state.currentLocation && state.currentLocation.is_event) {
-        return {
-            date_start: $('#dateStart').val(),
-            date_end: $('#dateEnd').val()
-        };
-    } else {
+    if ($('#rentalDatesBlock').is(':visible')) {
         return {
             date_start: $('#rentalDateStart').val(),
             date_end: $('#rentalDateEnd').val()
+        };
+    } else {
+        return {
+            date_start: $('#dateStart').val(),
+            date_end: $('#dateEnd').val()
         };
     }
 };
@@ -290,19 +290,38 @@ export const updateEquipmentList = async () => {
         return;
     }
     
-    const dates = getCurrentDates();
-    const dateStart = dates.date_start;
-    const dateEnd = dates.date_end;
+    // Получаем даты из видимой формы
+    let dateStart, dateEnd;
     
-    if (!dateStart || !dateEnd) {
-        $('#equipmentContainer').html('<div class="info-message">📅 Выберите даты</div>');
-        return;
-    }
-    
-    const dateValid = validateDates();
-    if (!dateValid.valid) {
-        $('#equipmentContainer').html(`<div class="info-message">⚠️ ${dateValid.error}</div>`);
-        return;
+    if ($('#rentalDatesBlock').is(':visible')) {
+        // Для блока аренды - даты не проверяем
+        dateStart = $('#rentalDateStart').val();
+        dateEnd = $('#rentalDateEnd').val();
+        
+        // Если даты не выбраны, всё равно загружаем оборудование
+        if (!dateStart || !dateEnd) {
+            // Загружаем оборудование без проверки дат
+            allEquipmentData = await loadAllEquipment();
+            if (allEquipmentData.length > 0) {
+                initEquipmentSearch();
+                updateDisplayWithSearch();
+            }
+            return;
+        }
+    } else {
+        dateStart = $('#dateStart').val();
+        dateEnd = $('#dateEnd').val();
+        
+        if (!dateStart || !dateEnd) {
+            $('#equipmentContainer').html('<div class="info-message">📅 Выберите даты</div>');
+            return;
+        }
+        
+        const dateValid = validateDates(dateStart, dateEnd);
+        if (!dateValid.valid) {
+            $('#equipmentContainer').html(`<div class="info-message">⚠️ ${dateValid.error}</div>`);
+            return;
+        }
     }
     
     // Сохраняем текущие количества перед обновлением
@@ -314,13 +333,11 @@ export const updateEquipmentList = async () => {
         }
     });
     
-    // Загружаем ВСЕ оборудование (без фильтрации по типам)
+    // Загружаем ВСЕ оборудование
     allEquipmentData = await loadAllEquipment();
     
     if (allEquipmentData.length > 0) {
-        // Инициализируем поиск, если ещё не инициализирован
         initEquipmentSearch();
-        // Обновляем отображение с учетом текущего поиска и типов
         updateDisplayWithSearch();
     } else if (allEquipmentData.length === 0) {
         $('#equipmentContainer').html('<div class="info-message">📭 Нет доступного оборудования</div>');

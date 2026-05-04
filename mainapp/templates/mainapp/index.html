@@ -76,9 +76,6 @@
                         {% for location in locations %}
                         <div class="location-item" data-id="{{ location.id }}" data-name="{{ location.name }}" data-is-event="{{ location.is_event|yesno:'true,false' }}">
                             <span>{{ location.name }}</span>
-                            {% if location.is_event %}
-                            <span class="event-badge">🎉 Мероприятие</span>
-                            {% endif %}
                         </div>
                         {% endfor %}
                     </div>

@@ -21,50 +21,115 @@ let currentLocationIsEvent = false;
 // Инициализация дат в зависимости от типа помещения
 const initDatePickersForLocation = (isEvent) => {
     if (isEvent) {
-        // Для мероприятий - используем основный блок дат
-        $('#dateStart, #dateEnd').closest('.date-field').show();
+        // Для мероприятий - скрываем блок аренды
         $('#rentalDatesBlock').hide();
-        // Очищаем даты аренды
-        if (rentalDateStartPicker) rentalDateStartPicker.clear();
-        if (rentalDateEndPicker) rentalDateEndPicker.clear();
+        $('.date-section .date-hint').text('Выберите даты мероприятия');
     } else {
-        // Для обычных помещений - используем блок дат аренды
-        $('#dateStart, #dateEnd').closest('.date-field').hide();
+        // Для обычных помещений - показываем блок аренды
         $('#rentalDatesBlock').show();
-        // Очищаем основные даты
-        if (dateStartPicker) dateStartPicker.clear();
-        if (dateEndPicker) dateEndPicker.clear();
+        $('.date-section .date-hint').text('Даты мероприятия не используются для этого помещения');
     }
 };
 
-// Получение текущих выбранных дат в зависимости от типа помещения
+// Получение текущих выбранных дат (только из видимой формы)
 const getSelectedDates = () => {
-    if (currentLocationIsEvent) {
-        return {
-            date_start: $('#dateStart').val(),
-            date_end: $('#dateEnd').val()
-        };
-    } else {
+    // Проверяем, виден ли блок аренды
+    if ($('#rentalDatesBlock').is(':visible')) {
         return {
             date_start: $('#rentalDateStart').val(),
             date_end: $('#rentalDateEnd').val()
+        };
+    } else {
+        return {
+            date_start: $('#dateStart').val(),
+            date_end: $('#dateEnd').val()
         };
     }
 };
 
-// Получение дат для проверки занятости
+// Получение дат для проверки занятости (только из видимой формы)
 const getDatesForBusyCheck = () => {
-    if (currentLocationIsEvent) {
-        return {
-            date_start: $('#dateStart').val(),
-            date_end: $('#dateEnd').val()
-        };
-    } else {
+    if ($('#rentalDatesBlock').is(':visible')) {
         return {
             date_start: $('#rentalDateStart').val(),
             date_end: $('#rentalDateEnd').val()
         };
+    } else {
+        return {
+            date_start: $('#dateStart').val(),
+            date_end: $('#dateEnd').val()
+        };
     }
+};
+
+// Проверка, выбраны ли даты в видимой форме
+const areDatesSelected = () => {
+    if ($('#rentalDatesBlock').is(':visible')) {
+        // Для блока аренды - всегда считаем, что даты выбраны
+        return true;
+    } else {
+        return $('#dateStart').val() && $('#dateEnd').val();
+    }
+};
+
+// Валидация дат в зависимости от типа помещения
+const validateDatesByType = () => {
+    let dateStart, dateEnd;
+    
+    if (currentLocationIsEvent) {
+        dateStart = $('#dateStart').val();
+        dateEnd = $('#dateEnd').val();
+    } else {
+        dateStart = $('#rentalDateStart').val();
+        dateEnd = $('#rentalDateEnd').val();
+    }
+    
+    if (!dateStart || !dateEnd) {
+        return { valid: false, error: 'Сначала выберите даты' };
+    }
+    
+    const startDate = new Date(dateStart);
+    const endDate = new Date(dateEnd);
+    const now = new Date();
+    
+    if (startDate < now) {
+        return { valid: false, error: 'Дата начала не может быть в прошлом' };
+    }
+    if (endDate <= startDate) {
+        return { valid: false, error: 'Дата окончания должна быть позже даты начала' };
+    }
+    
+    return { valid: true };
+};
+
+// Валидация дат из видимой формы
+const validateVisibleDates = () => {
+    let dateStart, dateEnd;
+    
+    if ($('#rentalDatesBlock').is(':visible')) {
+        // Для блока аренды - НЕ проверяем даты, просто считаем их валидными
+        return { valid: true };
+    } else {
+        dateStart = $('#dateStart').val();
+        dateEnd = $('#dateEnd').val();
+    }
+    
+    if (!dateStart || !dateEnd) {
+        return { valid: false, error: 'Сначала выберите даты' };
+    }
+    
+    const startDate = new Date(dateStart);
+    const endDate = new Date(dateEnd);
+    const now = new Date();
+    
+    if (startDate < now) {
+        return { valid: false, error: 'Дата начала не может быть в прошлом' };
+    }
+    if (endDate <= startDate) {
+        return { valid: false, error: 'Дата окончания должна быть позже даты начала' };
+    }
+    
+    return { valid: true };
 };
 
 // Инициализация календарей для дат аренды
@@ -89,36 +154,16 @@ const initRentalDatePickers = () => {
         time_24hr: true,
         minDate: minDate,
         minuteIncrement: 30,
-        disable: [getDisabledDatesFunction()],
+        disable: [() => false], // Не блокируем никакие даты
         onDayCreate: (dObj, dStr, fp, dayElem) => {
-            try {
-                if (dayElem && dayElem.dateObj) {
-                    const dateObj = dayElem.dateObj;
-                    const today = new Date();
-                    today.setHours(0, 0, 0, 0);
-                    
-                    if (dateObj >= today) {
-                        const year = dateObj.getFullYear();
-                        const month = String(dateObj.getMonth() + 1).padStart(2, '0');
-                        const day = String(dateObj.getDate()).padStart(2, '0');
-                        const dateStr = `${year}-${month}-${day}`;
-                        
-                        if (busyDates.has(dateStr)) {
-                            dayElem.classList.add('busy-day');
-                            dayElem.title = 'Дата занята (можно выбрать, но помещение будет занято)';
-                        }
-                    }
-                }
-            } catch (e) {}
+            // Не добавляем подсветку занятых дат
         },
         onChange: async (selectedDates, dateStr, instance) => {
+            // При изменении дат аренды НЕ проверяем занятость
             if (isUpdating) return;
-            if (selectedDates && selectedDates.length > 0) {
-                const dateEnd = $('#rentalDateEnd').val();
-                if (dateEnd && state.currentLocation) {
-                    await checkLocationBusy(state.currentLocation.id, state.currentLocation.name);
-                    await updateEquipmentList();
-                }
+            if (selectedDates && selectedDates.length > 0 && state.currentLocation) {
+                // Просто обновляем список оборудования (без проверки занятости)
+                await updateEquipmentList();
             }
         }
     });
@@ -132,36 +177,14 @@ const initRentalDatePickers = () => {
         time_24hr: true,
         minDate: minDate,
         minuteIncrement: 30,
-        disable: [getDisabledDatesFunction()],
+        disable: [() => false], // Не блокируем никакие даты
         onDayCreate: (dObj, dStr, fp, dayElem) => {
-            try {
-                if (dayElem && dayElem.dateObj) {
-                    const dateObj = dayElem.dateObj;
-                    const today = new Date();
-                    today.setHours(0, 0, 0, 0);
-                    
-                    if (dateObj >= today) {
-                        const year = dateObj.getFullYear();
-                        const month = String(dateObj.getMonth() + 1).padStart(2, '0');
-                        const day = String(dateObj.getDate()).padStart(2, '0');
-                        const dateStr = `${year}-${month}-${day}`;
-                        
-                        if (busyDates.has(dateStr)) {
-                            dayElem.classList.add('busy-day');
-                            dayElem.title = 'Дата занята (можно выбрать, но помещение будет занято)';
-                        }
-                    }
-                }
-            } catch (e) {}
+            // Не добавляем подсветку занятых дат
         },
         onChange: async (selectedDates, dateStr, instance) => {
             if (isUpdating) return;
-            if (selectedDates && selectedDates.length > 0) {
-                const dateStart = $('#rentalDateStart').val();
-                if (dateStart && state.currentLocation) {
-                    await checkLocationBusy(state.currentLocation.id, state.currentLocation.name);
-                    await updateEquipmentList();
-                }
+            if (selectedDates && selectedDates.length > 0 && state.currentLocation) {
+                await updateEquipmentList();
             }
         }
     });
@@ -178,15 +201,25 @@ const clearBusyHighlight = () => {
 const initDateFields = () => {
     const dateStartInput = document.getElementById('dateStart');
     const dateEndInput = document.getElementById('dateEnd');
+    const rentalDateStartInput = document.getElementById('rentalDateStart');
+    const rentalDateEndInput = document.getElementById('rentalDateEnd');
     
     if (dateStartInput) dateStartInput.disabled = false;
     if (dateEndInput) dateEndInput.disabled = false;
+    if (rentalDateStartInput) rentalDateStartInput.disabled = false;
+    if (rentalDateEndInput) rentalDateEndInput.disabled = false;
     
     $('.date-hint').text('Выберите дату и время');
 };
 
 // Загрузка занятых дат с сервера
 const loadBusyDates = async () => {
+    // Если активен блок аренды (is_event = false), не загружаем занятые даты
+    if ($('#rentalDatesBlock').is(':visible')) {
+        console.log('Блок аренды активен, загрузка занятых дат пропущена');
+        return;
+    }
+    
     if (!state.currentLocation) {
         console.log('Нет выбранной локации');
         return;
@@ -236,21 +269,20 @@ const getDisabledDatesFunction = () => {
     };
 };
 
-// Проверка занятости помещения при выборе локации
+// Проверка занятости помещения
 const checkLocationBusy = async (locationId, locationName) => {
-    const dates = getDatesForBusyCheck();
-    const dateStart = dates.date_start;
-    const dateEnd = dates.date_end;
-    
-    if (!dateStart || !dateEnd) {
-        showNotification('Сначала выберите даты', 'warning');
-        return false;
+    // Если активен блок аренды (is_event = false), не проверяем занятость
+    if ($('#rentalDatesBlock').is(':visible')) {
+        console.log('Блок аренды активен, проверка занятости пропущена');
+        return true;
     }
     
-    const dateValid = validateDates(dateStart, dateEnd);
-    if (!dateValid.valid) {
-        showNotification(dateValid.error, 'error');
-        return false;
+    // Получаем даты из основного блока
+    const dateStart = $('#dateStart').val();
+    const dateEnd = $('#dateEnd').val();
+    
+    if (!dateStart || !dateEnd) {
+        return true;
     }
     
     try {
@@ -346,16 +378,23 @@ const validateAndCheckDates = async () => {
 
 // Обработчик выбора локации
 const handleLocationSelect = async (locationId, locationName, isEvent) => {
-    const dates = getDatesForBusyCheck();
-    const dateStart = dates.date_start;
-    const dateEnd = dates.date_end;
+    // Сохраняем тип помещения
+    currentLocationIsEvent = isEvent;
     
-    if (!dateStart || !dateEnd) {
+    // Проверяем, выбраны ли даты в видимой форме
+    if (!areDatesSelected()) {
         showNotification('Сначала выберите даты', 'warning');
         return false;
     }
     
-    // Проверяем занятость помещения
+    // Валидация дат из видимой формы
+    const dateValid = validateVisibleDates();
+    if (!dateValid.valid) {
+        showNotification(dateValid.error, 'error');
+        return false;
+    }
+    
+    // Проверяем занятость помещения (только для мероприятий)
     const isAvailable = await checkLocationBusy(locationId, locationName);
     
     if (!isAvailable) return false;
@@ -366,15 +405,14 @@ const handleLocationSelect = async (locationId, locationName, isEvent) => {
     $(`.location-item[data-id="${locationId}"]`).addClass('active');
     
     state.currentLocation = { id: locationId, name: locationName, is_event: isEvent };
-    currentLocationIsEvent = isEvent;
     
-    // Настраиваем отображение дат в зависимости от типа помещения
+    // Настраиваем отображение блока аренды в зависимости от типа помещения
     initDatePickersForLocation(isEvent);
     
     // Загружаем фото
     loadLocationPhoto(locationId);
     
-    // Загружаем занятые даты для календаря
+    // Загружаем занятые даты для календаря (только для мероприятий)
     await loadBusyDates();
     
     // Обновляем список оборудования
@@ -494,10 +532,14 @@ export const initEventHandlers = () => {
     
     // Инициализируем все календари
     initAllDatePickers();
-
-    // Скрываем блок дат аренды по умолчанию
-    $('#rentalDatesBlock').hide();
     
+    // По умолчанию: основной блок дат ВСЕГДА ВИДЕН, блок аренды скрыт
+    $('#rentalDatesBlock').hide();
+    $('.date-section .date-hint').text('Выберите даты мероприятия');
+    
+    // Поля дат активны
+    initDateFields();
+
     // Переключение страниц
     $('[data-page]').click(function(e) {
         e.preventDefault();
@@ -544,15 +586,16 @@ export const initEventHandlers = () => {
     $('.location-item').click(async function() {
         const id = $(this).data('id');
         const name = $(this).data('name');
+        const isEvent = $(this).data('is-event') === true; // Получаем тип помещения
         
-        console.log('Выбрана локация:', id, name);
+        console.log('Выбрана локация:', id, name, 'isEvent:', isEvent);
         
         if (state.selectedLocations.has(id.toString())) {
             showNotification('⚠️ Это помещение уже добавлено в заказ', 'warning');
             return;
         }
         
-        await handleLocationSelect(id, name);
+        await handleLocationSelect(id, name, isEvent);
     });
     
     // Обработчик изменения дат
