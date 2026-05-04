@@ -74,13 +74,35 @@
                     <h2>Помещения</h2>
                     <div class="location-items" id="locationList">
                         {% for location in locations %}
-                        <div class="location-item" data-id="{{ location.id }}" data-name="{{ location.name }}">
+                        <div class="location-item" data-id="{{ location.id }}" data-name="{{ location.name }}" data-is-event="{{ location.is_event|yesno:'true,false' }}">
                             <span>{{ location.name }}</span>
+                            {% if location.is_event %}
+                            <span class="event-badge">🎉 Мероприятие</span>
+                            {% endif %}
                         </div>
                         {% endfor %}
                     </div>
                 </div>
                 <div class="location-photo-section">
+                    <!-- Блок дат аренды (скрыт по умолчанию) -->
+                    <div id="rentalDatesBlock" class="rental-dates-block" style="display: none;">
+                        <div class="rental-dates-header">
+                            <h3>📅 Даты аренды помещения</h3>
+                        </div>
+                        <div class="date-fields">
+                            <div class="date-field">
+                                <label>📅 Дата начала аренды</label>
+                                <input type="text" id="rentalDateStart" class="date-input" placeholder="Выберите дату и время">
+                                <small class="date-hint">Выберите дату начала аренды</small>
+                            </div>
+                            <div class="date-field">
+                                <label>⏰ Дата окончания аренды</label>
+                                <input type="text" id="rentalDateEnd" class="date-input" placeholder="Выберите дату и время">
+                                <small class="date-hint">Выберите дату окончания аренды</small>
+                            </div>
+                        </div>
+                    </div>
+                    
                     <div class="location-photo" id="locationPhoto">
                         <div class="photo-placeholder">📷 Выберите помещение</div>
                     </div>

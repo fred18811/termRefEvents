@@ -30,6 +30,21 @@ export const loadLocationPhoto = async (id) => {
     }
 };
 
+// Получение текущих дат в зависимости от типа помещения
+const getCurrentDates = () => {
+    if (state.currentLocation && state.currentLocation.is_event) {
+        return {
+            date_start: $('#dateStart').val(),
+            date_end: $('#dateEnd').val()
+        };
+    } else {
+        return {
+            date_start: $('#rentalDateStart').val(),
+            date_end: $('#rentalDateEnd').val()
+        };
+    }
+};
+
 // Загрузка ВСЕГО оборудования для локации (без фильтрации по типам)
 const loadAllEquipment = async () => {
     if (!state.currentLocation) return [];
@@ -275,11 +290,12 @@ export const updateEquipmentList = async () => {
         return;
     }
     
-    const dateStart = $('#dateStart').val();
-    const dateEnd = $('#dateEnd').val();
+    const dates = getCurrentDates();
+    const dateStart = dates.date_start;
+    const dateEnd = dates.date_end;
     
     if (!dateStart || !dateEnd) {
-        $('#equipmentContainer').html('<div class="info-message">📅 Выберите дату начала и окончания</div>');
+        $('#equipmentContainer').html('<div class="info-message">📅 Выберите даты</div>');
         return;
     }
     
@@ -397,11 +413,21 @@ export const addToCart = () => {
     console.log('addToCart вызван');
     
     if (!state.currentLocation) {
-        showNotification('❌ Выберите локацию', 'error');
+        showNotification('❌ Выберите помещение', 'error');
         return;
     }
     
-    const dateValid = validateDates();
+    const dates = getCurrentDates();
+    const dateStart = dates.date_start;
+    const dateEnd = dates.date_end;
+    
+    if (!dateStart || !dateEnd) {
+        showNotification('❌ Выберите даты', 'error');
+        return;
+    }
+    
+    // Валидация дат
+    const dateValid = validateDates(dateStart, dateEnd);
     if (!dateValid.valid) {
         showNotification(dateValid.error, 'error');
         return;
@@ -454,8 +480,9 @@ export const addToCart = () => {
     state.orderCart.push({
         location_id: state.currentLocation?.id || null,
         location_name: state.currentLocation?.name || 'Общее оборудование',
-        date_start: $('#dateStart').val(),
-        date_end: $('#dateEnd').val(),
+        date_start: dateStart,
+        date_end: dateEnd,
+        is_event: state.currentLocation?.is_event || false, // Сохраняем тип
         equipment: selected,
         comment: comment || ''
     });

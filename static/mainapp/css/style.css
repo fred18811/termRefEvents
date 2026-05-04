@@ -617,6 +617,36 @@ nav {
 }
 
 /* ========== 10. DATE FIELDS ========== */
+/* Блок дат аренды */
+.rental-dates-block {
+    background: linear-gradient(135deg, var(--gray-50), var(--gray-100));
+    border-radius: var(--radius-xl);
+    padding: 1.25rem;
+    margin-bottom: 1.5rem;
+    border: 1px solid var(--gray-200);
+}
+
+.rental-dates-header {
+    margin-bottom: 1rem;
+}
+
+.rental-dates-header h3 {
+    font-size: 1rem;
+    color: var(--color-blue);
+    margin: 0;
+}
+
+/* Бейдж мероприятия */
+.event-badge {
+    display: inline-block;
+    background: linear-gradient(135deg, #ffc107, #e0a800);
+    color: #2c3e50;
+    font-size: 0.6rem;
+    padding: 0.15rem 0.5rem;
+    border-radius: 20px;
+    margin-left: 0.5rem;
+    vertical-align: middle;
+}
 .location-photo-section {
     background: white;
     border-radius: var(--radius-2xl);

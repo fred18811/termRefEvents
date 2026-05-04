@@ -64,26 +64,60 @@ export const showNotification = (message, type = 'info') => {
     notification.find('.modal-close').click(() => notification.remove());
 };
 
-// Валидация дат
+// Обновленная функция validateDates (принимает даты)
 export const validateDates = (dateStart, dateEnd) => {
-    const start = dateStart || $('#dateStart').val();
-    const end = dateEnd || $('#dateEnd').val();
+    if (!dateStart || !dateEnd) return { valid: false, error: 'Выберите даты' };
     
-    if (!start) return { valid: false, error: 'Выберите дату начала' };
-    if (!end) return { valid: false, error: 'Выберите дату окончания' };
-    
-    const startDate = new Date(start);
-    const endDate = new Date(end);
+    const startDate = new Date(dateStart);
+    const endDate = new Date(dateEnd);
     const now = new Date();
     
     if (startDate < now) {
         return { valid: false, error: 'Дата начала не может быть в прошлом' };
     }
     if (endDate <= startDate) {
-        return { valid: false, error: 'Окончание должно быть позже начала' };
+        return { valid: false, error: 'Дата окончания должна быть позже даты начала' };
     }
     
     return { valid: true };
+};
+
+// ========== ИНИЦИАЛИЗАЦИЯ ==========
+
+export const initDateStartPicker = () => {
+    const dateStartInput = document.getElementById('dateStart');
+    if (!dateStartInput) {
+        console.error('Элемент dateStart не найден');
+        return;
+    }
+    
+    const minDate = new Date();
+    minDate.setHours(0, 0, 0, 0);
+    
+    dateStartPicker = flatpickr(dateStartInput, {
+        locale: 'ru',
+        enableTime: true,
+        dateFormat: 'Y-m-d H:i:S',
+        altFormat: 'd.m.Y H:i',
+        altInput: true,
+        time_24hr: true,
+        minDate: minDate,
+        minuteIncrement: 30,
+        disable: [getDisabledDatesFunction()],
+        onDayCreate: (dObj, dStr, fp, dayElem) => {
+            // ... существующий код ...
+        },
+        onChange: async (selectedDates, dateStr, instance) => {
+            if (isUpdating) return;
+            if (selectedDates && selectedDates.length > 0 && state.currentLocation && currentLocationIsEvent) {
+                const dateEnd = $('#dateEnd').val();
+                if (dateEnd) {
+                    await checkLocationBusy(state.currentLocation.id, state.currentLocation.name);
+                    await updateEquipmentList();
+                }
+            }
+        }
+    });
 };
 
 // Установка минимальной даты
