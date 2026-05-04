@@ -289,8 +289,9 @@
             <form id="loginForm" class="auth-form">
                 {% csrf_token %}
                 <div class="form-group">
-                    <label for="username">Email</label>
-                    <input type="email" id="username" name="username" class="auth-input" placeholder="example@mail.ru" required autocomplete="email">
+                    <label for="username">Логин или Email</label>
+                    <input type="text" id="username" name="username" class="auth-input" placeholder="Введите логин или email" required autocomplete="username">
+                    <small class="field-hint">Введите ваш логин (например, admin) или email</small>
                 </div>
                 <div class="form-group">
                     <label for="password">Пароль</label>
@@ -301,50 +302,7 @@
             </form>
             
             <div class="auth-footer">
-                <p>Нет аккаунта? <a href="#" id="showRegisterBtn">Зарегистрироваться</a></p>
-            </div>
-        </div>
-    </div>
-
-    <!-- Модальное окно регистрации -->
-    <div id="registerModal" class="modal" style="display: none;">
-        <div class="modal-content auth-modal">
-            <div class="auth-header">
-                <div class="auth-logo">
-                    <div class="logo-icon">🏢</div>
-                    <h2>Регистрация</h2>
-                </div>
-                <p class="auth-subtitle">Создайте новый аккаунт</p>
-            </div>
-            
-            <form id="registerForm" class="auth-form">
-                {% csrf_token %}
-                <div class="form-group">
-                    <label for="regEmail">Email <span class="required">*</span></label>
-                    <input type="email" id="regEmail" class="auth-input" placeholder="example@mail.ru" required>
-                </div>
-                <div class="form-group">
-                    <label for="regFirstName">Имя</label>
-                    <input type="text" id="regFirstName" class="auth-input" placeholder="Ваше имя">
-                </div>
-                <div class="form-group">
-                    <label for="regLastName">Фамилия</label>
-                    <input type="text" id="regLastName" class="auth-input" placeholder="Ваша фамилия">
-                </div>
-                <div class="form-group">
-                    <label for="regPassword">Пароль <span class="required">*</span></label>
-                    <input type="password" id="regPassword" class="auth-input" placeholder="Минимум 6 символов" required>
-                </div>
-                <div class="form-group">
-                    <label for="regPasswordConfirm">Подтверждение пароля <span class="required">*</span></label>
-                    <input type="password" id="regPasswordConfirm" class="auth-input" placeholder="Повторите пароль" required>
-                </div>
-                <div id="regError" class="auth-error" style="display: none;"></div>
-                <button type="submit" class="btn btn-primary btn-block">Зарегистрироваться</button>
-            </form>
-            
-            <div class="auth-footer">
-                <p>Уже есть аккаунт? <a href="#" id="showLoginBtn">Войти</a></p>
+                <p>Для получения доступа обратитесь к администратору</p>
             </div>
         </div>
     </div>

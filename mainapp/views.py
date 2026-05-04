@@ -326,10 +326,9 @@ def login_view(request):
         if not username_or_email or not password:
             return JsonResponse({
                 'success': False,
-                'error': 'Введите email и пароль'
+                'error': 'Введите логин/email и пароль'
             }, status=400)
         
-        # Пытаемся найти пользователя по email или username
         user = None
         
         # Сначала пробуем найти по email
@@ -374,7 +373,7 @@ def login_view(request):
         else:
             return JsonResponse({
                 'success': False,
-                'error': 'Неверный email или пароль'
+                'error': 'Неверный логин/email или пароль'
             }, status=401)
             
     except Exception as e:
