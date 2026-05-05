@@ -19,7 +19,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from .models import Location, TypeEquipment, EquipmentLocation, Photo, Order,\
     OrderItem, CommonEquipmentLocation, Application, History, Feedback, Department,\
-        UserDepartment
+        UserDepartment, ApplicationApproval
 from .history_utils import HistoryService
 from django.contrib.admin.views.decorators import staff_member_required
 import json
@@ -1104,6 +1104,27 @@ def save_order(request):
             is_new_application = True
             print(f"Создана новая заявка №{application.id} с датами: {app_date_start} - {app_date_end}")
             
+            # ========== СОЗДАНИЕ ЗАПИСЕЙ СОГЛАСОВАНИЯ ==========
+            # Находим все подразделения, у которых требуется согласование
+            departments_need_approval = Department.objects.filter(is_approval_required=True)
+            
+            created_approvals_count = 0
+            for dept in departments_need_approval:
+                # Создаем запись согласования для каждого подразделения
+                approval, created = ApplicationApproval.objects.get_or_create(
+                    id_department=dept,
+                    id_application=application,
+                    defaults={
+                        'is_agreed': False,
+                        'comment': f'Ожидает согласования от подразделения {dept.name}'
+                    }
+                )
+                if created:
+                    created_approvals_count += 1
+                    print(f"Создана запись согласования для подразделения '{dept.name}' (заявка #{application.id})")
+            
+            print(f"Создано записей согласования: {created_approvals_count}")
+            
             try:
                 from .email_utils import EmailService
                 EmailService.send_new_application_notification(application, request.user)
@@ -1277,6 +1298,9 @@ def save_order(request):
             order.delete()
             # Если заявка была только что создана, но заказ не добавился, удаляем заявку
             if is_new_application:
+                # Создаем записи согласования
+                created_approvals = create_application_approvals(application)
+                print(f"Создано записей согласования: {created_approvals}")
                 application.delete()
             return JsonResponse({
                 'success': False,
@@ -2596,4 +2620,25 @@ def get_user_department(request):
             'error': str(e)
         }, status=500)
     
+
+def create_application_approvals(application):
+    """
+    Создает записи согласования для заявки
+    """
+    departments_need_approval = Department.objects.filter(is_approval_required=True)
     
+    created_count = 0
+    for dept in departments_need_approval:
+        approval, created = ApplicationApproval.objects.get_or_create(
+            id_department=dept,
+            id_application=application,
+            defaults={
+                'is_agreed': False,
+                'comment': f'Ожидает согласования от подразделения {dept.name}'
+            }
+        )
+        if created:
+            created_count += 1
+            print(f"Создана запись согласования для подразделения '{dept.name}' (заявка #{application.id})")
+    
+    return created_count
