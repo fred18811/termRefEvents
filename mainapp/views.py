@@ -1033,12 +1033,12 @@ def save_order(request):
         print("=" * 60)
         print("ПОЛУЧЕН ЗАПРОС НА СОХРАНЕНИЕ ЗАКАЗА")
         print(f"Пользователь: {request.user.username} (ID: {request.user.id})")
-        print(f"Дата начала: {data.get('date_time_start')}")
-        print(f"Дата окончания: {data.get('date_time_end')}")
-        print(f"Комментарий: {data.get('comment', '')}")
+        print(f"Дата начала заказа: {data.get('date_time_start')}")
+        print(f"Дата окончания заказа: {data.get('date_time_end')}")
+        print(f"Дата начала заявки (из date-section): {data.get('application_date_start')}")
+        print(f"Дата окончания заявки (из date-section): {data.get('application_date_end')}")
         print(f"Application ID: {data.get('application_id')}")
         print(f"Location ID: {data.get('location_id')}")
-        print(f"Количество позиций: {len(data.get('items', []))}")
         
         if not data.get('date_time_start'):
             return JsonResponse({
@@ -1053,19 +1053,29 @@ def save_order(request):
                 'error': 'Нет позиций для сохранения'
             }, status=400)
         
-        # Получаем application_id
         application_id = data.get('application_id')
         application = None
-        is_new_application = False  # Флаг, что заявка только что создана
+        is_new_application = False
         
-        # Получаем даты для заявки
-        app_date_start = data.get('date_time_start')
-        app_date_end = data.get('date_time_end')
+        # ДАТЫ ДЛЯ ЗАЯВКИ ВСЕГДА БЕРУТСЯ ИЗ ОТДЕЛЬНЫХ ПОЛЕЙ (из date-section)
+        app_date_start = data.get('application_date_start')
+        app_date_end = data.get('application_date_end')
+        
+        print(f"Даты для Application: начало={app_date_start}, окончание={app_date_end}")
         
         if application_id:
             try:
                 application = Application.objects.get(id=application_id, id_user=request.user)
                 print(f"Найдена существующая заявка №{application.id}")
+                
+                # Обновляем даты в существующей заявке
+                if app_date_start:
+                    application.date_start = app_date_start
+                if app_date_end:
+                    application.date_end = app_date_end
+                application.save(update_fields=['date_start', 'date_end'])
+                print(f"Обновлены даты в заявке #{application.id}")
+                
             except Application.DoesNotExist:
                 print(f"Заявка с ID {application_id} не найдена")
                 return JsonResponse({
@@ -1073,8 +1083,6 @@ def save_order(request):
                     'error': 'Заявка не найдена'
                 }, status=404)
         else:
-            # ========== ВОТ ЗДЕСЬ СОЗДАЕТСЯ НОВАЯ ЗАЯВКА ==========
-            # Получаем название заявки из данных
             application_name = data.get('application_name')
             if not application_name:
                 return JsonResponse({
@@ -1084,25 +1092,18 @@ def save_order(request):
             
             application_comment = data.get('application_comment', '')
             
-            # Создаем новую заявку
+            # Создаем новую заявку с датами из date-section
             application = Application.objects.create(
                 name=application_name,
                 id_user=request.user,
                 comment=application_comment,
-                status='new'
+                status='new',
+                date_start=app_date_start,
+                date_end=app_date_end
             )
             is_new_application = True
-            print(f"Создана новая заявка №{application.id}")
+            print(f"Создана новая заявка №{application.id} с датами: {app_date_start} - {app_date_end}")
             
-            # ========== ВОТ ЗДЕСЬ СОХРАНЯЕМ ДАТЫ В ЗАЯВКУ ==========
-            # Обновляем даты в только что созданной заявке
-            application.date_start = app_date_start
-            application.date_end = app_date_end
-            application.save(update_fields=['date_start', 'date_end'])
-            print(f"Даты заявки сохранены: начало={app_date_start}, окончание={app_date_end}")
-            
-            # ========== ОТПРАВЛЯЕМ УВЕДОМЛЕНИЕ ==========
-            # Отправляем уведомление о новой заявке
             try:
                 from .email_utils import EmailService
                 EmailService.send_new_application_notification(application, request.user)
@@ -1529,8 +1530,16 @@ def get_orders(request):
             orders = Order.objects.filter(id_application=app)
             first_order = orders.first()
             
-            date_time_start = first_order.date_time_start if first_order else None
-            date_time_end = first_order.date_time_end if first_order else None
+            # ДАТЫ ДЛЯ ОТОБРАЖЕНИЯ БЕРУТСЯ ИЗ APPLICATION
+            # Если в Application даты не заполнены, используем даты из первого заказа
+            app_date_start = app.date_start
+            app_date_end = app.date_end
+            
+            # Если даты в Application не указаны, берем из первого заказа
+            if not app_date_start and first_order:
+                app_date_start = first_order.date_time_start
+            if not app_date_end and first_order:
+                app_date_end = first_order.date_time_end
             
             status_display = dict(Application._meta.get_field('status').choices).get(app.status, app.status)
             is_active = app.status == 'new' or app.status == 'in_progress'
@@ -1540,10 +1549,10 @@ def get_orders(request):
             apps_list.append({
                 'id': app.id,
                 'application_name': app.name,
-                'date_time_start': date_time_start.isoformat() if date_time_start else None,
-                'date_time_end': date_time_end.isoformat() if date_time_end else None,
-                'application_date_start': app.date_start.isoformat() if app.date_start else None,  # новое поле
-                'application_date_end': app.date_end.isoformat() if app.date_end else None,        # новое поле
+                'date_time_start': app_date_start.isoformat() if app_date_start else None,
+                'date_time_end': app_date_end.isoformat() if app_date_end else None,
+                'application_date_start': app.date_start.isoformat() if app.date_start else None,
+                'application_date_end': app.date_end.isoformat() if app.date_end else None,
                 'is_active': is_active,
                 'status': app.status,
                 'status_display': status_display,

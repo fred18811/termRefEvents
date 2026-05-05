@@ -679,9 +679,13 @@ export const saveSingleOrder = async () => {
     }
     $('#applicationName').removeClass('error');
     
-    // Комментарий к заявке (общий для всей заявки)
     const applicationComment = $('#orderComment').val().trim();
     
+    // ========== ДАТЫ ДЛЯ ЗАЯВКИ ВСЕГДА БЕРУТСЯ ИЗ date-section ==========
+    const appDateStart = $('#dateStart').val();
+    const appDateEnd = $('#dateEnd').val();
+    
+    console.log('Даты для заявки (из date-section):', { appDateStart, appDateEnd });
     console.log('Количество локаций в корзине:', state.orderCart.length);
     console.log('Комментарий к заявке:', applicationComment);
     
@@ -692,53 +696,40 @@ export const saveSingleOrder = async () => {
     try {
         const csrftoken = document.cookie.split('; ').find(row => row.startsWith('csrftoken='))?.split('=')[1];
         
-        // 1. Создаем ОДНУ заявку для всех заказов
-        console.log('Шаг 1: Создание заявки...');
-        const applicationResponse = await fetch('/api/applications/create/', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': csrftoken
-            },
-            credentials: 'include',
-            body: JSON.stringify({
-                name: applicationName,
-                comment: applicationComment
-            })
-        });
-        
-        const applicationData = await applicationResponse.json();
-        console.log('Ответ сервера (заявка):', applicationData);
-        
-        if (!applicationData.success) {
-            throw new Error(applicationData.error || 'Ошибка создания заявки');
-        }
-        
-        const applicationId = applicationData.application.id;
-        console.log('Создана заявка №', applicationId);
-        
-        // 2. Создаем отдельный заказ для КАЖДОЙ локации
         let createdOrders = [];
         let hasErrors = false;
+        let createdApplicationId = null;
         
         for (let i = 0; i < state.orderCart.length; i++) {
             const cartItem = state.orderCart[i];
-            // Комментарий к заказу (индивидуальный для каждой локации)
             const orderComment = cartItem.comment || '';
-            console.log(`\nШаг 2.${i + 1}: Создание заказа для локации "${cartItem.location_name}"`);
+            
+            console.log(`\nШаг ${i + 1}: Создание заказа для локации "${cartItem.location_name}"`);
+            console.log(`  Дата начала заказа: ${cartItem.date_start}`);
+            console.log(`  Дата окончания заказа: ${cartItem.date_end}`);
             console.log(`  Комментарий к заказу: ${orderComment}`);
             
-            // Формируем данные для заказа этой локации
+            // Формируем данные для заказа
             const orderData = {
                 date_time_start: cartItem.date_start,
                 date_time_end: cartItem.date_end,
-                comment: orderComment, // Сохраняем комментарий к заказу
-                application_id: applicationId,
+                comment: orderComment,
                 location_id: cartItem.location_id,
                 items: []
             };
             
-            // Добавляем оборудование из этой локации
+            // Для первого заказа передаём данные заявки
+            if (i === 0) {
+                orderData.application_name = applicationName;
+                orderData.application_comment = applicationComment;
+                // ДАТЫ ДЛЯ ЗАЯВКИ ВСЕГДА ИЗ date-section
+                orderData.application_date_start = appDateStart;
+                orderData.application_date_end = appDateEnd;
+            } else if (createdApplicationId) {
+                orderData.application_id = createdApplicationId;
+            }
+            
+            // Добавляем оборудование
             for (const equip of cartItem.equipment) {
                 const itemData = {
                     equipment_id: equip.equipment_id,
@@ -751,12 +742,11 @@ export const saveSingleOrder = async () => {
                 }
                 
                 orderData.items.push(itemData);
-                console.log(`    - Оборудование: ${equip.equipment_name}, кол-в ${equip.quantity}, is_common: ${equip.is_common}`);
+                console.log(`    - Оборудование: ${equip.equipment_name}, кол-во ${equip.quantity}, is_common: ${equip.is_common}`);
             }
             
             console.log(`Отправка заказа для локации ${cartItem.location_name}...`);
             
-            // Сохраняем заказ
             const orderResponse = await fetch('/api/save-order/', {
                 method: 'POST',
                 headers: {
@@ -771,6 +761,9 @@ export const saveSingleOrder = async () => {
             console.log(`Ответ для локации ${cartItem.location_name}:`, orderResponseData);
             
             if (orderResponseData.success) {
+                if (i === 0 && orderResponseData.application_id) {
+                    createdApplicationId = orderResponseData.application_id;
+                }
                 createdOrders.push({
                     location_name: cartItem.location_name,
                     order_id: orderResponseData.order_id,
@@ -782,7 +775,6 @@ export const saveSingleOrder = async () => {
             }
         }
         
-        // 3. Показываем результат
         if (createdOrders.length > 0) {
             let message = `✅ Заявка "${applicationName}" создана!\n`;
             message += `Создано заказов: ${createdOrders.length}\n`;
@@ -794,19 +786,19 @@ export const saveSingleOrder = async () => {
             });
             showNotification(message, 'success');
             
-            // Очищаем корзину и поля
             clearCart();
             $('#applicationName').val('');
             $('#orderComment').val('');
             updateCartDisplay();
             $('.location-item').removeClass('disabled');
             $('#dateStart, #dateEnd').val('');
+            $('#rentalDateStart, #rentalDateEnd').val('');
         } else {
             showNotification('❌ Не удалось создать ни одного заказа', 'error');
         }
         
         if (hasErrors) {
-            showNotification('⚠️ Некоторые заказы не были созданы. Проверьте консоль.', 'warning');
+            showNotification('⚠️ Некоторые заказы не были созданы.', 'warning');
         }
         
     } catch (error) {

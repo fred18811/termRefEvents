@@ -227,7 +227,6 @@ export const displayOrders = (orders) => {
                           (order.status === 'cancelled' ? 'Отменена' : 
                            (order.status === 'completed' ? 'Завершена' : 'Активна'));
         
-        // Получаем статус иконку
         let statusIcon = '';
         switch(order.status) {
             case 'new': statusIcon = '🟢'; break;
@@ -237,8 +236,11 @@ export const displayOrders = (orders) => {
             default: statusIcon = '📋';
         }
         
+        // ОТОБРАЖАЕМ ДАТЫ ИЗ APPLICATION (date_time_start, date_time_end)
+        // Эти поля теперь содержат даты из Application
         const startDate = order.date_time_start ? new Date(order.date_time_start).toLocaleString('ru-RU') : 'Не указана';
         const endDate = order.date_time_end ? new Date(order.date_time_end).toLocaleString('ru-RU') : 'Не завершен';
+        
         const isChecked = state.selectedOrders.has(order.id) ? 'checked' : '';
         const commentHtml = order.comment ? `<div class="order-comment">💬 ${escapeHtml(order.comment)}</div>` : '';
         
@@ -246,7 +248,6 @@ export const displayOrders = (orders) => {
         const ownerInfo = (userPermissions.can_view_all || userPermissions.is_superuser) && order.user_name ? 
             `<span class="order-owner">👤 ${escapeHtml(order.user_name)}</span>` : '';
         
-        // Подсветка поискового запроса в названии
         let displayName = escapeHtml(order.application_name || 'Без названия');
         if (currentFilters.search) {
             const regex = new RegExp(`(${escapeRegex(currentFilters.search)})`, 'gi');
@@ -278,7 +279,6 @@ export const displayOrders = (orders) => {
     
     $('#ordersContainer').html(html + '</div>');
     
-    // Обработчики чекбоксов
     $('.order-checkbox').on('change', function() {
         const applicationId = parseInt($(this).data('id'));
         if ($(this).is(':checked')) {
@@ -291,7 +291,6 @@ export const displayOrders = (orders) => {
         updateSelectionInfo();
     });
     
-    // Загружаем позиции для каждого заказа
     orders.forEach(order => {
         loadOrderItems(order.id);
     });
