@@ -22,9 +22,9 @@ class ApplicationApprovalInline(admin.TabularInline):
     """Inline для отображения согласований в заявке"""
     model = ApplicationApproval
     extra = 1
-    fields = ['id_department', 'is_agreed', 'date_agreed', 'comment']
+    fields = ['id_department', 'id_user', 'is_agreed', 'date_agreed', 'comment']
     readonly_fields = ['date_agreed']
-    autocomplete_fields = ['id_department']
+    autocomplete_fields = ['id_department', 'id_user']
     verbose_name = 'Согласование'
     verbose_name_plural = 'Согласования'
     
@@ -932,19 +932,19 @@ class DepartmentTypeEquipmentAdmin(admin.ModelAdmin):
     
 @admin.register(ApplicationApproval)
 class ApplicationApprovalAdmin(admin.ModelAdmin):
-    list_display = ['id', 'get_department_display', 'get_application_display', 'is_agreed', 'date_agreed', 'created_at']
+    list_display = ['id', 'get_department_display', 'get_application_display', 'get_user_display', 'is_agreed', 'date_agreed', 'created_at']
     list_display_links = ['id']
-    list_filter = ['is_agreed', 'created_at', 'date_agreed', 'id_department']
-    search_fields = ['id_department__name', 'id_application__name', 'comment']
+    list_filter = ['is_agreed', 'created_at', 'date_agreed', 'id_department', 'id_user']
+    search_fields = ['id_department__name', 'id_application__name', 'id_user__username', 'comment']
     list_per_page = 20
     ordering = ['-created_at']
-    autocomplete_fields = ['id_department', 'id_application']
+    autocomplete_fields = ['id_department', 'id_application', 'id_user']
     readonly_fields = ['created_at', 'updated_at', 'date_agreed']
     list_editable = ['is_agreed']
     
     fieldsets = (
         ('Информация о согласовании', {
-            'fields': ('id_department', 'id_application', 'is_agreed')
+            'fields': ('id_department', 'id_application', 'id_user', 'is_agreed')
         }),
         ('Дополнительно', {
             'fields': ('comment',)
@@ -965,6 +965,13 @@ class ApplicationApprovalAdmin(admin.ModelAdmin):
     get_application_display.short_description = 'Заявка'
     get_application_display.admin_order_field = 'id_application__name'
     
+    def get_user_display(self, obj):
+        if obj.id_user:
+            return obj.id_user.username
+        return "—"
+    get_user_display.short_description = 'Пользователь'
+    get_user_display.admin_order_field = 'id_user__username'
+    
     actions = ['export_to_csv']
     
     def export_to_csv(self, request, queryset):
@@ -975,13 +982,14 @@ class ApplicationApprovalAdmin(admin.ModelAdmin):
         response['Content-Disposition'] = 'attachment; filename="application_approvals_export.csv"'
         
         writer = csv.writer(response)
-        writer.writerow(['ID', 'Подразделение', 'Заявка', 'Согласовано', 'Дата согласования', 'Комментарий', 'Дата создания'])
+        writer.writerow(['ID', 'Подразделение', 'Заявка', 'Пользователь', 'Согласовано', 'Дата согласования', 'Комментарий', 'Дата создания'])
         
         for obj in queryset:
             writer.writerow([
                 obj.id,
                 obj.id_department.name,
                 f"{obj.id_application.id} - {obj.id_application.name[:50]}",
+                obj.id_user.username if obj.id_user else '',
                 'Да' if obj.is_agreed else 'Нет',
                 obj.date_agreed.strftime('%d.%m.%Y %H:%M:%S') if obj.date_agreed else '',
                 obj.comment or '',
@@ -990,4 +998,4 @@ class ApplicationApprovalAdmin(admin.ModelAdmin):
         
         self.message_user(request, f'Экспортировано {queryset.count()} записей')
         return response
-    export_to_csv.short_description = 'Экспорт в CSV'    
+    export_to_csv.short_description = 'Экспорт в CSV' 

@@ -846,6 +846,16 @@ class ApplicationApproval(models.Model):
         related_name='approvals',
         help_text='Заявка на согласование'
     )
+    id_user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        db_column='id_user',
+        verbose_name=_('пользователь'),
+        related_name='application_approvals',
+        null=True,
+        blank=True,
+        help_text='Пользователь, который согласовал заявку'
+    )
     is_agreed = models.BooleanField(
         verbose_name=_('согласовано'),
         default=False,
@@ -882,6 +892,7 @@ class ApplicationApproval(models.Model):
         indexes = [
             models.Index(fields=['id_department']),
             models.Index(fields=['id_application']),
+            models.Index(fields=['id_user']),
             models.Index(fields=['is_agreed']),
             models.Index(fields=['date_agreed']),
         ]
@@ -889,7 +900,8 @@ class ApplicationApproval(models.Model):
     
     def __str__(self):
         status = "Согласовано" if self.is_agreed else "Не согласовано"
-        return f"{self.id_department.name} - Заявка #{self.id_application.id} ({status})"
+        user_info = f" (пользователь: {self.id_user.username})" if self.id_user else ""
+        return f"{self.id_department.name} - Заявка #{self.id_application.id} ({status}){user_info}"
     
     def save(self, *args, **kwargs):
         # Если is_agreed изменилось на True, устанавливаем дату согласования
