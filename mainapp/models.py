@@ -704,6 +704,12 @@ class Department(models.Model):
         help_text='Дата и время последнего обновления'
     )
     
+    is_approval_required = models.BooleanField(
+        verbose_name=_('Согласование'),
+        default=False,
+        help_text='Отметьте, если данное подразделение учавствует в согласовании заявок'
+    )
+    
     class Meta:
         db_table = 'departments'
         verbose_name = _('подразделение')
@@ -761,3 +767,44 @@ class UserDepartment(models.Model):
     
     def __str__(self):
         return f"{self.id_user.username} → {self.id_department.name}"
+
+
+class DepartmentTypeEquipment(models.Model):
+    """
+    Модель связи подразделения с типом оборудования
+    """
+    id_department = models.ForeignKey(
+        Department,
+        on_delete=models.CASCADE,
+        db_column='id_department',
+        verbose_name=_('подразделение'),
+        related_name='department_type_equipment',
+        help_text='Подразделение'
+    )
+    id_type_equipment = models.ForeignKey(
+        TypeEquipment,
+        on_delete=models.CASCADE,
+        db_column='id_type_equipment',
+        verbose_name=_('тип оборудования'),
+        related_name='department_type_equipment',
+        help_text='Тип оборудования'
+    )
+    created_at = models.DateTimeField(
+        verbose_name=_('дата создания'),
+        auto_now_add=True,
+        help_text='Дата и время создания связи'
+    )
+    
+    class Meta:
+        db_table = 'departments_types_equipment'
+        verbose_name = _('связь подразделения с типом оборудования')
+        verbose_name_plural = _('связи подразделений с типами оборудования')
+        ordering = ['id_department', 'id_type_equipment']
+        indexes = [
+            models.Index(fields=['id_department']),
+            models.Index(fields=['id_type_equipment']),
+        ]
+        unique_together = [['id_department', 'id_type_equipment']]  # Уникальная связь
+    
+    def __str__(self):
+        return f"{self.id_department.name} → {self.id_type_equipment.name}"

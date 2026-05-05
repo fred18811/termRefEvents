@@ -7,7 +7,7 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from .models import Location, TypeEquipment, Equipment, EquipmentLocation, Photo,\
     Order, OrderItem, CommonEquipmentLocation, Application, History,Feedback,\
-        Department, UserDepartment  
+        Department, UserDepartment, DepartmentTypeEquipment  
 
 # Настройка заголовков админ-панели
 admin.site.site_header = "Управление локациями и оборудованием"
@@ -18,6 +18,16 @@ admin.site.index_title = "Добро пожаловать в систему уп
 admin.site.unregister(User)
 
 
+class DepartmentTypeEquipmentInline(admin.TabularInline):
+    """Inline для отображения типов оборудования в подразделении"""
+    model = DepartmentTypeEquipment
+    extra = 1
+    fields = ['id_type_equipment']
+    autocomplete_fields = ['id_type_equipment']
+    verbose_name = 'Тип оборудования'
+    verbose_name_plural = 'Типы оборудования'
+    
+    
 class UserDepartmentInline(admin.TabularInline):
     """Inline для отображения пользователей в подразделении"""
     model = UserDepartment
@@ -719,17 +729,18 @@ class FeedbackAdmin(admin.ModelAdmin):
 
 @admin.register(Department)
 class DepartmentAdmin(admin.ModelAdmin):
-    list_display = ['id', 'name', 'get_user_count', 'created_at', 'updated_at']
+    list_display = ['id', 'name', 'is_approval_required', 'get_type_equipment_count', 'get_user_count', 'created_at', 'updated_at']
     list_display_links = ['id', 'name']
-    list_filter = ['created_at']
+    list_filter = ['created_at', 'is_approval_required']
     search_fields = ['name', 'description']
     list_per_page = 20
     ordering = ['name']
     readonly_fields = ['created_at', 'updated_at']
+    list_editable = ['is_approval_required']
     
     fieldsets = (
         ('Информация о подразделении', {
-            'fields': ('name', 'description'),
+            'fields': ('name', 'description', 'is_approval_required'),
         }),
         ('Системная информация', {
             'fields': ('created_at', 'updated_at'),
@@ -737,9 +748,15 @@ class DepartmentAdmin(admin.ModelAdmin):
         }),
     )
     
+    inlines = [DepartmentTypeEquipmentInline]
+    
+    def get_type_equipment_count(self, obj):
+        return obj.department_type_equipment.count()
+    get_type_equipment_count.short_description = 'Типов оборудования'
+    
     def get_user_count(self, obj):
         return obj.department_users.count()
-    get_user_count.short_description = 'Количество сотрудников'
+    get_user_count.short_description = 'Сотрудников'
     
     actions = ['export_to_csv']
     
@@ -751,13 +768,15 @@ class DepartmentAdmin(admin.ModelAdmin):
         response['Content-Disposition'] = 'attachment; filename="departments_export.csv"'
         
         writer = csv.writer(response)
-        writer.writerow(['ID', 'Подразделение', 'Описание', 'Кол-во сотрудников', 'Дата создания', 'Дата обновления'])
+        writer.writerow(['ID', 'Подразделение', 'Описание', 'Требуется согласование', 'Типов оборудования', 'Сотрудников', 'Дата создания', 'Дата обновления'])
         
         for obj in queryset:
             writer.writerow([
                 obj.id,
                 obj.name,
                 obj.description or '',
+                'Да' if obj.is_approval_required else 'Нет',
+                obj.department_type_equipment.count(),
                 obj.department_users.count(),
                 obj.created_at.strftime('%d.%m.%Y %H:%M:%S'),
                 obj.updated_at.strftime('%d.%m.%Y %H:%M:%S')
@@ -818,6 +837,62 @@ class UserDepartmentAdmin(admin.ModelAdmin):
                 obj.id_user.email,
                 obj.id_department.name,
                 'Да' if obj.is_head else 'Нет',
+                obj.created_at.strftime('%d.%m.%Y %H:%M:%S')
+            ])
+        
+        self.message_user(request, f'Экспортировано {queryset.count()} записей')
+        return response
+    export_to_csv.short_description = 'Экспорт в CSV'
+    
+    
+@admin.register(DepartmentTypeEquipment)
+class DepartmentTypeEquipmentAdmin(admin.ModelAdmin):
+    list_display = ['id', 'get_department_display', 'get_type_equipment_display', 'created_at']
+    list_display_links = ['id']
+    list_filter = ['created_at', 'id_department', 'id_type_equipment']
+    search_fields = ['id_department__name', 'id_type_equipment__name']
+    list_per_page = 20
+    ordering = ['id_department', 'id_type_equipment']
+    autocomplete_fields = ['id_department', 'id_type_equipment']
+    readonly_fields = ['created_at']
+    
+    fieldsets = (
+        ('Связь подразделения с типом оборудования', {
+            'fields': ('id_department', 'id_type_equipment')
+        }),
+        ('Системная информация', {
+            'fields': ('created_at',),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def get_department_display(self, obj):
+        return obj.id_department.name
+    get_department_display.short_description = 'Подразделение'
+    get_department_display.admin_order_field = 'id_department__name'
+    
+    def get_type_equipment_display(self, obj):
+        return obj.id_type_equipment.name
+    get_type_equipment_display.short_description = 'Тип оборудования'
+    get_type_equipment_display.admin_order_field = 'id_type_equipment__name'
+    
+    actions = ['export_to_csv']
+    
+    def export_to_csv(self, request, queryset):
+        import csv
+        from django.http import HttpResponse
+        
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="departments_types_equipment_export.csv"'
+        
+        writer = csv.writer(response)
+        writer.writerow(['ID', 'Подразделение', 'Тип оборудования', 'Дата создания'])
+        
+        for obj in queryset:
+            writer.writerow([
+                obj.id,
+                obj.id_department.name,
+                obj.id_type_equipment.name,
                 obj.created_at.strftime('%d.%m.%Y %H:%M:%S')
             ])
         

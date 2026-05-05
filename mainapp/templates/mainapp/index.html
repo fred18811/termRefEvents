@@ -6,9 +6,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="Управление оборудованием и заказами">
     <title>Управление оборудованием</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/themes/material_blue.css">
+    <link rel="stylesheet" href="{% static 'mainapp/css/googleapis_css2.css' %}">
+    <link rel="stylesheet" href="{% static 'mainapp/css/flatpickr.min.css' %}">
+    <link rel="stylesheet" href="{% static 'mainapp/css/material_blue.css' %}">
     <link rel="stylesheet" href="{% static 'mainapp/css/style.css' %}">
 </head>
 <body>
@@ -40,6 +40,9 @@
             <div id="userInfo" class="user-info" style="display: none;">
                 <div class="user-details">
                     <span id="userName" class="user-name"></span>
+                    <div id="userDepartmentContainer" style="display: none;">
+                        <span id="userDepartment" class="user-department"></span>
+                    </div>
                 </div>
                 <button id="logoutBtn" class="btn-logout">Выйти</button>
             </div>
@@ -304,9 +307,9 @@
         </div>
     </div>
 
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
-    <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/ru.js"></script>
+    <script type="module" src="{% static 'mainapp/js/expansion/jquery-3.6.0.min.js' %}"></script>
+    <script type="module" src="{% static 'mainapp/js/expansion/flatpickr.js' %}"></script>
+    <script type="module" src="{% static 'mainapp/js/expansion/ru.js' %}"></script>
     <script type="module" src="{% static 'mainapp/js/main.js' %}"></script>
 </body>
 </html>

@@ -1,4 +1,6 @@
 import { showNotification } from './utils.js';
+import { api } from './api.js';
+
 
 // Получение CSRF токена
 const getCSRFToken = () => {
@@ -36,9 +38,27 @@ export const checkAuth = async () => {
 };
 
 // Обновление информации о пользователе
-const updateUserInfo = (user) => {
-    $('#userName').text(`${user.first_name || user.username}`);
+const updateUserInfo = async (user) => {
+    const userName = user.first_name || user.username;
+    $('#userName').text(userName);
     $('#userRole').text(getUserRole(user));
+    
+    // Загружаем подразделение пользователя
+    try {
+        const response = await api.getUserDepartments();
+        if (response.success && response.departments && response.departments.length > 0) {
+            // Показываем первое подразделение (если их несколько)
+            const departments = response.departments.map(d => d.name).join(', ');
+            $('#userDepartment').text(departments);
+            $('#userDepartmentContainer').show();
+        } else {
+            $('#userDepartmentContainer').hide();
+        }
+    } catch (error) {
+        console.error('Ошибка загрузки подразделения:', error);
+        $('#userDepartmentContainer').hide();
+    }
+    
     $('#userInfo').show();
     
     // Скрываем все страницы
@@ -78,7 +98,7 @@ export const initAuth = () => {
         const password = $('#password').val();
         
         if (!username || !password) {
-            $('#authError').text('Введите логин и пароль').show();
+            $('#authError').text('Введите логин/email и пароль').show();
             return;
         }
         
@@ -99,7 +119,7 @@ export const initAuth = () => {
             const data = await response.json();
             
             if (data.success) {
-                showNotification(`Добро пожаловать, ${data.user.username}!`, 'success');
+                showNotification(`Добро пожаловать, ${data.user.first_name || data.user.username}!`, 'success');
                 window.location.href = '/';
             } else {
                 $('#authError').text(data.error || 'Ошибка авторизации').show();
@@ -111,6 +131,52 @@ export const initAuth = () => {
             $('#loginForm button').prop('disabled', false).text('Войти');
         }
     });
+};
+
+// Обновленная функция регистрации (только для обычных пользователей)
+export const register = async (userData) => {
+    try {
+        const response = await fetch('/api/register/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCSRFToken()
+            },
+            credentials: 'include',
+            body: JSON.stringify(userData)
+        });
+        
+        const data = await response.json();
+        return data;
+    } catch (error) {
+        console.error('Ошибка регистрации:', error);
+        return { success: false, error: 'Ошибка соединения с сервером' };
+    }
+};
+
+// Полная инициализация с переключением форм
+export const initAuthWithRegister = () => {
+    $('#authModal').show();
+    $('#mainPage, #ordersPage, #roomsPage').hide();
+    $('#userInfo').hide();
+    
+    let isLoginMode = true;
+    
+    const showLoginForm = () => {
+        isLoginMode = true;
+        $('#loginForm').show();
+        $('#registerForm').hide();
+        $('#switchAuthMode').html('Нет аккаунта? <a href="#" id="switchToRegister">Зарегистрироваться</a>');
+        $('#authModalTitle').text('Вход в систему');
+    };
+    
+    const showRegisterForm = () => {
+        isLoginMode = false;
+        $('#loginForm').hide();
+        $('#registerForm').show();
+        $('#switchAuthMode').html('Уже есть аккаунт? <a href="#" id="switchToLogin">Войти</a>');
+        $('#authModalTitle').text('Регистрация');
+    };
 };
 
 // Выход из системы

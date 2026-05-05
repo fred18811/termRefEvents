@@ -180,7 +180,10 @@ export const api = {
     getAllFeedback: (limit = 50, offset = 0) => $.get('/api/feedback/all/', {
         limit: limit,
         offset: offset
-    })
+    }),
+
+    // ========== ПОДРАЗДЕЛЕНИЯ ==========
+    getUserDepartments: () => $.get('/api/user/department/'),
 };
 
 // Экспорт CSRF токена для использования в других модулях

@@ -66,7 +66,7 @@ urlpatterns = [
     # ========== ПОДРАЗДЕЛЕНИЯ (DEPARTMENT) ==========
     path('api/departments/', views.get_departments, name='get_departments'),
     path('api/departments/<int:dept_id>/', views.get_department_detail, name='get_department_detail'),
-    path('api/user/department/', views.get_user_department, name='get_user_department'), 
+    path('api/user/department/', views.get_user_departments, name='get_user_departments'), 
 ]
 
 if settings.DEBUG:
