@@ -7,7 +7,7 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from .models import Location, TypeEquipment, Equipment, EquipmentLocation, Photo,\
     Order, OrderItem, CommonEquipmentLocation, Application, History,Feedback,\
-        Department, UserDepartment, DepartmentTypeEquipment  
+        Department, UserDepartment, DepartmentTypeEquipment, ApplicationApproval  
 
 # Настройка заголовков админ-панели
 admin.site.site_header = "Управление локациями и оборудованием"
@@ -18,6 +18,17 @@ admin.site.index_title = "Добро пожаловать в систему уп
 admin.site.unregister(User)
 
 
+class ApplicationApprovalInline(admin.TabularInline):
+    """Inline для отображения согласований в заявке"""
+    model = ApplicationApproval
+    extra = 1
+    fields = ['id_department', 'is_agreed', 'date_agreed', 'comment']
+    readonly_fields = ['date_agreed']
+    autocomplete_fields = ['id_department']
+    verbose_name = 'Согласование'
+    verbose_name_plural = 'Согласования'
+    
+    
 class DepartmentTypeEquipmentInline(admin.TabularInline):
     """Inline для отображения типов оборудования в подразделении"""
     model = DepartmentTypeEquipment
@@ -65,12 +76,15 @@ class OrderItemForm(forms.ModelForm):
         self.fields['equipment_location'].help_text = 'Выберите оборудование из конкретной локации'
         self.fields['common_equipment_location'].help_text = 'Выберите общее оборудование (не привязанное к локации)'
         self.fields['quantity'].help_text = 'Введите количество от 1 до 999'
+        self.fields['can_provide'].help_text = 'Введите количество, которое может предоставить подразделение (0 - не может)'
+        self.fields['is_agreed'].help_text = 'Отметьте, если позиция согласована'
     
     def clean(self):
         cleaned_data = super().clean()
         equipment_location = cleaned_data.get('equipment_location')
         common_equipment_location = cleaned_data.get('common_equipment_location')
         quantity = cleaned_data.get('quantity')
+        can_provide = cleaned_data.get('can_provide')
         
         # Проверка: должно быть заполнено одно из полей
         if not equipment_location and not common_equipment_location:
@@ -91,6 +105,12 @@ class OrderItemForm(forms.ModelForm):
                 raise forms.ValidationError(
                     f'Недостаточно общего оборудования! Доступно только {common_equipment_location.quantity} шт.'
                 )
+        
+        # Проверка can_provide (не может быть больше quantity)
+        if can_provide and quantity and can_provide > quantity:
+            raise forms.ValidationError({
+                'can_provide': f'Количество для предоставления ({can_provide}) не может превышать запрошенное количество ({quantity})'
+            })
         
         return cleaned_data
 
@@ -335,6 +355,8 @@ class ApplicationAdmin(admin.ModelAdmin):
         }),
     )
     
+    inlines = [ApplicationApprovalInline]  # Добавляем Inline для согласований
+    
     def name_preview(self, obj):
         if len(obj.name) > 50:
             return obj.name[:50] + '...'
@@ -342,7 +364,6 @@ class ApplicationAdmin(admin.ModelAdmin):
     name_preview.short_description = 'Название'
     
     def get_status_display(self, obj):
-        """Отображение статуса в виде цветного бейджа"""
         colors = {
             'new': '#28a745',
             'in_progress': '#ffc107',
@@ -410,17 +431,20 @@ class OrderItemAdmin(admin.ModelAdmin):
         'order', 
         'get_equipment_display',
         'get_location_display',
-        'quantity', 
+        'quantity',
+        'can_provide',
+        'is_agreed',
         'available_quantity_display'
     ]
     list_display_links = ['id']
-    list_filter = ['order', 'equipment_location__id_locations']
+    list_filter = ['order', 'equipment_location__id_locations', 'is_agreed']
     search_fields = [
         'order__id', 
         'equipment_location__id_equipments__name',
         'common_equipment_location__id_equipments__name'
     ]
     list_per_page = 20
+    list_editable = ['can_provide', 'is_agreed']
     autocomplete_fields = ['order', 'equipment_location', 'common_equipment_location']
     
     fieldsets = (
@@ -430,6 +454,11 @@ class OrderItemAdmin(admin.ModelAdmin):
         ('Оборудование', {
             'fields': ('equipment_location', 'common_equipment_location', 'quantity'),
             'description': 'Выберите либо оборудование из конкретной локации, либо общее оборудование'
+        }),
+        ('Согласование', {
+            'fields': ('can_provide', 'is_agreed'),
+            'description': 'Укажите, сколько оборудования может предоставить подразделение и отметьте согласование',
+            'classes': ('wide',)
         }),
     )
     
@@ -899,3 +928,66 @@ class DepartmentTypeEquipmentAdmin(admin.ModelAdmin):
         self.message_user(request, f'Экспортировано {queryset.count()} записей')
         return response
     export_to_csv.short_description = 'Экспорт в CSV'
+    
+    
+@admin.register(ApplicationApproval)
+class ApplicationApprovalAdmin(admin.ModelAdmin):
+    list_display = ['id', 'get_department_display', 'get_application_display', 'is_agreed', 'date_agreed', 'created_at']
+    list_display_links = ['id']
+    list_filter = ['is_agreed', 'created_at', 'date_agreed', 'id_department']
+    search_fields = ['id_department__name', 'id_application__name', 'comment']
+    list_per_page = 20
+    ordering = ['-created_at']
+    autocomplete_fields = ['id_department', 'id_application']
+    readonly_fields = ['created_at', 'updated_at', 'date_agreed']
+    list_editable = ['is_agreed']
+    
+    fieldsets = (
+        ('Информация о согласовании', {
+            'fields': ('id_department', 'id_application', 'is_agreed')
+        }),
+        ('Дополнительно', {
+            'fields': ('comment',)
+        }),
+        ('Системная информация', {
+            'fields': ('date_agreed', 'created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def get_department_display(self, obj):
+        return obj.id_department.name
+    get_department_display.short_description = 'Подразделение'
+    get_department_display.admin_order_field = 'id_department__name'
+    
+    def get_application_display(self, obj):
+        return f"№{obj.id_application.id} - {obj.id_application.name[:50]}"
+    get_application_display.short_description = 'Заявка'
+    get_application_display.admin_order_field = 'id_application__name'
+    
+    actions = ['export_to_csv']
+    
+    def export_to_csv(self, request, queryset):
+        import csv
+        from django.http import HttpResponse
+        
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="application_approvals_export.csv"'
+        
+        writer = csv.writer(response)
+        writer.writerow(['ID', 'Подразделение', 'Заявка', 'Согласовано', 'Дата согласования', 'Комментарий', 'Дата создания'])
+        
+        for obj in queryset:
+            writer.writerow([
+                obj.id,
+                obj.id_department.name,
+                f"{obj.id_application.id} - {obj.id_application.name[:50]}",
+                'Да' if obj.is_agreed else 'Нет',
+                obj.date_agreed.strftime('%d.%m.%Y %H:%M:%S') if obj.date_agreed else '',
+                obj.comment or '',
+                obj.created_at.strftime('%d.%m.%Y %H:%M:%S')
+            ])
+        
+        self.message_user(request, f'Экспортировано {queryset.count()} записей')
+        return response
+    export_to_csv.short_description = 'Экспорт в CSV'    

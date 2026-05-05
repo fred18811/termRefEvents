@@ -465,6 +465,19 @@ class OrderItem(models.Model):
         ],
         help_text='Введите количество от 1 до 999 (максимум 3 знака)'
     )
+    can_provide = models.IntegerField(
+        verbose_name=_('можем предоставить'),
+        default=0,
+        validators=[
+            MinValueValidator(0, message='Значение не может быть меньше 0')
+        ],
+        help_text='Количество оборудования, которое может предоставить подразделение (0 - не может предоставить)'
+    )
+    is_agreed = models.BooleanField(
+        verbose_name=_('согласовано'),
+        default=False,
+        help_text='Отметьте, если позиция согласована'
+    )
     
     class Meta:
         db_table = 'order_items'
@@ -475,7 +488,10 @@ class OrderItem(models.Model):
                 condition=models.Q(quantity__gte=1) & models.Q(quantity__lte=999),
                 name='order_item_quantity_range_check'
             ),
-            # Проверка: должно быть заполнено либо equipment_location, либо common_equipment_location
+            models.CheckConstraint(
+                condition=models.Q(can_provide__gte=0),
+                name='order_item_can_provide_range_check'
+            ),
             models.CheckConstraint(
                 condition=(
                     models.Q(equipment_location__isnull=False, common_equipment_location__isnull=True) |
@@ -808,3 +824,78 @@ class DepartmentTypeEquipment(models.Model):
     
     def __str__(self):
         return f"{self.id_department.name} → {self.id_type_equipment.name}"
+    
+
+class ApplicationApproval(models.Model):
+    """
+    Модель списка согласования заявок
+    """
+    id_department = models.ForeignKey(
+        Department,
+        on_delete=models.CASCADE,
+        db_column='id_department',
+        verbose_name=_('подразделение'),
+        related_name='application_approvals',
+        help_text='Подразделение, которое согласовывает заявку'
+    )
+    id_application = models.ForeignKey(
+        Application,
+        on_delete=models.CASCADE,
+        db_column='id_application',
+        verbose_name=_('заявка'),
+        related_name='approvals',
+        help_text='Заявка на согласование'
+    )
+    is_agreed = models.BooleanField(
+        verbose_name=_('согласовано'),
+        default=False,
+        help_text='Статус согласования заявки подразделением'
+    )
+    date_agreed = models.DateTimeField(
+        verbose_name=_('дата согласования'),
+        blank=True,
+        null=True,
+        help_text='Дата и время согласования (заполняется автоматически при is_agreed=True)'
+    )
+    comment = models.TextField(
+        verbose_name=_('комментарий'),
+        blank=True,
+        null=True,
+        help_text='Комментарий к согласованию'
+    )
+    created_at = models.DateTimeField(
+        verbose_name=_('дата создания'),
+        auto_now_add=True,
+        help_text='Дата и время создания записи'
+    )
+    updated_at = models.DateTimeField(
+        verbose_name=_('дата обновления'),
+        auto_now=True,
+        help_text='Дата и время последнего обновления'
+    )
+    
+    class Meta:
+        db_table = 'application_approvals'
+        verbose_name = _('согласование заявки')
+        verbose_name_plural = _('согласование заявок')
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['id_department']),
+            models.Index(fields=['id_application']),
+            models.Index(fields=['is_agreed']),
+            models.Index(fields=['date_agreed']),
+        ]
+        unique_together = [['id_department', 'id_application']]  # Одно подразделение может согласовать заявку только один раз
+    
+    def __str__(self):
+        status = "Согласовано" if self.is_agreed else "Не согласовано"
+        return f"{self.id_department.name} - Заявка #{self.id_application.id} ({status})"
+    
+    def save(self, *args, **kwargs):
+        # Если is_agreed изменилось на True, устанавливаем дату согласования
+        if self.is_agreed and not self.date_agreed:
+            self.date_agreed = timezone.now()
+        # Если is_agreed стало False, сбрасываем дату согласования
+        elif not self.is_agreed and self.date_agreed:
+            self.date_agreed = None
+        super().save(*args, **kwargs)
