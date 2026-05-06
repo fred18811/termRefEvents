@@ -53,10 +53,10 @@ class UserDepartmentInline(admin.TabularInline):
     """Inline для отображения пользователей в подразделении"""
     model = UserDepartment
     extra = 1
-    fields = ['id_user', 'is_head']
-    autocomplete_fields = ['id_user']
-    verbose_name = 'Пользователь'
-    verbose_name_plural = 'Пользователи подразделения'
+    fields = ['id_department', 'is_head']  # Поля для выбора подразделения
+    autocomplete_fields = ['id_department']  # Автодополнение при поиске
+    verbose_name = 'Подразделение'
+    verbose_name_plural = 'Подразделения'
     
     
 class EquipmentForm(forms.ModelForm):
