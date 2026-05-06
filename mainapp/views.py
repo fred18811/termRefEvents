@@ -19,7 +19,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from .models import Location, TypeEquipment, EquipmentLocation, Photo, Order,\
     OrderItem, CommonEquipmentLocation, Application, History, Feedback, Department,\
-        UserDepartment, ApplicationApproval
+        UserDepartment, ApplicationApproval, DepartmentTypeEquipment
 from .history_utils import HistoryService
 from django.contrib.admin.views.decorators import staff_member_required
 import json
@@ -1643,7 +1643,9 @@ def get_order_items(request):
                         'is_common': False,
                         'date_start': order.date_time_start.isoformat(),
                         'date_end': order.date_time_end.isoformat() if order.date_time_end else None,
-                        'order_comment': order.comment or ''
+                        'order_comment': order.comment or '',
+                        'can_provide': item.can_provide,  # ДОБАВИТЬ
+                        'is_agreed': item.is_agreed        # ДОБАВИТЬ
                     })
                 elif item.common_equipment_location:
                     items_list.append({
@@ -1658,7 +1660,9 @@ def get_order_items(request):
                         'is_common': True,
                         'date_start': order.date_time_start.isoformat(),
                         'date_end': order.date_time_end.isoformat() if order.date_time_end else None,
-                        'order_comment': order.comment or ''
+                        'order_comment': order.comment or '',
+                        'can_provide': item.can_provide,  # ДОБАВИТЬ
+                        'is_agreed': item.is_agreed        # ДОБАВИТЬ
                     })
         
         return JsonResponse({
@@ -2419,6 +2423,88 @@ def duplicate_order(request, order_id):
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
     
+
+@login_required
+@csrf_exempt
+@require_http_methods(["POST"])
+def update_order_item_approval(request, item_id):
+    """
+    Обновление данных согласования для позиции заказа
+    """
+    try:
+        data = json.loads(request.body)
+        can_provide = data.get('can_provide', 0)
+        is_agreed = data.get('is_agreed', False)
+        
+        # Получаем позицию заказа
+        order_item = OrderItem.objects.get(id=item_id)
+        
+        # Проверяем права: пользователь должен быть в подразделении,
+        # которое связано с типом оборудования этой позиции
+        order = order_item.order
+        location = order.id_location
+        
+        # Получаем тип оборудования позиции
+        if order_item.equipment_location:
+            equipment_type = order_item.equipment_location.id_types_equipments
+        elif order_item.common_equipment_location:
+            equipment_type = order_item.common_equipment_location.id_types_equipments
+        else:
+            return JsonResponse({
+                'success': False,
+                'error': 'Не удалось определить тип оборудования'
+            }, status=400)
+        
+        # Проверяем, принадлежит ли пользователь к подразделению,
+        # которое может согласовывать этот тип оборудования
+        user_departments = UserDepartment.objects.filter(id_user=request.user)
+        department_ids = [ud.id_department.id for ud in user_departments]
+        
+        # Проверяем, есть ли связь между подразделениями пользователя и типом оборудования
+        can_approve = DepartmentTypeEquipment.objects.filter(
+            id_department_id__in=department_ids,
+            id_type_equipment=equipment_type
+        ).exists()
+        
+        if not can_approve:
+            return JsonResponse({
+                'success': False,
+                'error': 'У вас нет прав для согласования этого оборудования'
+            }, status=403)
+        
+        # Обновляем поля
+        order_item.can_provide = can_provide
+        order_item.is_agreed = is_agreed
+        order_item.save()
+        
+        # Логируем действие
+        HistoryService.add_entry(
+            request.user,
+            f"Обновлено согласование для позиции #{order_item.id}: количество={can_provide}, согласовано={is_agreed}"
+        )
+        
+        return JsonResponse({
+            'success': True,
+            'message': 'Данные согласования сохранены',
+            'order_item': {
+                'id': order_item.id,
+                'can_provide': order_item.can_provide,
+                'is_agreed': order_item.is_agreed
+            }
+        })
+        
+    except OrderItem.DoesNotExist:
+        return JsonResponse({
+            'success': False,
+            'error': 'Позиция заказа не найдена'
+        }, status=404)
+    except Exception as e:
+        print(f"Ошибка обновления согласования: {str(e)}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+    
     
 # ========== ПОДРАЗДЕЛЕНИЯ (DEPARTMENT) - ТОЛЬКО ПРОСМОТР ==========
 
@@ -2642,3 +2728,56 @@ def create_application_approvals(application):
             print(f"Создана запись согласования для подразделения '{dept.name}' (заявка #{application.id})")
     
     return created_count
+
+
+@login_required
+def get_user_department_types(request):
+    """
+    Получить типы оборудования, связанные с подразделениями пользователя
+    """
+    try:
+        # Получаем все подразделения пользователя
+        user_departments = UserDepartment.objects.filter(id_user=request.user)
+        
+        if not user_departments.exists():
+            return JsonResponse({
+                'success': True,
+                'department_types': [],
+                'message': 'Пользователь не привязан ни к одному подразделению'
+            })
+        
+        # Получаем ID подразделений пользователя
+        department_ids = [ud.id_department.id for ud in user_departments]
+        
+        # Получаем все связи подразделений с типами оборудования
+        department_type_relations = DepartmentTypeEquipment.objects.filter(
+            id_department_id__in=department_ids
+        ).select_related('id_type_equipment')
+        
+        # Формируем список уникальных типов оборудования
+        department_types = []
+        seen_types = set()
+        
+        for relation in department_type_relations:
+            type_name = relation.id_type_equipment.name
+            if type_name not in seen_types:
+                seen_types.add(type_name)
+                department_types.append({
+                    'id': relation.id_type_equipment.id,
+                    'name': type_name,
+                    'department_id': relation.id_department.id,
+                    'department_name': relation.id_department.name
+                })
+        
+        return JsonResponse({
+            'success': True,
+            'department_types': department_types,
+            'total': len(department_types)
+        })
+        
+    except Exception as e:
+        print(f"Ошибка в get_user_department_types: {str(e)}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)

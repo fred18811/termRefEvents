@@ -752,12 +752,65 @@ const getAllEquipmentFromTypes = (typesMap) => {
     return Array.from(equipmentMap.values()).sort((a, b) => a.name.localeCompare(b.name));
 };
 
-// Отображение позиций заказа с кнопками (только если есть права)
-export const displayOrderItems = (applicationId, items, canEdit = false) => {
+// Функция для загрузки всех сохраненных значений
+const loadAllApprovalValues = () => {
+    $('.approval-quantity-input').each(function() {
+        const $input = $(this);
+        const orderId = $input.data('order-id');
+        const locationId = $input.data('location-id');
+        const equipmentId = $input.data('equipment-id');
+        
+        const storageKey = `order_${orderId}_${locationId}`;
+        const savedValues = JSON.parse(localStorage.getItem(storageKey) || '{}');
+        const savedValue = savedValues[equipmentId];
+        
+        if (savedValue) {
+            $input.val(savedValue.quantity);
+            const $checkbox = $(`.approval-checkbox[data-order-id="${orderId}"][data-location-id="${locationId}"][data-equipment-id="${equipmentId}"]`);
+            
+            if (savedValue.quantity > 0) {
+                $checkbox.prop('disabled', false);
+            }
+            
+            if (savedValue.isChecked) {
+                $checkbox.prop('checked', true);
+                // Блокируем поле ввода, если галочка была установлена
+                $input.prop('readonly', true);
+                $input.css('background-color', '#f0f0f0');
+            } else {
+                $input.prop('readonly', false);
+                $input.css('background-color', 'white');
+            }
+        }
+    });
+};
+
+// Функция для загрузки сохраненных значений согласования из items
+const loadApprovalValuesFromItems = () => {
+    $('.approval-quantity-input').each(function() {
+        const $input = $(this);
+        const orderId = $input.data('order-id');
+        const locationId = $input.data('location-id');
+        const equipmentId = $input.data('equipment-id');
+        const orderItemId = $input.data('order-item-id');
+        
+        // Ищем соответствующий item по order_item_id
+        // Данные уже переданы в items, нужно только отобразить
+        console.log(`Загрузка для order_item_id: ${orderItemId}`);
+    });
+};
+
+// Отображение позиций заказа с кнопками
+export const displayOrderItems = async (applicationId, items, canEdit = false) => {
     if (!items?.length) {
         $(`#order-items-${applicationId}`).html('<div class="no-orders">Нет позиций в заявке</div>');
         return;
     }
+    
+    // Загружаем подразделения пользователя и типы оборудования
+    const { userDepartments, departmentTypes, canEditApproval } = await loadUserDepartmentAndTypes();
+    
+    console.log('Полученные items из API:', items);
     
     const ordersMap = new Map();
     
@@ -785,12 +838,16 @@ export const displayOrderItems = (applicationId, items, canEdit = false) => {
         
         const equipmentName = item.is_common ? `🌍 ${item.equipment_name}` : item.equipment_name;
         
+        // Сохраняем данные из БД (can_provide, is_agreed)
         orderData.typesMap.get(typeName).push({
             name: equipmentName,
             quantity: item.quantity,
             is_common: item.is_common || false,
             equipment_id: item.equipment_id,
-            type_name: item.type_name
+            type_name: item.type_name,
+            order_item_id: item.id,
+            can_provide: item.can_provide || 0,      // ДОБАВИТЬ
+            is_agreed: item.is_agreed || false       // ДОБАВИТЬ
         });
     });
     
@@ -807,20 +864,49 @@ export const displayOrderItems = (applicationId, items, canEdit = false) => {
             endDate,
             orderData.typesMap,
             orderData.order_comment,
-            canEdit  // Передаем флаг возможности редактирования
+            canEdit,
+            userDepartments,
+            departmentTypes,
+            canEditApproval
         );
     }
     
     $(`#order-items-${applicationId}`).html(html);
     
-    // Привязываем обработчики кнопок только если есть права на редактирование
+    // Загружаем сохраненные значения из БД в интерфейс
+    loadApprovalValuesFromItems();
+    
+    // Привязываем обработчики для полей согласования только если есть права
+    if (canEditApproval) {
+        bindApprovalControls();
+    }
+    
     if (canEdit) {
         bindOrderCardButtons();
     }
 };
 
+// Функция для загрузки сохраненных значений согласования с сервера
+const loadApprovalValuesFromServer = async () => {
+    // Значения уже пришли в items, нужно только отобразить их в интерфейсе
+    $('.approval-quantity-input').each(function() {
+        const $input = $(this);
+        const orderId = $input.data('order-id');
+        const locationId = $input.data('location-id');
+        const equipmentId = $input.data('equipment-id');
+        
+        // Ищем соответствующий order_item_id в данных
+        const orderItemId = $input.data('order-item-id');
+        
+        if (orderItemId) {
+            // Здесь можно загрузить данные с сервера, но они уже есть в items
+            // Просто отображаем сохраненные значения
+        }
+    });
+};
+
 // Генерация карточки с кнопками (только если есть права)
-const generateLocationCardWithButtons = (orderId, locationName, startDate, endDate, typesMap, orderComment, canEdit) => {
+const generateLocationCardWithButtons = (orderId, locationName, startDate, endDate, typesMap, orderComment, canEdit, userDepartments, departmentTypes, canEditApproval) => {
     const allTypes = Array.from(typesMap.keys());
     const maxRows = getMaxRows(typesMap);
     
@@ -863,7 +949,7 @@ const generateLocationCardWithButtons = (orderId, locationName, startDate, endDa
                         </tr>
                     </thead>
                     <tbody>
-                        ${generateTableRows(typesMap, allTypes, maxRows)}
+                        ${generateTableRows(typesMap, allTypes, maxRows, orderId, locationName, userDepartments, departmentTypes, canEditApproval)}
                     </tbody>
                 </table>
             </div>
@@ -969,35 +1055,80 @@ const getMaxRows = (typesMap) => {
 };
 
 
-// Генерация строк таблицы
-const generateTableRows = (typesMap, allTypes, maxRows) => {
+// Генерация строк таблицы с input и checkbox
+const generateTableRows = (typesMap, allTypes, maxRows, orderId, locationId, userDepartments, departmentTypes, canEditApproval) => {
     let rows = '';
     
-    // Преобразуем Map в массив для удобства
     const typesData = [];
     for (const typeName of allTypes) {
         const equipmentList = typesMap.get(typeName) || [];
-        // Сортируем оборудование по названию
         equipmentList.sort((a, b) => a.name.localeCompare(b.name));
+        
+        const canProvide = departmentTypes.some(dt => dt.name === typeName);
+        
         typesData.push({
             name: typeName,
-            equipment: equipmentList
+            equipment: equipmentList,
+            can_provide: canProvide
         });
     }
     
-    // Создаем строки для каждой позиции
     for (let i = 0; i < maxRows; i++) {
         let row = '<tr>';
         
         for (let j = 0; j < typesData.length; j++) {
-            const equipment = typesData[j].equipment[i];
+            const typeData = typesData[j];
+            const equipment = typeData.equipment[i];
+            
             if (equipment) {
+                const equipmentId = equipment.equipment_id || `eq_${i}_${j}`;
+                // Используем данные из БД (can_provide, is_agreed)
+                const savedQuantity = equipment.can_provide || 0;
+                const savedIsChecked = equipment.is_agreed || false;
+                const canProvide = typeData.can_provide && canEditApproval;
+                
                 row += `
                     <td class="equipment-cell">
                         <div class="equipment-name-with-quantity">
                             <span class="equipment-name">${escapeHtml(equipment.name)}</span>
                             <span class="equipment-quantity-badge">${equipment.quantity} шт.</span>
                         </div>
+                        ${canProvide ? `
+                        <div class="equipment-approval-controls">
+                            <input type="number" 
+                                   class="approval-quantity-input" 
+                                   data-order-id="${orderId}"
+                                   data-location-id="${locationId}"
+                                   data-equipment-id="${equipmentId}"
+                                   data-order-item-id="${equipment.order_item_id || ''}"
+                                   data-type-name="${escapeHtml(typeData.name)}"
+                                   data-max="${equipment.quantity}"
+                                   value="${savedQuantity}"
+                                   placeholder="0"
+                                   min="0"
+                                   max="${equipment.quantity}"
+                                   ${savedIsChecked ? 'readonly' : ''}
+                                   style="width: 70px; padding: 0.3rem; text-align: center; border-radius: 4px; border: 1px solid #ddd; ${savedIsChecked ? 'background-color: #f0f0f0;' : ''}">
+                            <label class="approval-checkbox-label">
+                                <input type="checkbox" 
+                                       class="approval-checkbox" 
+                                       data-order-id="${orderId}"
+                                       data-location-id="${locationId}"
+                                       data-equipment-id="${equipmentId}"
+                                       data-order-item-id="${equipment.order_item_id || ''}"
+                                       ${savedIsChecked ? 'checked' : ''}
+                                       ${savedQuantity > 0 && !savedIsChecked ? '' : 'disabled'}>
+                                <span style="font-size: 0.7rem;">Согласовано</span>
+                            </label>
+                        </div>
+                        ` : `
+                        <div class="equipment-status" style="margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px dashed #e2e8f0; text-align: center;">
+                            <span style="font-size: 0.7rem; padding: 0.2rem 0.5rem; border-radius: 12px; background-color: ${savedIsChecked ? '#28a745' : '#ffc107'}; color: ${savedIsChecked ? 'white' : '#333'};">
+                                ${savedIsChecked ? '✅ Согласовано' : '⏳ В работе'}
+                                ${savedQuantity ? ` (${savedQuantity} шт.)` : ''}
+                            </span>
+                        </div>
+                        `}
                     </td>
                 `;
             } else {
@@ -1010,6 +1141,156 @@ const generateTableRows = (typesMap, allTypes, maxRows) => {
     }
     
     return rows;
+};
+
+// Функция для сохранения значений в localStorage
+const saveApprovalValue = (orderId, locationId, equipmentId, quantity, isChecked) => {
+    const storageKey = `order_${orderId}_${locationId}`;
+    const savedValues = JSON.parse(localStorage.getItem(storageKey) || '{}');
+    savedValues[equipmentId] = { quantity: quantity, isChecked: isChecked };
+    localStorage.setItem(storageKey, JSON.stringify(savedValues));
+};
+
+// Функция сохранения согласования на сервер
+const saveApprovalToServer = async (orderItemId, canProvide, isAgreed) => {
+    if (!orderItemId) {
+        console.warn('Нет order_item_id для сохранения');
+        return;
+    }
+    
+    try {
+        const response = await api.updateOrderItemApproval(orderItemId, canProvide, isAgreed);
+        if (response.success) {
+            console.log(`Сохранено согласование для позиции ${orderItemId}: количество=${canProvide}, согласовано=${isAgreed}`);
+            // Обновляем локальные данные
+            const $input = $(`.approval-quantity-input[data-order-item-id="${orderItemId}"]`);
+            const $checkbox = $(`.approval-checkbox[data-order-item-id="${orderItemId}"]`);
+            
+            if ($input.length) {
+                $input.data('saved-quantity', canProvide);
+                $input.val(canProvide);
+            }
+            if ($checkbox.length) {
+                $checkbox.data('saved-checked', isAgreed);
+                if (isAgreed) {
+                    $checkbox.prop('checked', true);
+                    $checkbox.prop('disabled', true);
+                    $input.prop('readonly', true);
+                    $input.css('background-color', '#f0f0f0');
+                }
+            }
+        } else {
+            console.error('Ошибка сохранения:', response.error);
+            showNotification(`Ошибка: ${response.error}`, 'error');
+        }
+    } catch (error) {
+        console.error('Ошибка при сохранении согласования:', error);
+        showNotification('Ошибка при сохранении данных', 'error');
+    }
+};
+
+// Привязка обработчиков для полей ввода и чекбоксов
+const bindApprovalControls = () => {
+    // Обработчик изменения количества
+    $('.approval-quantity-input').off('input').on('input', function() {
+        const $input = $(this);
+        const quantity = parseInt($input.val()) || 0;
+        const maxQuantity = parseInt($input.data('max')) || 0;
+        const orderId = $input.data('order-id');
+        const locationId = $input.data('location-id');
+        const equipmentId = $input.data('equipment-id');
+        const orderItemId = $input.data('order-item-id');
+        
+        let finalQuantity = quantity;
+        if (quantity > maxQuantity) finalQuantity = maxQuantity;
+        if (quantity < 0) finalQuantity = 0;
+        $input.val(finalQuantity);
+        
+        const $checkbox = $(`.approval-checkbox[data-order-id="${orderId}"][data-location-id="${locationId}"][data-equipment-id="${equipmentId}"]`);
+        
+        if (finalQuantity > 0) {
+            $checkbox.prop('disabled', false);
+        } else {
+            $checkbox.prop('disabled', true);
+            $checkbox.prop('checked', false);
+            $input.prop('readonly', false);
+            $input.css('background-color', 'white');
+            // Сохраняем на сервер
+            saveApprovalToServer(orderItemId, finalQuantity, false);
+            saveApprovalValue(orderId, locationId, equipmentId, finalQuantity, false);
+        }
+        
+        const isChecked = $checkbox.is(':checked');
+        saveApprovalValue(orderId, locationId, equipmentId, finalQuantity, isChecked);
+        // Сохраняем на сервер при изменении количества
+        if (orderItemId) {
+            saveApprovalToServer(orderItemId, finalQuantity, isChecked);
+        }
+    });
+    
+    // Обработчик изменения чекбокса
+    $('.approval-checkbox').off('change').on('change', function() {
+        const $checkbox = $(this);
+        const isChecked = $checkbox.is(':checked');
+        const orderId = $checkbox.data('order-id');
+        const locationId = $checkbox.data('location-id');
+        const equipmentId = $checkbox.data('equipment-id');
+        const orderItemId = $checkbox.data('order-item-id');
+        
+        const $input = $(`.approval-quantity-input[data-order-id="${orderId}"][data-location-id="${locationId}"][data-equipment-id="${equipmentId}"]`);
+        const quantity = parseInt($input.val()) || 0;
+        
+        if (isChecked) {
+            $input.prop('readonly', true);
+            $input.css('background-color', '#f0f0f0');
+            const typeName = $input.data('type-name');
+            showNotification(`${typeName}: согласовано ${quantity} шт.`, 'success');
+            // Сохраняем на сервер
+            if (orderItemId) {
+                saveApprovalToServer(orderItemId, quantity, true);
+            }
+        } else {
+            $checkbox.prop('checked', true);
+            showNotification('Нельзя отменить согласование. Обратитесь к администратору.', 'warning');
+            return;
+        }
+        
+        saveApprovalValue(orderId, locationId, equipmentId, quantity, isChecked);
+    });
+};
+
+
+// Функция для загрузки подразделений пользователя и типов оборудования
+const loadUserDepartmentAndTypes = async () => {
+    try {
+        const [departmentsRes, departmentTypesRes] = await Promise.all([
+            fetch('/api/user/departments/').then(res => res.json()),
+            fetch('/api/user/department-types/').then(res => res.json())
+        ]);
+        
+        let userDepartments = [];
+        let departmentTypes = [];
+        let canEditApproval = false;
+        
+        if (departmentsRes.success && departmentsRes.departments) {
+            userDepartments = departmentsRes.departments;
+            // Если пользователь состоит хотя бы в одном подразделении, может редактировать согласование
+            canEditApproval = userDepartments.length > 0;
+        }
+        
+        if (departmentTypesRes.success && departmentTypesRes.department_types) {
+            departmentTypes = departmentTypesRes.department_types;
+            console.log('Загружены типы оборудования для подразделений:', departmentTypes);
+        }
+        
+        console.log('Пользователь состоит в подразделениях:', userDepartments.length > 0);
+        console.log('Может редактировать согласование:', canEditApproval);
+        
+        return { userDepartments, departmentTypes, canEditApproval };
+    } catch (error) {
+        console.error('Ошибка загрузки данных подразделений:', error);
+        return { userDepartments: [], departmentTypes: [], canEditApproval: false };
+    }
 };
 
 // Получение заголовков колонок по типам

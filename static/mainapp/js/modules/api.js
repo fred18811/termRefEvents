@@ -184,6 +184,23 @@ export const api = {
 
     // ========== ПОДРАЗДЕЛЕНИЯ ==========
     getUserDepartments: () => $.get('/api/user/department/'),
+
+    // ========== ПОДРАЗДЕЛЕНИЯ ==========
+    getUserDepartments: () => $.get('/api/user/departments/'),
+    
+    // Получить типы оборудования для подразделений пользователя
+    getUserDepartmentTypes: () => $.get('/api/user/department-types/'),
+
+    // ========== СОГЛАСОВАНИЕ ==========
+    updateOrderItemApproval: (orderItemId, canProvide, isAgreed) => $.ajax({
+        url: `/api/order-item/${orderItemId}/update-approval/`,
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({
+            can_provide: canProvide,
+            is_agreed: isAgreed
+        })
+    }),
 };
 
 // Экспорт CSRF токена для использования в других модулях

@@ -66,7 +66,10 @@ urlpatterns = [
     # ========== ПОДРАЗДЕЛЕНИЯ (DEPARTMENT) ==========
     path('api/departments/', views.get_departments, name='get_departments'),
     path('api/departments/<int:dept_id>/', views.get_department_detail, name='get_department_detail'),
-    path('api/user/department/', views.get_user_departments, name='get_user_departments'), 
+    path('api/user/departments/', views.get_user_departments, name='get_user_departments'),
+    path('api/user/department-types/', views.get_user_department_types, name='get_user_department_types'),
+     # ========== СОГЛАСОВАНИЕ ПОЗИЦИЙ ЗАКАЗА ==========
+    path('api/order-item/<int:item_id>/update-approval/', views.update_order_item_approval, name='update_order_item_approval'), 
 ]
 
 if settings.DEBUG:
