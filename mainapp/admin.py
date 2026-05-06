@@ -1,13 +1,14 @@
 from django.contrib import admin
-from django.contrib.auth.admin import UserAdmin
-from django.contrib.auth.models import User
+from django.contrib.auth.admin import UserAdmin, GroupAdmin as BaseGroupAdmin
+from django.contrib.auth.models import User, Group
+from django.contrib.auth.models import Group as BaseGroup
 from django import forms
 from django.utils.html import format_html
 from django.core.exceptions import ValidationError
 from django.db import models
 from .models import Location, TypeEquipment, Equipment, EquipmentLocation, Photo,\
     Order, OrderItem, CommonEquipmentLocation, Application, History,Feedback,\
-        Department, UserDepartment, DepartmentTypeEquipment, ApplicationApproval  
+        Department, UserDepartment, DepartmentTypeEquipment, ApplicationApproval, GroupProfile  
 
 # Настройка заголовков админ-панели
 admin.site.site_header = "Управление локациями и оборудованием"
@@ -16,8 +17,17 @@ admin.site.index_title = "Добро пожаловать в систему уп
 
 # Разрегистрируем стандартный UserAdmin
 admin.site.unregister(User)
+admin.site.unregister(Group)
 
-
+class GroupProfileInline(admin.StackedInline):
+    """Inline для отображения профиля группы"""
+    model = GroupProfile
+    can_delete = False
+    verbose_name_plural = 'Дополнительная информация'
+    fields = ['comment']
+    extra = 0
+    
+    
 class ApplicationApprovalInline(admin.TabularInline):
     """Inline для отображения согласований в заявке"""
     model = ApplicationApproval
@@ -998,4 +1008,79 @@ class ApplicationApprovalAdmin(admin.ModelAdmin):
         
         self.message_user(request, f'Экспортировано {queryset.count()} записей')
         return response
-    export_to_csv.short_description = 'Экспорт в CSV' 
+    export_to_csv.short_description = 'Экспорт в CSV'
+    
+    
+@admin.register(BaseGroup)
+class GroupAdmin(BaseGroupAdmin):
+    """Расширенный администратор групп с управлением правами"""
+    list_display = ['id', 'name', 'get_comment_preview', 'get_user_count']
+    list_display_links = ['id', 'name']
+    search_fields = ['name', 'profile__comment']
+    list_per_page = 20
+    ordering = ['name']
+    
+    # Добавляем поля для управления правами
+    fieldsets = (
+        (None, {
+            'fields': ('name',)
+        }),
+        ('Права доступа', {
+            'fields': ('permissions',),
+            'classes': ('wide',),
+            'description': 'Выберите права, которые будут назначены группе'
+        }),
+    )
+    
+    # Добавляем фильтр по правам
+    filter_horizontal = ('permissions',)
+    
+    # Добавляем в list_filter фильтр по правам
+    list_filter = ['permissions']
+    
+    inlines = [GroupProfileInline]
+    
+    def get_comment_preview(self, obj):
+        if hasattr(obj, 'profile') and obj.profile and obj.profile.comment:
+            return obj.profile.comment[:100] + '...' if len(obj.profile.comment) > 100 else obj.profile.comment
+        return '-'
+    get_comment_preview.short_description = 'Комментарий'
+    
+    def get_user_count(self, obj):
+        return obj.user_set.count()
+    get_user_count.short_description = 'Пользователей'
+    
+    def save_model(self, request, obj, form, change):
+        super().save_model(request, obj, form, change)
+        GroupProfile.objects.get_or_create(group=obj)
+    
+    actions = ['export_to_csv']
+    
+    def export_to_csv(self, request, queryset):
+        import csv
+        from django.http import HttpResponse
+        
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="groups_export.csv"'
+        
+        writer = csv.writer(response)
+        writer.writerow(['ID', 'Название группы', 'Комментарий', 'Количество пользователей', 'Права'])
+        
+        for obj in queryset:
+            comment = ''
+            if hasattr(obj, 'profile') and obj.profile:
+                comment = obj.profile.comment or ''
+            
+            permissions = ', '.join([p.name for p in obj.permissions.all()])
+            
+            writer.writerow([
+                obj.id,
+                obj.name,
+                comment,
+                obj.user_set.count(),
+                permissions
+            ])
+        
+        self.message_user(request, f'Экспортировано {queryset.count()} записей')
+        return response
+    export_to_csv.short_description = 'Экспорт в CSV'

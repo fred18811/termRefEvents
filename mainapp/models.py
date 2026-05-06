@@ -20,7 +20,41 @@ def set_username_as_email(sender, instance, **kwargs):
     if not instance.is_superuser and instance.email:
         # Устанавливаем username равным email
         instance.username = instance.email
-        
+ 
+
+class GroupProfile(models.Model):
+    """
+    Дополнительная информация о группе (комментарий)
+    """
+    group = models.OneToOneField(
+        Group,
+        on_delete=models.CASCADE,
+        related_name='profile',
+        verbose_name='группа'
+    )
+    comment = models.TextField(
+        verbose_name='комментарий',
+        blank=True,
+        null=True,
+        help_text='Дополнительный комментарий к группе'
+    )
+    created_at = models.DateTimeField(
+        verbose_name='дата создания',
+        auto_now_add=True
+    )
+    updated_at = models.DateTimeField(
+        verbose_name='дата обновления',
+        auto_now=True
+    )
+    
+    class Meta:
+        db_table = 'mainapp_group_profiles'
+        verbose_name = 'профиль группы'
+        verbose_name_plural = 'профили групп'
+    
+    def __str__(self):
+        return f"Профиль группы: {self.group.name}"
+            
 
 class History(models.Model):
     """
@@ -633,55 +667,60 @@ class Feedback(models.Model):
 def create_default_groups_and_permissions(sender, **kwargs):
     """Создание групп и прав по умолчанию после миграции"""
     if sender.name == 'mainapp':
+        from .models import Application, Department, GroupProfile
+        
         # Создаем группы
         view_group, _ = Group.objects.get_or_create(name='ViewApplications')
         edit_group, _ = Group.objects.get_or_create(name='EditApplications')
+        mail_group, _ = Group.objects.get_or_create(name='MailReciver')
         
-        # Создаем права (если нужно)
-        from .models import Application
+        # Создаем профили для групп с комментариями
+        for group in [view_group, edit_group, mail_group]:
+            profile, created = GroupProfile.objects.get_or_create(group=group)
+            if created:
+                if group.name == 'ViewApplications':
+                    profile.comment = 'Группа для просмотра всех заявок (без возможности редактирования)'
+                elif group.name == 'EditApplications':
+                    profile.comment = 'Группа для просмотра и редактирования всех заявок'
+                elif group.name == 'MailReciver':
+                    profile.comment = 'Группа для получения email уведомлений о новых заявках и обращениях'
+                profile.save()
         
-        content_type = ContentType.objects.get_for_model(Application)
+        # Создаем права
+        from .models import Application, Department
         
-        # Право на просмотр всех заявок
+        app_content_type = ContentType.objects.get_for_model(Application)
+        dept_content_type = ContentType.objects.get_for_model(Department)
+        
         view_perm, _ = Permission.objects.get_or_create(
             codename='view_all_applications',
             name='Can view all applications',
-            content_type=content_type
+            content_type=app_content_type
         )
         
-        # Право на редактирование всех заявок
         edit_perm, _ = Permission.objects.get_or_create(
             codename='edit_all_applications',
             name='Can edit all applications',
-            content_type=content_type
+            content_type=app_content_type
         )
         
-        # Назначаем права группам
-        view_group.permissions.add(view_perm)
-        edit_group.permissions.add(view_perm, edit_perm)
-        
-        # ========== ПРАВА ДЛЯ DEPARTMENT ==========
-        from .models import Department
-        
-        dept_content_type = ContentType.objects.get_for_model(Department)
-        
-        # Право на просмотр подразделений
         view_dept_perm, _ = Permission.objects.get_or_create(
             codename='view_department',
             name='Can view department',
             content_type=dept_content_type
         )
         
-        # Право на изменение подразделений
         change_dept_perm, _ = Permission.objects.get_or_create(
             codename='change_department',
             name='Can change department',
             content_type=dept_content_type
         )
         
-        # Назначаем права группам (только для админов и менеджеров)
-        edit_group.permissions.add(view_dept_perm, change_dept_perm)
-        view_group.permissions.add(view_dept_perm)
+        view_group.permissions.add(view_perm, view_dept_perm)
+        edit_group.permissions.add(view_perm, edit_perm, view_dept_perm, change_dept_perm)
+        
+        print(f"Группы созданы: ViewApplications, EditApplications, MailReciver")
+        print(f"Права назначены: {view_group.permissions.count()} для ViewApplications, {edit_group.permissions.count()} для EditApplications")
                 
         
 @receiver(post_migrate)
