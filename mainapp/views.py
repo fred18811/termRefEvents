@@ -1764,8 +1764,8 @@ def get_order_items(request):
                         'date_start': order.date_time_start.isoformat(),
                         'date_end': order.date_time_end.isoformat() if order.date_time_end else None,
                         'order_comment': order.comment or '',
-                        'can_provide': item.can_provide,  # ДОБАВИТЬ
-                        'is_agreed': item.is_agreed        # ДОБАВИТЬ
+                        'can_provide': item.can_provide,
+                        'is_agreed': item.is_agreed
                     })
                 elif item.common_equipment_location:
                     items_list.append({
@@ -1781,14 +1781,16 @@ def get_order_items(request):
                         'date_start': order.date_time_start.isoformat(),
                         'date_end': order.date_time_end.isoformat() if order.date_time_end else None,
                         'order_comment': order.comment or '',
-                        'can_provide': item.can_provide,  # ДОБАВИТЬ
-                        'is_agreed': item.is_agreed        # ДОБАВИТЬ
+                        'can_provide': item.can_provide,
+                        'is_agreed': item.is_agreed
                     })
         
         return JsonResponse({
             'success': True,
             'items': items_list,
-            'can_edit': (application.id_user == request.user) or user_can_edit_all_applications(request.user)
+            'can_edit': (application.id_user == request.user) or user_can_edit_all_applications(request.user),
+            'application_status': application.status,  # Добавляем статус заявки
+            'application_status_display': dict(Application._meta.get_field('status').choices).get(application.status, application.status)
         })
     except Application.DoesNotExist:
         return JsonResponse({

@@ -70,7 +70,6 @@ const loadUserDepartments = async () => {
 export const loadOrders = async () => {
     $('#ordersContainer').html('<div class="loading">Загрузка...</div>');
     try {
-        // Загружаем подразделения пользователя
         await loadUserDepartments();
         
         const res = await api.getOrders();
@@ -79,6 +78,13 @@ export const loadOrders = async () => {
                 userPermissions = res.user_permissions;
             }
             allOrders = res.orders;
+            
+            // Отладка: выводим статусы всех заявок
+            console.log('Загружены заявки:');
+            allOrders.forEach(order => {
+                console.log(`  Заявка №${order.id}: статус = ${order.status} (${order.status_display})`);
+            });
+            
             applyFiltersAndDisplay();
             initOrderFilters();
         } else {
@@ -859,6 +865,14 @@ export const loadOrderItems = async (orderId) => {
     try {
         const res = await api.getOrderItems(orderId);
         if (res.success) {
+            // Сохраняем статус заявки для использования в displayOrderItems
+            if (res.application_status) {
+                // Обновляем статус в глобальном массиве allOrders
+                const orderIndex = allOrders.findIndex(o => o.id === orderId);
+                if (orderIndex !== -1) {
+                    allOrders[orderIndex].status = res.application_status;
+                }
+            }
             displayOrderItems(orderId, res.items, res.can_edit || false);
         } else {
             $(`#order-items-${orderId}`).html(`<div class="no-orders">❌ ${escapeHtml(res.error)}</div>`);
@@ -947,7 +961,17 @@ export const displayOrderItems = async (applicationId, items, canEdit = false) =
     // Загружаем подразделения пользователя и типы оборудования
     const { userDepartments, departmentTypes, canEditApproval } = await loadUserDepartmentAndTypes();
     
-    console.log('Полученные items из API:', items);
+    // Получаем статус заявки из глобального массива allOrders
+    const application = allOrders.find(o => o.id === applicationId);
+    const applicationStatus = application ? application.status : 'new';
+    
+    // Редактирование доступно только если статус 'new' (Новая)
+    // Для 'in_progress' и 'completed' редактирование недоступно
+    const canEditOrder = canEdit && (applicationStatus === 'new');
+    
+    console.log('Заявка ID:', applicationId);
+    console.log('Статус заявки:', applicationStatus);
+    console.log('Можно редактировать заказ:', canEditOrder);
     
     const ordersMap = new Map();
     
@@ -975,7 +999,6 @@ export const displayOrderItems = async (applicationId, items, canEdit = false) =
         
         const equipmentName = item.is_common ? `🌍 ${item.equipment_name}` : item.equipment_name;
         
-        // Сохраняем данные из БД (can_provide, is_agreed)
         orderData.typesMap.get(typeName).push({
             name: equipmentName,
             quantity: item.quantity,
@@ -983,8 +1006,8 @@ export const displayOrderItems = async (applicationId, items, canEdit = false) =
             equipment_id: item.equipment_id,
             type_name: item.type_name,
             order_item_id: item.id,
-            can_provide: item.can_provide || 0,      // ДОБАВИТЬ
-            is_agreed: item.is_agreed || false       // ДОБАВИТЬ
+            can_provide: item.can_provide || 0,
+            is_agreed: item.is_agreed || false
         });
     });
     
@@ -1001,10 +1024,11 @@ export const displayOrderItems = async (applicationId, items, canEdit = false) =
             endDate,
             orderData.typesMap,
             orderData.order_comment,
-            canEdit,
+            canEditOrder,  // Передаем флаг возможности редактирования заказа
             userDepartments,
             departmentTypes,
-            canEditApproval
+            canEditApproval,
+            applicationStatus
         );
     }
     
@@ -1013,12 +1037,13 @@ export const displayOrderItems = async (applicationId, items, canEdit = false) =
     // Загружаем сохраненные значения из БД в интерфейс
     loadApprovalValuesFromItems();
     
-    // Привязываем обработчики для полей согласования только если есть права
-    if (canEditApproval) {
+    // Привязываем обработчики для полей согласования только если есть права и заявка активна
+    if (canEditApproval && (applicationStatus === 'new' || applicationStatus === 'in_progress')) {
         bindApprovalControls();
     }
     
-    if (canEdit) {
+    // Привязываем обработчики кнопок только если есть права на редактирование заказа
+    if (canEditOrder) {
         bindOrderCardButtons();
     }
 };
@@ -1043,7 +1068,7 @@ const loadApprovalValuesFromServer = async () => {
 };
 
 // Генерация карточки с кнопками (только если есть права)
-const generateLocationCardWithButtons = (orderId, locationName, startDate, endDate, typesMap, orderComment, canEdit, userDepartments, departmentTypes, canEditApproval) => {
+const generateLocationCardWithButtons = (orderId, locationName, startDate, endDate, typesMap, orderComment, canEdit, userDepartments, departmentTypes, canEditApproval, applicationStatus) => {
     const allTypes = Array.from(typesMap.keys());
     const maxRows = getMaxRows(typesMap);
     
@@ -1054,8 +1079,10 @@ const generateLocationCardWithButtons = (orderId, locationName, startDate, endDa
         </div>
     ` : '';
     
-    // Кнопки действий только если есть права на редактирование
-    const actionButtons = canEdit ? `
+    // Кнопки действий доступны ТОЛЬКО если статус заявки 'new'
+    const showActionButtons = canEdit && (applicationStatus === 'new');
+    
+    const actionButtons = showActionButtons ? `
         <div class="order-card-actions">
             <button class="order-edit-btn-small" data-order-id="${orderId}" title="Редактировать заказ">
                 ✏️ Редактировать
@@ -1086,7 +1113,7 @@ const generateLocationCardWithButtons = (orderId, locationName, startDate, endDa
                         </tr>
                     </thead>
                     <tbody>
-                        ${generateTableRows(typesMap, allTypes, maxRows, orderId, locationName, userDepartments, departmentTypes, canEditApproval)}
+                        ${generateTableRows(typesMap, allTypes, maxRows, orderId, locationName, userDepartments, departmentTypes, canEditApproval, applicationStatus)}
                     </tbody>
                 </table>
             </div>
@@ -1193,7 +1220,7 @@ const getMaxRows = (typesMap) => {
 
 
 // Генерация строк таблицы с input и checkbox
-const generateTableRows = (typesMap, allTypes, maxRows, orderId, locationId, userDepartments, departmentTypes, canEditApproval) => {
+const generateTableRows = (typesMap, allTypes, maxRows, orderId, locationId, userDepartments, departmentTypes, canEditApproval, applicationStatus) => {
     let rows = '';
     
     const typesData = [];
@@ -1210,6 +1237,9 @@ const generateTableRows = (typesMap, allTypes, maxRows, orderId, locationId, use
         });
     }
     
+    // Для статусов 'in_progress', 'completed', 'cancelled' отключаем редактирование согласования
+    const isApprovalEditable = canEditApproval && (applicationStatus === 'new');
+    
     for (let i = 0; i < maxRows; i++) {
         let row = '<tr>';
         
@@ -1219,10 +1249,9 @@ const generateTableRows = (typesMap, allTypes, maxRows, orderId, locationId, use
             
             if (equipment) {
                 const equipmentId = equipment.equipment_id || `eq_${i}_${j}`;
-                // Используем данные из БД (can_provide, is_agreed)
                 const savedQuantity = equipment.can_provide || 0;
                 const savedIsChecked = equipment.is_agreed || false;
-                const canProvide = typeData.can_provide && canEditApproval;
+                const canProvide = typeData.can_provide && isApprovalEditable;
                 
                 row += `
                     <td class="equipment-cell">
