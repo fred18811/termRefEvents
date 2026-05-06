@@ -1554,12 +1554,9 @@ def get_orders(request):
             orders = Order.objects.filter(id_application=app)
             first_order = orders.first()
             
-            # ДАТЫ ДЛЯ ОТОБРАЖЕНИЯ БЕРУТСЯ ИЗ APPLICATION
-            # Если в Application даты не заполнены, используем даты из первого заказа
             app_date_start = app.date_start
             app_date_end = app.date_end
             
-            # Если даты в Application не указаны, берем из первого заказа
             if not app_date_start and first_order:
                 app_date_start = first_order.date_time_start
             if not app_date_end and first_order:
@@ -1569,6 +1566,20 @@ def get_orders(request):
             is_active = app.status == 'new' or app.status == 'in_progress'
             
             can_edit = (app.id_user == request.user) or user_can_edit_all_applications(request.user)
+            
+            # ========== ПОЛУЧАЕМ СПИСОК СОГЛАСОВАНИЙ ДЛЯ ЗАЯВКИ ==========
+            approvals = ApplicationApproval.objects.filter(id_application=app).select_related('id_department', 'id_user')
+            
+            approval_statuses = []
+            for approval in approvals:
+                approval_statuses.append({
+                    'department_name': approval.id_department.name,
+                    'is_agreed': approval.is_agreed,
+                    'status_text': '✅ Согласовано' if approval.is_agreed else '⏳ На согласовании',
+                    'status_class': 'approved' if approval.is_agreed else 'pending',
+                    'user_name': approval.id_user.username if approval.id_user else None,
+                    'date_agreed': approval.date_agreed.isoformat() if approval.date_agreed else None
+                })
             
             apps_list.append({
                 'id': app.id,
@@ -1585,7 +1596,8 @@ def get_orders(request):
                 'total_quantity': sum(order.total_quantity for order in orders),
                 'can_edit': can_edit,
                 'user_id': app.id_user.id,
-                'user_name': app.id_user.username
+                'user_name': app.id_user.username,
+                'approvals': approval_statuses  # Добавляем список согласований
             })
         
         return JsonResponse({

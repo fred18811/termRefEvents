@@ -236,8 +236,6 @@ export const displayOrders = (orders) => {
             default: statusIcon = '📋';
         }
         
-        // ОТОБРАЖАЕМ ДАТЫ ИЗ APPLICATION (date_time_start, date_time_end)
-        // Эти поля теперь содержат даты из Application
         const startDate = order.date_time_start ? new Date(order.date_time_start).toLocaleString('ru-RU') : 'Не указана';
         const endDate = order.date_time_end ? new Date(order.date_time_end).toLocaleString('ru-RU') : 'Не завершен';
         
@@ -254,6 +252,31 @@ export const displayOrders = (orders) => {
             displayName = displayName.replace(regex, '<span class="highlight">$1</span>');
         }
         
+        // ========== ГЕНЕРИРУЕМ БЛОК СОГЛАСОВАНИЙ ==========
+        let approvalsHtml = '';
+        if (order.approvals && order.approvals.length > 0) {
+            approvalsHtml = '<div class="order-approvals">';
+            approvalsHtml += '<div class="approvals-title">📋 Согласование подразделений:</div>';
+            approvalsHtml += '<div class="approvals-list">';
+            
+            order.approvals.forEach(approval => {
+                const statusColor = approval.is_agreed ? '#28a745' : '#ffc107';
+                const statusBgColor = approval.is_agreed ? '#d4edda' : '#fff3cd';
+                const statusIcon = approval.is_agreed ? '✅' : '⏳';
+                
+                approvalsHtml += `
+                    <div class="approval-item ${approval.status_class}" style="border-left-color: ${statusColor}; background-color: ${statusBgColor};">
+                        <span class="approval-department">🏢 ${escapeHtml(approval.department_name)}</span>
+                        <span class="approval-status" style="color: ${statusColor};">
+                            ${statusIcon} ${escapeHtml(approval.status_text)}
+                        </span>
+                    </div>
+                `;
+            });
+            
+            approvalsHtml += '</div></div>';
+        }
+        
         html += `
             <div class="order-card" data-id="${order.id}" id="order-${order.id}">
                 <div class="order-header">
@@ -266,8 +289,9 @@ export const displayOrders = (orders) => {
                             ${ownerInfo}
                         </div>
                     </div>
-                    <button class="order-toggle" onclick="toggleOrderBody(${order.id})">▼</button>
+                    <button class="order-toggle">▼</button>
                 </div>
+                ${approvalsHtml}
                 <div class="order-body" id="order-body-${order.id}">
                     ${commentHtml}
                     <div id="order-items-${order.id}">
@@ -278,6 +302,14 @@ export const displayOrders = (orders) => {
     });
     
     $('#ordersContainer').html(html + '</div>');
+    
+    // Обработчики для кнопок toggle
+    $('.order-toggle').off('click').on('click', function(e) {
+        e.stopPropagation();
+        const $card = $(this).closest('.order-card');
+        const orderId = $card.data('id');
+        toggleOrderBody(orderId);
+    });
     
     $('.order-checkbox').on('change', function() {
         const applicationId = parseInt($(this).data('id'));
@@ -1359,12 +1391,12 @@ export const deselectAllOrders = () => {
 };
 
 // Переключение видимости заявки
-window.toggleOrderBody = (orderId) => {
-    const body = $(`#order-body-${orderId}`);
-    const toggleBtn = $(`.order-card[data-id="${orderId}"] .order-toggle`);
+const toggleOrderBody = (orderId) => {
+    const $body = $(`#order-body-${orderId}`);
+    const $toggle = $(`.order-card[data-id="${orderId}"] .order-toggle`);
     
-    body.toggleClass('show');
-    toggleBtn.html(body.hasClass('show') ? '▲' : '▼');
+    $body.toggleClass('show');
+    $toggle.html($body.hasClass('show') ? '▲' : '▼');
 };
 
 // Экспорт заявок в Excel
