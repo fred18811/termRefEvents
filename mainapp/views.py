@@ -1620,18 +1620,73 @@ def get_orders(request):
             
             can_edit = (app.id_user == request.user) or user_can_edit_all_applications(request.user)
             
-            # ========== ПОЛУЧАЕМ СПИСОК СОГЛАСОВАНИЙ ДЛЯ ЗАЯВКИ ==========
+            # Получаем список согласований для заявки
             approvals = ApplicationApproval.objects.filter(id_application=app).select_related('id_department', 'id_user')
+            
+            # Получаем все позиции оборудования из всех заказов заявки
+            all_order_items = []
+            for order in orders:
+                items = OrderItem.objects.filter(order=order).select_related(
+                    'equipment_location__id_equipments',
+                    'equipment_location__id_types_equipments',
+                    'common_equipment_location__id_equipments',
+                    'common_equipment_location__id_types_equipments'
+                )
+                all_order_items.extend(items)
+            
+            # Группируем оборудование по подразделениям
+            department_equipment_status = {}
+            
+            for item in all_order_items:
+                # Получаем тип оборудования
+                if item.equipment_location:
+                    equipment_type_id = item.equipment_location.id_types_equipments.id
+                    equipment_type_name = item.equipment_location.id_types_equipments.name
+                elif item.common_equipment_location:
+                    equipment_type_id = item.common_equipment_location.id_types_equipments.id
+                    equipment_type_name = item.common_equipment_location.id_types_equipments.name
+                else:
+                    continue
+                
+                # Находим подразделения, связанные с этим типом оборудования
+                departments_for_type = Department.objects.filter(
+                    department_type_equipment__id_type_equipment_id=equipment_type_id
+                )
+                
+                for dept in departments_for_type:
+                    if dept.id not in department_equipment_status:
+                        department_equipment_status[dept.id] = {
+                            'department_name': dept.name,
+                            'total_items': 0,
+                            'agreed_items': 0,
+                            'all_agreed': False
+                        }
+                    
+                    department_equipment_status[dept.id]['total_items'] += 1
+                    if item.is_agreed:
+                        department_equipment_status[dept.id]['agreed_items'] += 1
+            
+            # Определяем, все ли оборудование согласовано для каждого подразделения
+            for dept_id in department_equipment_status:
+                status = department_equipment_status[dept_id]
+                status['all_agreed'] = (status['total_items'] > 0 and status['agreed_items'] == status['total_items'])
             
             approval_statuses = []
             for approval in approvals:
+                dept_status = department_equipment_status.get(approval.id_department.id, {})
+                all_equipment_agreed = dept_status.get('all_agreed', False)
+                
                 approval_statuses.append({
+                    'department_id': approval.id_department.id,
                     'department_name': approval.id_department.name,
                     'is_agreed': approval.is_agreed,
                     'status_text': '✅ Согласовано' if approval.is_agreed else '⏳ На согласовании',
                     'status_class': 'approved' if approval.is_agreed else 'pending',
                     'user_name': approval.id_user.username if approval.id_user else None,
-                    'date_agreed': approval.date_agreed.isoformat() if approval.date_agreed else None
+                    'date_agreed': approval.date_agreed.isoformat() if approval.date_agreed else None,
+                    'all_equipment_agreed': all_equipment_agreed,  # Флаг, что всё оборудование подразделения согласовано
+                    'total_items': dept_status.get('total_items', 0),
+                    'agreed_items': dept_status.get('agreed_items', 0)
                 })
             
             apps_list.append({
@@ -1650,7 +1705,7 @@ def get_orders(request):
                 'can_edit': can_edit,
                 'user_id': app.id_user.id,
                 'user_name': app.id_user.username,
-                'approvals': approval_statuses  # Добавляем список согласований
+                'approvals': approval_statuses
             })
         
         return JsonResponse({
@@ -2870,6 +2925,158 @@ def get_user_department_types(request):
         
     except Exception as e:
         print(f"Ошибка в get_user_department_types: {str(e)}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+        
+
+@login_required
+@csrf_exempt
+@require_http_methods(["POST"])
+def approve_application(request):
+    """
+    Согласование заявки от имени подразделения
+    """
+    try:
+        data = json.loads(request.body)
+        application_id = data.get('application_id')
+        department_id = data.get('department_id')
+        
+        if not application_id or not department_id:
+            return JsonResponse({
+                'success': False,
+                'error': 'Не указаны параметры'
+            }, status=400)
+        
+        # Получаем заявку
+        application = Application.objects.get(id=application_id)
+        
+        # Получаем подразделение
+        department = Department.objects.get(id=department_id)
+        
+        # Проверяем, принадлежит ли пользователь к этому подразделению
+        user_in_department = UserDepartment.objects.filter(
+            id_user=request.user,
+            id_department=department
+        ).exists()
+        
+        if not user_in_department and not request.user.is_superuser:
+            return JsonResponse({
+                'success': False,
+                'error': 'Вы не принадлежите к этому подразделению'
+            }, status=403)
+        
+        # Получаем или создаем запись согласования
+        approval, created = ApplicationApproval.objects.get_or_create(
+            id_department=department,
+            id_application=application,
+            defaults={
+                'is_agreed': False,
+                'comment': ''
+            }
+        )
+        
+        # Если уже согласовано
+        if approval.is_agreed:
+            return JsonResponse({
+                'success': False,
+                'error': 'Эта заявка уже согласована вашим подразделением'
+            }, status=400)
+        
+        # Обновляем статус согласования
+        approval.is_agreed = True
+        approval.id_user = request.user
+        approval.date_agreed = timezone.now()
+        approval.comment = f"Согласовано пользователем {request.user.get_full_name() or request.user.username}"
+        approval.save()
+        
+        # ========== ПРОВЕРЯЕМ, ВСЕ ЛИ ПОДРАЗДЕЛЕНИЯ СОГЛАСОВАЛИ ==========
+        # Получаем все подразделения, которые должны согласовать эту заявку
+        # (подразделения с is_approval_required=True, связанные с типами оборудования)
+        
+        # Получаем все заказы в заявке
+        orders = Order.objects.filter(id_application=application)
+        
+        # Собираем все типы оборудования из заявки
+        equipment_types = set()
+        for order in orders:
+            items = OrderItem.objects.filter(order=order)
+            for item in items:
+                if item.equipment_location:
+                    equipment_types.add(item.equipment_location.id_types_equipments.id)
+                elif item.common_equipment_location:
+                    equipment_types.add(item.common_equipment_location.id_types_equipments.id)
+        
+        # Находим все подразделения, которые должны согласовать
+        required_departments = Department.objects.filter(
+            is_approval_required=True
+        ).filter(
+            department_type_equipment__id_type_equipment__id__in=equipment_types
+        ).distinct()
+        
+        # Получаем все согласования для этой заявки
+        approvals = ApplicationApproval.objects.filter(id_application=application)
+        
+        # Проверяем, все ли обязательные подразделения согласовали
+        required_dept_ids = set(required_departments.values_list('id', flat=True))
+        approved_dept_ids = set(approvals.filter(is_agreed=True).values_list('id_department_id', flat=True))
+        
+        # Если все обязательные подразделения согласовали, меняем статус заявки
+        if required_dept_ids.issubset(approved_dept_ids):
+            application.status = 'in_progress'
+            application.save(update_fields=['status'])
+            
+            # Логируем смену статуса
+            HistoryService.add_entry(
+                request.user,
+                f"Статус заявки #{application.id} изменён на 'В работе' (все подразделения согласовали)"
+            )
+            
+            # Отправляем уведомление о смене статуса
+            try:
+                from .email_utils import EmailService
+                EmailService.send_application_status_notification(
+                    application, 
+                    'new', 
+                    'in_progress', 
+                    request.user.username
+                )
+            except Exception as e:
+                print(f"Ошибка отправки уведомления: {e}")
+        
+        # Логируем действие
+        HistoryService.add_entry(
+            request.user,
+            f"Согласована заявка #{application.id} от подразделения {department.name}"
+        )
+        
+        return JsonResponse({
+            'success': True,
+            'message': f'Заявка #{application.id} успешно согласована',
+            'approval': {
+                'id': approval.id,
+                'is_agreed': approval.is_agreed,
+                'date_agreed': approval.date_agreed.isoformat(),
+                'user_name': request.user.username
+            },
+            'application_status': application.status,
+            'application_status_display': dict(Application._meta.get_field('status').choices).get(application.status, application.status),
+            'all_approved': required_dept_ids.issubset(approved_dept_ids)
+        })
+        
+    except Application.DoesNotExist:
+        return JsonResponse({
+            'success': False,
+            'error': 'Заявка не найдена'
+        }, status=404)
+    except Department.DoesNotExist:
+        return JsonResponse({
+            'success': False,
+            'error': 'Подразделение не найдено'
+        }, status=404)
+    except Exception as e:
+        print(f"Ошибка согласования заявки: {str(e)}")
         return JsonResponse({
             'success': False,
             'error': str(e)

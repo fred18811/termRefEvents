@@ -3,6 +3,7 @@
 import { state } from './state.js';
 import { escapeHtml, formatDate, showNotification, debounce  } from './utils.js';
 import { api } from './api.js';
+import { showConfirm } from './modal.js';
 
 // Глобальные переменные для редактирования
 let currentEditingOrderId = null;
@@ -12,11 +13,16 @@ let userPermissions = {
     can_edit_all: false,
     is_superuser: false
 };
+let userDepartments = [];
 let allOrders = [];
 let currentFilters = {
     search: '',
     status: 'all',
     user: 'all'
+};
+
+const getCSRFToken = () => {
+    return document.cookie.split('; ').find(row => row.startsWith('csrftoken='))?.split('=')[1];
 };
 
 // Функция для преобразования UTC даты в локальную для datetime-local input
@@ -44,10 +50,29 @@ const formatDateTimeForInput = (isoString) => {
     }
 };
 
+// Загрузка подразделений текущего пользователя
+const loadUserDepartments = async () => {
+    try {
+        const response = await fetch('/api/user/departments/');
+        const data = await response.json();
+        
+        if (data.success && data.departments) {
+            userDepartments = data.departments;
+            console.log('Загружены подразделения пользователя:', userDepartments);
+        }
+    } catch (error) {
+        console.error('Ошибка загрузки подразделений:', error);
+        userDepartments = [];
+    }
+};
+
 // Загрузка заявок
 export const loadOrders = async () => {
     $('#ordersContainer').html('<div class="loading">Загрузка...</div>');
     try {
+        // Загружаем подразделения пользователя
+        await loadUserDepartments();
+        
         const res = await api.getOrders();
         if (res.success) {
             if (res.user_permissions) {
@@ -211,6 +236,47 @@ const populateUserFilter = () => {
     }
 };
 
+// Функция согласования заявки
+const approveApplication = async (applicationId, departmentId) => {
+    showNotification('Отправка запроса на согласование...', 'info');
+    
+    try {
+        const csrftoken = document.cookie.split('; ').find(row => row.startsWith('csrftoken='))?.split('=')[1];
+        
+        const response = await fetch('/api/application/approve/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrftoken
+            },
+            credentials: 'include',
+            body: JSON.stringify({
+                application_id: applicationId,
+                department_id: departmentId
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showNotification(`✅ Заявка №${applicationId} согласована!`, 'success');
+            
+            // Если все подразделения согласовали, показываем дополнительное уведомление
+            if (data.all_approved) {
+                showNotification(`🎉 Заявка №${applicationId} переведена в статус "В работе"!`, 'success');
+            }
+            
+            // Обновляем список заявок
+            loadOrders();
+        } else {
+            showNotification(data.error || 'Ошибка при согласовании', 'error');
+        }
+    } catch (error) {
+        console.error('Ошибка:', error);
+        showNotification('Ошибка при отправке запроса', 'error');
+    }
+};
+
 // Обновленная функция displayOrders (с учетом фильтров)
 export const displayOrders = (orders) => {
     if (!orders?.length) {
@@ -252,7 +318,7 @@ export const displayOrders = (orders) => {
             displayName = displayName.replace(regex, '<span class="highlight">$1</span>');
         }
         
-        // ========== ГЕНЕРИРУЕМ БЛОК СОГЛАСОВАНИЙ ==========
+        // Генерируем блок согласований
         let approvalsHtml = '';
         if (order.approvals && order.approvals.length > 0) {
             approvalsHtml = '<div class="order-approvals">';
@@ -264,12 +330,35 @@ export const displayOrders = (orders) => {
                 const statusBgColor = approval.is_agreed ? '#d4edda' : '#fff3cd';
                 const statusIcon = approval.is_agreed ? '✅' : '⏳';
                 
+                // Проверяем, может ли пользователь согласовать
+                const userInDepartment = userDepartments.some(d => d.name === approval.department_name);
+                // Кнопка активна ТОЛЬКО если:
+                // 1. Ещё не согласовано
+                // 2. Пользователь из этого подразделения
+                // 3. ВСЁ оборудование подразделения согласовано (all_equipment_agreed = true)
+                const canApprove = !approval.is_agreed && userInDepartment && approval.all_equipment_agreed;
+                
+                // Информация о согласованном оборудовании
+                const equipmentInfo = approval.total_items ? 
+                    `<span class="equipment-info"> (${approval.agreed_items}/${approval.total_items} позиций согласовано)</span>` : '';
+                
                 approvalsHtml += `
-                    <div class="approval-item ${approval.status_class}" style="border-left-color: ${statusColor}; background-color: ${statusBgColor};">
-                        <span class="approval-department">🏢 ${escapeHtml(approval.department_name)}</span>
-                        <span class="approval-status" style="color: ${statusColor};">
-                            ${statusIcon} ${escapeHtml(approval.status_text)}
-                        </span>
+                    <div class="approval-item ${approval.status_class}" data-approval-dept="${approval.department_name}" data-application-id="${order.id}" data-department-id="${approval.department_id}" style="border-left-color: ${statusColor}; background-color: ${statusBgColor};">
+                        <div class="approval-department-info">
+                            <span class="approval-department">🏢 ${escapeHtml(approval.department_name)}</span>
+                            ${equipmentInfo}
+                        </div>
+                        <div class="approval-status-area">
+                            <span class="approval-status" style="color: ${statusColor};">
+                                ${statusIcon} ${escapeHtml(approval.status_text)}
+                            </span>
+                            ${canApprove ? 
+                                `<button class="btn-approve-application" data-application-id="${order.id}" data-department-name="${escapeHtml(approval.department_name)}" data-department-id="${approval.department_id}">✅ Согласовать</button>` : 
+                                (!approval.all_equipment_agreed && !approval.is_agreed ? 
+                                    `<span class="approve-disabled-hint" title="Не всё оборудование подразделения согласовано">🔒 Требуется согласование всего оборудования</span>` : 
+                                    '')
+                            }
+                        </div>
                     </div>
                 `;
             });
@@ -311,6 +400,7 @@ export const displayOrders = (orders) => {
         toggleOrderBody(orderId);
     });
     
+    // Обработчики чекбоксов
     $('.order-checkbox').on('change', function() {
         const applicationId = parseInt($(this).data('id'));
         if ($(this).is(':checked')) {
@@ -321,6 +411,21 @@ export const displayOrders = (orders) => {
             $(`#order-${applicationId}`).removeClass('selected');
         }
         updateSelectionInfo();
+    });
+    
+    // Обработчики кнопок согласования заявки
+    $('.btn-approve-application').off('click').on('click', function(e) {
+        e.stopPropagation();
+        const applicationId = $(this).data('application-id');
+        const departmentName = $(this).data('department-name');
+        const departmentId = $(this).data('department-id');
+        
+        showConfirm(
+            `Вы уверены, что хотите согласовать заявку №${applicationId} от подразделения "${departmentName}"?`,
+            async () => {
+                await approveApplication(applicationId, departmentId);
+            }
+        );
     });
     
     orders.forEach(order => {

@@ -69,7 +69,9 @@ urlpatterns = [
     path('api/user/departments/', views.get_user_departments, name='get_user_departments'),
     path('api/user/department-types/', views.get_user_department_types, name='get_user_department_types'),
      # ========== СОГЛАСОВАНИЕ ПОЗИЦИЙ ЗАКАЗА ==========
-    path('api/order-item/<int:item_id>/update-approval/', views.update_order_item_approval, name='update_order_item_approval'), 
+    path('api/order-item/<int:item_id>/update-approval/', views.update_order_item_approval, name='update_order_item_approval'),
+    # ========== СОГЛАСОВАНИЕ ЗАЯВКИ ==========
+    path('api/application/approve/', views.approve_application, name='approve_application'), 
 ]
 
 if settings.DEBUG:

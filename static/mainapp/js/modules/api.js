@@ -201,6 +201,16 @@ export const api = {
             is_agreed: isAgreed
         })
     }),
+    // ========== СОГЛАСОВАНИЕ ЗАЯВКИ ==========
+    approveApplication: (applicationId, departmentId) => $.ajax({
+        url: '/api/application/approve/',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({
+            application_id: applicationId,
+            department_id: departmentId
+        })
+    }),
 };
 
 // Экспорт CSRF токена для использования в других модулях

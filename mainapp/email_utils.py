@@ -135,3 +135,47 @@ class EmailService:
                     logger.error(f'Ошибка отправки на {receiver.email}: {e}')
         except Exception as e:
             logger.error(f'Ошибка при формировании письма: {e}')
+    
+    @staticmethod
+    def send_application_status_notification(application, old_status, new_status, changed_by):
+        """
+        Отправка уведомления об изменении статуса заявки
+        """
+        receivers = EmailService.get_mail_receivers()
+        
+        if not receivers:
+            return
+        
+        status_choices = dict(Application._meta.get_field('status').choices)
+        
+        context = {
+            'application_id': application.id,
+            'application_name': application.name,
+            'old_status': status_choices.get(old_status, old_status),
+            'new_status': status_choices.get(new_status, new_status),
+            'changed_by': changed_by,
+            'user': application.id_user,
+            'admin_url': getattr(settings, 'SITE_URL', 'http://127.0.0.1:8000')
+        }
+        
+        try:
+            html_message = render_to_string('mainapp/email/application_status_change.html', context)
+            plain_message = strip_tags(html_message)
+            
+            subject = f'📝 Изменение статуса заявки #{application.id}'
+            
+            for receiver in receivers:
+                try:
+                    send_mail(
+                        subject=subject,
+                        message=plain_message,
+                        from_email=settings.DEFAULT_FROM_EMAIL,
+                        recipient_list=[receiver.email],
+                        html_message=html_message,
+                        fail_silently=False
+                    )
+                    logger.info(f'Уведомление об изменении статуса отправлено на {receiver.email}')
+                except Exception as e:
+                    logger.error(f'Ошибка отправки на {receiver.email}: {e}')
+        except Exception as e:
+            logger.error(f'Ошибка при формировании письма: {e}')
