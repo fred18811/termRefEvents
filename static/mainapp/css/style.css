@@ -3208,7 +3208,7 @@ nav {
 .equipment-approval-controls {
     display: flex;
     align-items: center;
-    justify-content: center;
+    justify-content: end;
     gap: 0.5rem;
     margin-top: 0.5rem;
     padding-top: 0.5rem;

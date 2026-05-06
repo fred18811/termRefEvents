@@ -1122,9 +1122,9 @@ const generateTableRows = (typesMap, allTypes, maxRows, orderId, locationId, use
                             </label>
                         </div>
                         ` : `
-                        <div class="equipment-status" style="margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px dashed #e2e8f0; text-align: center;">
+                        <div class="equipment-status" style="margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px dashed #e2e8f0; text-align: right;">
                             <span style="font-size: 0.7rem; padding: 0.2rem 0.5rem; border-radius: 12px; background-color: ${savedIsChecked ? '#28a745' : '#ffc107'}; color: ${savedIsChecked ? 'white' : '#333'};">
-                                ${savedIsChecked ? '✅ Согласовано' : '⏳ В работе'}
+                                ${savedIsChecked ? '✅ Согласовано' : '⏳На согласовании'}
                                 ${savedQuantity ? ` (${savedQuantity} шт.)` : ''}
                             </span>
                         </div>
