@@ -30,6 +30,94 @@ from datetime import timedelta, datetime
 from .email_utils import EmailService
 
 
+def get_all_equipment_types_for_application(application):
+    """
+    Получает все типы оборудования из ВСЕХ заказов заявки
+    """
+    equipment_types = set()
+    
+    orders = Order.objects.filter(id_application=application)
+    for order in orders:
+        items = OrderItem.objects.filter(order=order)
+        for item in items:
+            if item.equipment_location:
+                equipment_types.add(item.equipment_location.id_types_equipments.id)
+            elif item.common_equipment_location:
+                equipment_types.add(item.common_equipment_location.id_types_equipments.id)
+    
+    return equipment_types
+
+
+def get_departments_for_equipment_types(equipment_types):
+    """
+    Находит подразделения, которые должны согласовывать данные типы оборудования
+    """
+    departments = Department.objects.filter(
+        is_approval_required=True
+    ).filter(
+        department_type_equipment__id_type_equipment__id__in=equipment_types
+    ).distinct()
+    
+    return departments
+
+
+def get_equipment_types_from_application(application):
+    """
+    Получает все типы оборудования, используемые в заявке
+    """
+    equipment_types = set()
+    
+    orders = Order.objects.filter(id_application=application)
+    for order in orders:
+        items = OrderItem.objects.filter(order=order)
+        for item in items:
+            if item.equipment_location:
+                equipment_types.add(item.equipment_location.id_types_equipments.id)
+            elif item.common_equipment_location:
+                equipment_types.add(item.common_equipment_location.id_types_equipments.id)
+    
+    return equipment_types
+
+def update_application_approvals(application, equipment_types):
+    """
+    Обновляет список согласований для заявки на основе текущих типов оборудования
+    """
+    if not equipment_types:
+        # Если нет типов оборудования, удаляем все согласования
+        deleted_count, _ = ApplicationApproval.objects.filter(id_application=application).delete()
+        print(f"Удалено {deleted_count} согласований для заявки #{application.id} (нет оборудования)")
+        return 0
+    
+    # Получаем подразделения, которые должны согласовывать
+    required_departments = get_departments_for_equipment_types(equipment_types)
+    required_department_ids = set(required_departments.values_list('id', flat=True))
+    
+    # Получаем текущие согласования
+    current_approvals = ApplicationApproval.objects.filter(id_application=application)
+    current_department_ids = set(current_approvals.values_list('id_department_id', flat=True))
+    
+    # Добавляем новые согласования
+    departments_to_add = required_departments.filter(id__in=required_department_ids - current_department_ids)
+    added_count = 0
+    for dept in departments_to_add:
+        ApplicationApproval.objects.create(
+            id_department=dept,
+            id_application=application,
+            is_agreed=False,
+            comment=f'Автоматически добавлено при обновлении заявки'
+        )
+        added_count += 1
+        print(f"Добавлено согласование для подразделения {dept.name}")
+    
+    # Удаляем согласования для подразделений, которых больше нет
+    departments_to_remove = current_approvals.filter(id_department_id__in=current_department_ids - required_department_ids)
+    removed_count = departments_to_remove.delete()[0]
+    if removed_count:
+        print(f"Удалено {removed_count} согласований для подразделений, больше не участвующих в заявке")
+    
+    return added_count
+
+
 @login_required
 @csrf_exempt
 @require_http_methods(["POST"])
@@ -1057,24 +1145,55 @@ def save_order(request):
         application = None
         is_new_application = False
         
-        # ДАТЫ ДЛЯ ЗАЯВКИ ВСЕГДА БЕРУТСЯ ИЗ ОТДЕЛЬНЫХ ПОЛЕЙ (из date-section)
         app_date_start = data.get('application_date_start')
         app_date_end = data.get('application_date_end')
         
         print(f"Даты для Application: начало={app_date_start}, окончание={app_date_end}")
+        
+        # ========== СОБИРАЕМ ВСЕ ТИПЫ ОБОРУДОВАНИЯ ИЗ ТЕКУЩЕГО ЗАКАЗА ==========
+        current_equipment_types = set()
+        
+        for item in items_data:
+            equipment_id = item.get('equipment_id')
+            is_common = item.get('is_common', False)
+            
+            if is_common:
+                common_equipment = CommonEquipmentLocation.objects.filter(
+                    id_equipments_id=equipment_id
+                ).first()
+                if common_equipment:
+                    current_equipment_types.add(common_equipment.id_types_equipments.id)
+            else:
+                equipment_location = EquipmentLocation.objects.filter(
+                    id_equipments_id=equipment_id
+                ).first()
+                if equipment_location:
+                    current_equipment_types.add(equipment_location.id_types_equipments.id)
+        
+        print(f"Типы оборудования в текущем заказе: {current_equipment_types}")
         
         if application_id:
             try:
                 application = Application.objects.get(id=application_id, id_user=request.user)
                 print(f"Найдена существующая заявка №{application.id}")
                 
-                # Обновляем даты в существующей заявке
                 if app_date_start:
                     application.date_start = app_date_start
                 if app_date_end:
                     application.date_end = app_date_end
                 application.save(update_fields=['date_start', 'date_end'])
-                print(f"Обновлены даты в заявке #{application.id}")
+                
+                # ========== ДЛЯ СУЩЕСТВУЮЩЕЙ ЗАЯВКИ: ОБНОВЛЯЕМ СОГЛАСОВАНИЯ ==========
+                # Получаем все типы оборудования из ВСЕХ заказов этой заявки
+                all_equipment_types = get_all_equipment_types_for_application(application)
+                
+                # Добавляем типы из текущего заказа
+                all_equipment_types.update(current_equipment_types)
+                
+                print(f"Все типы оборудования в заявке #{application.id}: {all_equipment_types}")
+                
+                # Обновляем согласования для заявки
+                update_application_approvals(application, all_equipment_types)
                 
             except Application.DoesNotExist:
                 print(f"Заявка с ID {application_id} не найдена")
@@ -1092,7 +1211,6 @@ def save_order(request):
             
             application_comment = data.get('application_comment', '')
             
-            # Создаем новую заявку с датами из date-section
             application = Application.objects.create(
                 name=application_name,
                 id_user=request.user,
@@ -1102,36 +1220,19 @@ def save_order(request):
                 date_end=app_date_end
             )
             is_new_application = True
-            print(f"Создана новая заявка №{application.id} с датами: {app_date_start} - {app_date_end}")
+            print(f"Создана новая заявка №{application.id}")
             
             # ========== СОЗДАНИЕ ЗАПИСЕЙ СОГЛАСОВАНИЯ ==========
-            # Находим все подразделения, у которых требуется согласование
-            departments_need_approval = Department.objects.filter(is_approval_required=True)
+            # Используем типы оборудования из текущего заказа
+            create_application_approvals(application, current_equipment_types)
             
-            created_approvals_count = 0
-            for dept in departments_need_approval:
-                # Создаем запись согласования для каждого подразделения
-                approval, created = ApplicationApproval.objects.get_or_create(
-                    id_department=dept,
-                    id_application=application,
-                    defaults={
-                        'is_agreed': False,
-                        'comment': f'Ожидает согласования от подразделения {dept.name}'
-                    }
-                )
-                if created:
-                    created_approvals_count += 1
-                    print(f"Создана запись согласования для подразделения '{dept.name}' (заявка #{application.id})")
-            
-            print(f"Создано записей согласования: {created_approvals_count}")
-            
+            # Отправляем уведомление
             try:
                 from .email_utils import EmailService
                 EmailService.send_new_application_notification(application, request.user)
                 print(f"Уведомление о новой заявке #{application.id} отправлено")
             except Exception as e:
                 print(f"Ошибка отправки уведомления: {e}")
-                # Не блокируем создание заявки, если письмо не отправилось
         
         # Получаем location_id (если есть)
         location_id = data.get('location_id')
@@ -1143,11 +1244,9 @@ def save_order(request):
             except Location.DoesNotExist:
                 print(f"Локация с ID {location_id} не найдена")
         
-        # Преобразуем даты для проверки
         date_start = data.get('date_time_start')
         date_end = data.get('date_time_end')
         
-        # Создаем заказ для этой локации
         order = Order.objects.create(
             id_user=request.user,
             id_application=application,
@@ -1172,7 +1271,6 @@ def save_order(request):
                 print(f"  Позиция {idx + 1}: equipment_id={equipment_id}, location_id={item_location_id}, is_common={is_common}, qty={requested_qty}")
                 
                 if is_common:
-                    # ========== ОБЩЕЕ ОБОРУДОВАНИЕ ==========
                     common_equipment = CommonEquipmentLocation.objects.filter(
                         id_equipments_id=equipment_id
                     ).first()
@@ -1182,7 +1280,6 @@ def save_order(request):
                         print(f"    ✗ Общее оборудование не найдено")
                         continue
                     
-                    # Проверяем доступность с учетом отмененных заказов
                     busy_quantity = OrderItem.objects.filter(
                         common_equipment_location=common_equipment,
                         order__date_time_start__lt=date_end,
@@ -1204,13 +1301,7 @@ def save_order(request):
                     total_busy = busy_quantity + active_busy
                     available = common_equipment.quantity - total_busy
                     
-                    print(f"    Общее оборудование: всего={common_equipment.quantity}, занято={total_busy}, доступно={available}")
-                    
-                    if requested_qty > available:
-                        quantity = max(available, 0)
-                        print(f"    ! Количество уменьшено: {requested_qty} -> {quantity}")
-                    else:
-                        quantity = requested_qty
+                    quantity = min(requested_qty, max(available, 0))
                     
                     if quantity > 0:
                         OrderItem.objects.create(
@@ -1222,10 +1313,8 @@ def save_order(request):
                         print(f"    ✓ Сохранено общее оборудование: {common_equipment.id_equipments.name} x{quantity}")
                     else:
                         items_failed += 1
-                        print(f"    ✗ Недостаточно оборудования: доступно {available} шт.")
                         
                 else:
-                    # ========== ОБОРУДОВАНИЕ ИЗ КОНКРЕТНОЙ ЛОКАЦИИ ==========
                     if not item_location_id:
                         items_failed += 1
                         print(f"    ✗ Не указан location_id для обычного оборудования")
@@ -1238,53 +1327,22 @@ def save_order(request):
                     
                     if not equipment_location:
                         items_failed += 1
-                        print(f"    ✗ EquipmentLocation не найден: location_id={item_location_id}, equipment_id={equipment_id}")
+                        print(f"    ✗ EquipmentLocation не найден")
                         continue
                     
-                    # Проверяем доступность с учетом отмененных заказов
-                    busy_quantity = OrderItem.objects.filter(
-                        equipment_location=equipment_location,
-                        order__date_time_start__lt=date_end,
-                        order__date_time_end__gt=date_start
-                    ).exclude(
-                        order__date_time_end__isnull=True
-                    ).exclude(
-                        order__id_application__status='cancelled'
-                    ).aggregate(total=Sum('quantity'))['total'] or 0
-                    
-                    active_busy = OrderItem.objects.filter(
-                        equipment_location=equipment_location,
-                        order__date_time_end__isnull=True,
-                        order__date_time_start__lt=date_end
-                    ).exclude(
-                        order__id_application__status='cancelled'
-                    ).aggregate(total=Sum('quantity'))['total'] or 0
-                    
-                    total_busy = busy_quantity + active_busy
-                    available = equipment_location.quantity - total_busy
-                    
-                    print(f"    Оборудование локации: {equipment_location.id_equipments.name}")
-                    print(f"      Всего: {equipment_location.quantity}")
-                    print(f"      Занято: {total_busy}")
-                    print(f"      Доступно: {available}")
-                    
-                    if requested_qty > available:
-                        quantity = max(available, 0)
-                        print(f"    ! Количество уменьшено: {requested_qty} -> {quantity}")
-                    else:
-                        quantity = requested_qty
+                    total_quantity = equipment_location.quantity
+                    quantity = min(requested_qty, total_quantity)
                     
                     if quantity > 0:
-                        order_item = OrderItem.objects.create(
+                        OrderItem.objects.create(
                             order=order,
                             equipment_location=equipment_location,
                             quantity=quantity
                         )
                         items_added += 1
-                        print(f"    ✓ Сохранено: {equipment_location.id_equipments.name} x{quantity} (loc: {equipment_location.id_locations.name})")
+                        print(f"    ✓ Сохранено: {equipment_location.id_equipments.name} x{quantity}")
                     else:
                         items_failed += 1
-                        print(f"    ✗ Недостаточно оборудования: доступно {available} шт.")
                     
             except Exception as e:
                 items_failed += 1
@@ -1296,18 +1354,13 @@ def save_order(request):
         
         if items_added == 0:
             order.delete()
-            # Если заявка была только что создана, но заказ не добавился, удаляем заявку
             if is_new_application:
-                # Создаем записи согласования
-                created_approvals = create_application_approvals(application)
-                print(f"Создано записей согласования: {created_approvals}")
                 application.delete()
             return JsonResponse({
                 'success': False,
                 'error': 'Не удалось добавить ни одной позиции'
             }, status=400)
         
-        # Логируем сохранение заказа
         HistoryService.add_entry(
             request.user,
             f"Создан заказ #{order.id} для локации {location.name if location else 'Общее оборудование'}"
@@ -2384,7 +2437,7 @@ def cancel_order(request, order_id):
 @csrf_exempt
 @require_http_methods(["POST"])
 def duplicate_order(request, order_id):
-    """Дублирование заказа"""
+    """Дублирование заказа с созданием согласований для соответствующих подразделений"""
     try:
         original_order = Order.objects.get(id=order_id, id_user=request.user)
         
@@ -2405,6 +2458,9 @@ def duplicate_order(request, order_id):
                 comment=original_order.comment
             )
             
+            # Копируем оборудование и собираем типы
+            equipment_types_in_order = set()
+            
             for item in OrderItem.objects.filter(order=original_order):
                 if item.equipment_location:
                     OrderItem.objects.create(
@@ -2412,12 +2468,31 @@ def duplicate_order(request, order_id):
                         equipment_location=item.equipment_location,
                         quantity=item.quantity
                     )
+                    equipment_types_in_order.add(item.equipment_location.id_types_equipments.id)
                 elif item.common_equipment_location:
                     OrderItem.objects.create(
                         order=new_order,
                         common_equipment_location=item.common_equipment_location,
                         quantity=item.quantity
                     )
+                    equipment_types_in_order.add(item.common_equipment_location.id_types_equipments.id)
+            
+            # Создаем согласования для подразделений, связанных с типами оборудования
+            departments_for_approval = Department.objects.filter(
+                is_approval_required=True
+            ).filter(
+                department_type_equipment__id_type_equipment__id__in=equipment_types_in_order
+            ).distinct()
+            
+            for dept in departments_for_approval:
+                ApplicationApproval.objects.get_or_create(
+                    id_department=dept,
+                    id_application=new_application,
+                    defaults={
+                        'is_agreed': False,
+                        'comment': f'Ожидает согласования от подразделения {dept.name}'
+                    }
+                )
             
             HistoryService.add_entry(
                 request.user,
@@ -2719,14 +2794,20 @@ def get_user_department(request):
         }, status=500)
     
 
-def create_application_approvals(application):
+def create_application_approvals(application, equipment_types):
     """
-    Создает записи согласования для заявки
+    Создает записи согласования для заявки на основе типов оборудования
     """
-    departments_need_approval = Department.objects.filter(is_approval_required=True)
+    if not equipment_types:
+        print(f"Нет типов оборудования для заявки #{application.id}")
+        return 0
+    
+    departments = get_departments_for_equipment_types(equipment_types)
+    
+    print(f"Подразделения для согласования заявки #{application.id}: {[d.name for d in departments]}")
     
     created_count = 0
-    for dept in departments_need_approval:
+    for dept in departments:
         approval, created = ApplicationApproval.objects.get_or_create(
             id_department=dept,
             id_application=application,
@@ -2737,7 +2818,7 @@ def create_application_approvals(application):
         )
         if created:
             created_count += 1
-            print(f"Создана запись согласования для подразделения '{dept.name}' (заявка #{application.id})")
+            print(f"Создана запись согласования для подразделения '{dept.name}'")
     
     return created_count
 
