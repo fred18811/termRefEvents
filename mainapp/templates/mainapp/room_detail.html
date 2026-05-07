@@ -109,41 +109,48 @@
         </div>
     </div>
 
-    <script type="module" src="{% static 'mainapp/js/expansion/jquery-3.6.0.min.js' %}"></script>
-    <script type="module" src="{% static 'mainapp/js/expansion/swiper-bundle.min.js' %}"></script>
+    <script src="{% static 'mainapp/js/expansion/jquery-3.6.0.min.js' %}"></script>
+    <script src="{% static 'mainapp/js/expansion/swiper-bundle.min.js' %}"></script>
+  
     <script>
         // Инициализация Swiper карусели с автопрокруткой
-        const swiper = new Swiper('.room-swiper', {
-            loop: true,
-            navigation: {
-                nextEl: '.swiper-button-next',
-                prevEl: '.swiper-button-prev',
-            },
-            pagination: {
-                el: '.swiper-pagination',
-                type: 'progressbar',
-                clickable: true,
-            },
-            autoplay: {
-                delay: 5000,
-                disableOnInteraction: false,
-                pauseOnMouseEnter: true,
-            },
-            effect: 'slide',
-            speed: 800,
-            grabCursor: true,
+        document.addEventListener('DOMContentLoaded', function() {
+            if (typeof Swiper !== 'undefined') {
+                const swiper = new Swiper('.room-swiper', {
+                    loop: true,
+                    navigation: {
+                        nextEl: '.swiper-button-next',
+                        prevEl: '.swiper-button-prev',
+                    },
+                    pagination: {
+                        el: '.swiper-pagination',
+                        type: 'progressbar',
+                        clickable: true,
+                    },
+                    autoplay: {
+                        delay: 5000,
+                        disableOnInteraction: false,
+                        pauseOnMouseEnter: true,
+                    },
+                    effect: 'slide',
+                    speed: 800,
+                    grabCursor: true,
+                });
+                
+                // Приостановка автопрокрутки при наведении на описание
+                const caption = document.querySelector('.slide-caption');
+                if (caption) {
+                    caption.addEventListener('mouseenter', () => {
+                        swiper.autoplay.stop();
+                    });
+                    caption.addEventListener('mouseleave', () => {
+                        swiper.autoplay.start();
+                    });
+                }
+            } else {
+                console.error('Swiper библиотека не загружена');
+            }
         });
-        
-        // Приостановка автопрокрутки при наведении на описание
-        const caption = document.querySelector('.slide-caption');
-        if (caption) {
-            caption.addEventListener('mouseenter', () => {
-                swiper.autoplay.stop();
-            });
-            caption.addEventListener('mouseleave', () => {
-                swiper.autoplay.start();
-            });
-        }
     </script>
 </body>
 </html>
