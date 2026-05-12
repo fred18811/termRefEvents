@@ -615,18 +615,25 @@ class Feedback(models.Model):
         related_name='feedback_entries',
         null=True,
         blank=True,
-        help_text='Заявка, к которой оставлен отзыв (может быть не указана для общего отзыва)'
+        help_text='Заявка, к которой оставлен отзыв'
     )
     name = models.CharField(
         max_length=300,
         verbose_name=_('название'),
         blank=True,
         null=True,
-        help_text='Название отзыва/заголовок (необязательно)'
+        help_text='Название отзыва/заголовок'
     )
     comment = models.TextField(
         verbose_name=_('комментарий'),
         help_text='Текст обратной связи/комментария'
+    )
+    data = models.JSONField(
+        verbose_name=_('дополнительные данные'),
+        default=dict,
+        blank=True,
+        null=True,
+        help_text='Дополнительные данные в формате JSON (оценка мероприятия, отзыв о проведении и т.д.)'
     )
     created_at = models.DateTimeField(
         verbose_name=_('дата создания'),
@@ -651,16 +658,26 @@ class Feedback(models.Model):
         return f"Feedback #{self.id} - {self.id_user.username} - Общий отзыв"
     
     def get_short_comment(self):
-        """Возвращает короткую версию комментария (первые 100 символов)"""
         return self.comment[:100] + '...' if len(self.comment) > 100 else self.comment
     get_short_comment.short_description = 'Комментарий (кратко)'
     
     def get_short_name(self):
-        """Возвращает короткую версию названия (первые 50 символов)"""
         if self.name:
             return self.name[:50] + '...' if len(self.name) > 50 else self.name
         return '—'
     get_short_name.short_description = 'Название'
+    
+    def get_rating(self):
+        """Получить оценку мероприятия из JSON"""
+        if self.data:
+            return self.data.get('event_rating')
+        return None
+    
+    def get_event_feedback(self):
+        """Получить отзыв о проведении мероприятия из JSON"""
+        if self.data:
+            return self.data.get('event_feedback')
+        return None
     
     
 @receiver(post_migrate)

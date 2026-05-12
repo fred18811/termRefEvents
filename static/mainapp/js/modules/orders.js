@@ -308,8 +308,16 @@ export const displayOrders = (orders) => {
             default: statusIcon = '📋';
         }
         
+        // Проверка, истекла ли заявка по времени (используем orderEndDate вместо endDate)
+        const now = new Date();
+        const orderEndDate = order.date_time_end ? new Date(order.date_time_end) : null;
+        const isExpired = orderEndDate && orderEndDate < now && order.status !== 'completed' && order.status !== 'cancelled';
+        
+        // Проверка, можно ли оставить отзыв (заявка истекла и не завершена/не отменена)
+        const canLeaveFeedback = isExpired && order.status !== 'completed' && order.status !== 'cancelled';
+        
         const startDate = order.date_time_start ? new Date(order.date_time_start).toLocaleString('ru-RU') : 'Не указана';
-        const endDate = order.date_time_end ? new Date(order.date_time_end).toLocaleString('ru-RU') : 'Не завершен';
+        const endDateStr = order.date_time_end ? new Date(order.date_time_end).toLocaleString('ru-RU') : 'Не завершен';
         
         const isChecked = state.selectedOrders.has(order.id) ? 'checked' : '';
         const commentHtml = order.comment ? `<div class="order-comment">💬 ${escapeHtml(order.comment)}</div>` : '';
@@ -324,6 +332,10 @@ export const displayOrders = (orders) => {
             displayName = displayName.replace(regex, '<span class="highlight">$1</span>');
         }
         
+        // Кнопка обратной связи
+        const feedbackButton = canLeaveFeedback ? 
+            `<button class="order-feedback-btn" data-application-id="${order.id}" data-application-name="${escapeHtml(order.application_name)}">📝 Оставить отзыв</button>` : '';
+        
         // Генерируем блок согласований
         let approvalsHtml = '';
         if (order.approvals && order.approvals.length > 0) {
@@ -334,7 +346,7 @@ export const displayOrders = (orders) => {
             order.approvals.forEach(approval => {
                 const statusColor = approval.is_agreed ? '#28a745' : '#ffc107';
                 const statusBgColor = approval.is_agreed ? '#d4edda' : '#fff3cd';
-                const statusIcon = approval.is_agreed ? '✅' : '⏳';
+                const statusIconApproval = approval.is_agreed ? '✅' : '⏳';
                 
                 // Проверяем, может ли пользователь согласовать
                 const userInDepartment = userDepartments.some(d => d.name === approval.department_name);
@@ -356,7 +368,7 @@ export const displayOrders = (orders) => {
                         </div>
                         <div class="approval-status-area">
                             <span class="approval-status" style="color: ${statusColor};">
-                                ${statusIcon} ${escapeHtml(approval.status_text)}
+                                ${statusIconApproval} ${escapeHtml(approval.status_text)}
                             </span>
                             ${canApprove ? 
                                 `<button class="btn-approve-application" data-application-id="${order.id}" data-department-name="${escapeHtml(approval.department_name)}" data-department-id="${approval.department_id}">✅ Согласовать</button>` : 
@@ -379,10 +391,11 @@ export const displayOrders = (orders) => {
                         <input type="checkbox" class="order-checkbox" data-id="${order.id}" ${isChecked} onclick="event.stopPropagation()">
                         <div class="order-info" onclick="toggleOrderBody(${order.id})">
                             <h3>📋 Заявка №${order.id} - ${displayName}</h3>
-                            <div class="order-date">📅 ${startDate} - ${endDate}</div>
+                            <div class="order-date">📅 ${startDate} - ${endDateStr}</div>
                             <span class="order-status ${statusClass}">${statusIcon} ${statusText}</span>
                             ${ownerInfo}
                         </div>
+                        ${feedbackButton}
                     </div>
                     <button class="order-toggle">▼</button>
                 </div>
@@ -417,6 +430,14 @@ export const displayOrders = (orders) => {
             $(`#order-${applicationId}`).removeClass('selected');
         }
         updateSelectionInfo();
+    });
+    
+    // Обработчики кнопок обратной связи
+    $('.order-feedback-btn').off('click').on('click', function(e) {
+        e.stopPropagation();
+        const applicationId = $(this).data('application-id');
+        const applicationName = $(this).data('application-name');
+        window.location.href = `/feedback/application/${applicationId}/`;
     });
     
     // Обработчики кнопок согласования заявки

@@ -702,11 +702,11 @@ class PhotoAdmin(admin.ModelAdmin):
 
 @admin.register(Feedback)
 class FeedbackAdmin(admin.ModelAdmin):
-    list_display = ['id', 'id_user', 'get_short_name', 'get_application_display', 'get_short_comment', 'created_at']
+    list_display = ['id', 'id_user', 'get_short_name', 'get_application_display', 'get_short_comment', 'get_data_summary', 'created_at']
     list_display_links = ['id', 'id_user']
     list_filter = ['created_at', 'id_user']
-    search_fields = ['id_user__username', 'id_user__email', 'id_application__name', 'name', 'comment']
-    readonly_fields = ['created_at']
+    search_fields = ['id_user__username', 'id_user__email', 'id_application__name', 'name', 'comment', 'data']
+    readonly_fields = ['created_at', 'data_preview']
     date_hierarchy = 'created_at'
     list_per_page = 20
     ordering = ['-created_at']
@@ -714,13 +714,52 @@ class FeedbackAdmin(admin.ModelAdmin):
     
     fieldsets = (
         ('Информация об отзыве', {
-            'fields': ('id_user', 'id_application', 'name', 'comment')
+            'fields': ('id_user', 'id_application', 'name', 'comment', 'data')
         }),
         ('Системная информация', {
-            'fields': ('created_at',),
+            'fields': ('created_at', 'data_preview'),
             'classes': ('collapse',)
         }),
     )
+    
+    def get_data_summary(self, obj):
+        """Краткое отображение данных JSON"""
+        if not obj.data:
+            return '-'
+        items = []
+        if 'browser' in obj.data:
+            items.append(f"🌐 {obj.data['browser'][:30]}")
+        if 'os' in obj.data:
+            items.append(f"💻 {obj.data['os'][:20]}")
+        if 'url' in obj.data:
+            items.append(f"🔗 {obj.data['url'][:40]}")
+        if 'event_rating' in obj.data:
+            items.append(f"⭐ {obj.data['event_rating']}/10")
+        return ', '.join(items) if items else '📦 Есть данные'
+    get_data_summary.short_description = 'Доп. данные'
+    
+    def data_preview(self, obj):
+        """Подробный просмотр JSON в админке"""
+        if not obj.data:
+            return "Нет дополнительных данных"
+        
+        import json
+        from django.utils.safestring import mark_safe
+        
+        # Форматируем JSON с отступами
+        json_str = json.dumps(obj.data, ensure_ascii=False, indent=2)
+        
+        # Экранируем для HTML (чтобы не было проблем с кавычками и тегами)
+        json_str = json_str.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+        
+        html = f'''
+        <div style="background: #f5f5f5; padding: 10px; border-radius: 8px; font-family: monospace; font-size: 12px; max-height: 300px; overflow: auto;">
+            <strong>📋 Дополнительные данные:</strong>
+            <pre style="margin: 10px 0 0 0; white-space: pre-wrap; word-wrap: break-word; background: #fff; padding: 8px; border-radius: 4px;">{json_str}</pre>
+        </div>
+        '''
+        return mark_safe(html)
+    data_preview.short_description = 'Просмотр данных (JSON)'
     
     def get_application_display(self, obj):
         if obj.id_application:
@@ -736,7 +775,7 @@ class FeedbackAdmin(admin.ModelAdmin):
         return obj.get_short_comment()
     get_short_comment.short_description = 'Комментарий'
     
-    # Добавляем действие для экспорта в CSV
+    # Действие для экспорта в CSV
     actions = ['export_to_csv']
     
     def export_to_csv(self, request, queryset):
@@ -747,9 +786,13 @@ class FeedbackAdmin(admin.ModelAdmin):
         response['Content-Disposition'] = 'attachment; filename="feedback_export.csv"'
         
         writer = csv.writer(response)
-        writer.writerow(['ID', 'Пользователь', 'Email пользователя', 'Название отзыва', 'ID заявки', 'Название заявки', 'Комментарий', 'Дата создания'])
+        writer.writerow(['ID', 'Пользователь', 'Email пользователя', 'Название отзыва', 'ID заявки', 'Название заявки', 'Комментарий', 'Оценка мероприятия', 'Отзыв о мероприятии', 'Доп. данные', 'Дата создания'])
         
         for obj in queryset:
+            # Извлекаем данные из JSON поля
+            event_rating = obj.data.get('event_rating', '') if obj.data else ''
+            event_feedback = obj.data.get('event_feedback', '') if obj.data else ''
+            
             writer.writerow([
                 obj.id,
                 obj.id_user.username,
@@ -758,6 +801,9 @@ class FeedbackAdmin(admin.ModelAdmin):
                 obj.id_application.id if obj.id_application else '',
                 obj.id_application.name[:100] if obj.id_application and obj.id_application.name else '',
                 obj.comment,
+                event_rating,
+                event_feedback,
+                json.dumps(obj.data, ensure_ascii=False) if obj.data else '',
                 obj.created_at.strftime('%d.%m.%Y %H:%M:%S')
             ])
         

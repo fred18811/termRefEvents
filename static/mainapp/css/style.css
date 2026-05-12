@@ -3431,3 +3431,30 @@ nav {
         font-size: 0.6rem;
     }
 }
+
+.order-feedback-btn {
+    background: linear-gradient(135deg, #17a2b8, #138496);
+    color: white;
+    border: none;
+    padding: 0.3rem 1rem;
+    border-radius: 40px;
+    cursor: pointer;
+    font-size: 0.75rem;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    margin-left: 1rem;
+    white-space: nowrap;
+}
+
+.order-feedback-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(23, 162, 184, 0.3);
+}
+
+@media (max-width: 768px) {
+    .order-feedback-btn {
+        margin-left: 0;
+        margin-top: 0.5rem;
+        width: 100%;
+    }
+}

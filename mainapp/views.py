@@ -1,19 +1,22 @@
+from django.contrib import messages
 from django.contrib.auth.models import User
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
-from django.shortcuts import render
 from django.http import JsonResponse, HttpResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from django.db.models import Sum
-from django.shortcuts import render, get_object_or_404
+from django.shortcuts import render, get_object_or_404, redirect
 from django.utils import timezone
+from django.utils.html import strip_tags
 from django.db.models import Sum, Q
 from django.db import transaction
 from django.core.mail import send_mail
 from django.core.mail import EmailMultiAlternatives
+from django.template.loader import render_to_string
 from django.core.validators import validate_email
 from django.core.exceptions import ValidationError
+from django.conf import settings
 from rest_framework.authtoken.models import Token
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -30,6 +33,47 @@ from datetime import timedelta, datetime
 from .email_utils import EmailService
 
 
+def feedback_form(request, app_id):
+    """Страница формы обратной связи по заявке"""
+    try:
+        # Проверяем, авторизован ли пользователь
+        if not request.user.is_authenticated:
+            return redirect('/')
+        
+        application = Application.objects.get(id=app_id, id_user=request.user)
+        
+        # Проверяем, что заявка завершена по времени
+        if application.date_end and application.date_end > timezone.now():
+            # Если мероприятие еще не завершено, перенаправляем на главную с сообщением
+            messages.error(request, 'Мероприятие еще не завершено')
+            return redirect('/')
+        
+        # Проверяем, не оставлял ли пользователь уже отзыв
+        existing_feedback = Feedback.objects.filter(
+            id_application=application,
+            id_user=request.user
+        ).exists()
+        
+        if existing_feedback:
+            return render(request, 'mainapp/feedback_already.html', {
+                'application': application
+            })
+        
+        context = {
+            'application_id': application.id,
+            'application_name': application.name,
+        }
+        return render(request, 'mainapp/feedback_form.html', context)
+        
+    except Application.DoesNotExist:
+        # Логируем ошибку
+        print(f"Заявка с ID {app_id} не найдена для пользователя {request.user.username}")
+        return JsonResponse({
+            'success': False,
+            'error': 'Заявка не найдена'
+        }, status=404)
+        
+        
 def get_all_equipment_types_for_application(application):
     """
     Получает все типы оборудования из ВСЕХ заказов заявки
@@ -130,17 +174,75 @@ def create_feedback(request):
         name = data.get('name', '').strip()
         comment = data.get('comment', '').strip()
         
+        # Сбор дополнительных данных
+        extra_data = {}
+        
+        # Информация о браузере
+        user_agent = request.META.get('HTTP_USER_AGENT', '')
+        extra_data['user_agent'] = user_agent
+        
+        # Определение браузера и ОС (упрощённо)
+        if 'Chrome' in user_agent and 'Edg' not in user_agent:
+            extra_data['browser'] = 'Chrome'
+        elif 'Firefox' in user_agent:
+            extra_data['browser'] = 'Firefox'
+        elif 'Safari' in user_agent and 'Chrome' not in user_agent:
+            extra_data['browser'] = 'Safari'
+        elif 'Edg' in user_agent:
+            extra_data['browser'] = 'Edge'
+        elif 'Opera' in user_agent or 'OPR' in user_agent:
+            extra_data['browser'] = 'Opera'
+        else:
+            extra_data['browser'] = 'Other'
+        
+        # Определение ОС
+        if 'Windows' in user_agent:
+            extra_data['os'] = 'Windows'
+        elif 'Mac' in user_agent:
+            extra_data['os'] = 'macOS'
+        elif 'Linux' in user_agent:
+            extra_data['os'] = 'Linux'
+        elif 'Android' in user_agent:
+            extra_data['os'] = 'Android'
+        elif 'iPhone' in user_agent or 'iPad' in user_agent:
+            extra_data['os'] = 'iOS'
+        else:
+            extra_data['os'] = 'Other'
+        
+        # Язык браузера
+        extra_data['language'] = request.META.get('HTTP_ACCEPT_LANGUAGE', '')[:50]
+        
+        # IP адрес
+        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+        if x_forwarded_for:
+            extra_data['ip'] = x_forwarded_for.split(',')[0].strip()
+        else:
+            extra_data['ip'] = request.META.get('REMOTE_ADDR', '')
+        
+        # Реферер (откуда пришёл пользователь)
+        extra_data['referer'] = request.META.get('HTTP_REFERER', '')
+        
+        # Текущий URL
+        extra_data['url'] = request.META.get('HTTP_REFERER', '')
+        
+        # ID заявки, если передана
+        application_id = data.get('application_id')
+        if application_id:
+            extra_data['application_id'] = application_id
+        
+        # Проверка на пустой комментарий
         if not comment:
             return JsonResponse({
                 'success': False,
                 'error': 'Текст сообщения не может быть пустым'
             }, status=400)
         
-        # Создаем отзыв
+        # Создаем отзыв с дополнительными данными
         feedback = Feedback.objects.create(
             id_user=request.user,
             name=name if name else None,
-            comment=comment
+            comment=comment,
+            data=extra_data
         )
         
         # Логируем действие
@@ -220,7 +322,157 @@ def create_feedback(request):
             'success': False,
             'error': str(e)
         }, status=500)
+
+
+@login_required
+@csrf_exempt
+@require_http_methods(["POST"])
+def submit_event_feedback(request):
+    """
+    Отправка обратной связи по завершённому мероприятию
+    """
+    try:
+        data = json.loads(request.body)
         
+        application_id = data.get('application_id')
+        event_rating = data.get('event_rating')
+        event_feedback = data.get('event_feedback', '').strip()
+        comment = data.get('comment', '').strip()
+        
+        # Валидация
+        if not application_id:
+            return JsonResponse({
+                'success': False,
+                'error': 'Не указана заявка'
+            }, status=400)
+        
+        if not event_rating or event_rating < 1 or event_rating > 10:
+            return JsonResponse({
+                'success': False,
+                'error': 'Пожалуйста, оцените мероприятие от 1 до 10'
+            }, status=400)
+        
+        if not event_feedback:
+            return JsonResponse({
+                'success': False,
+                'error': 'Пожалуйста, напишите отзыв о проведении мероприятия'
+            }, status=400)
+        
+        if not comment:
+            return JsonResponse({
+                'success': False,
+                'error': 'Пожалуйста, оставьте комментарий'
+            }, status=400)
+        
+        # Получаем заявку
+        application = Application.objects.get(id=application_id, id_user=request.user)
+        
+        # Проверяем, что мероприятие завершено
+        if application.date_end and application.date_end > timezone.now():
+            return JsonResponse({
+                'success': False,
+                'error': 'Мероприятие еще не завершено'
+            }, status=400)
+        
+        # Проверяем, не оставлял ли пользователь уже отзыв
+        existing_feedback = Feedback.objects.filter(
+            id_application=application,
+            id_user=request.user
+        ).exists()
+        
+        if existing_feedback:
+            return JsonResponse({
+                'success': False,
+                'error': 'Вы уже оставляли отзыв на эту заявку'
+            }, status=400)
+        
+        # Создаём запись в обратной связи
+        feedback = Feedback.objects.create(
+            id_user=request.user,
+            id_application=application,
+            name=f"Отзыв на заявку #{application.id}",
+            comment=comment,
+            data={
+                'event_rating': event_rating,
+                'event_feedback': event_feedback,
+                'submitted_at': timezone.now().isoformat()
+            }
+        )
+        
+        # Меняем статус заявки на "completed" (Завершена)
+        old_status = application.status
+        application.status = 'completed'
+        application.save(update_fields=['status'])
+        
+        # Логируем действие
+        HistoryService.add_entry(
+            request.user,
+            f"Оставлен отзыв на заявку #{application.id} (оценка: {event_rating}/10) и статус изменён на 'Завершена'"
+        )
+        
+        # Отправляем уведомление администраторам
+        try:
+            from .email_utils import EmailService
+            
+            # Формируем контекст для письма
+            email_context = {
+                'feedback_id': feedback.id,
+                'application_id': application.id,
+                'application_name': application.name,
+                'user': request.user,
+                'user_name': request.user.get_full_name() or request.user.username,
+                'user_email': request.user.email,
+                'event_rating': event_rating,
+                'event_feedback': event_feedback,
+                'comment': comment,
+                'created_at': feedback.created_at,
+                'old_status': old_status,
+                'new_status': 'completed',
+                'admin_url': getattr(settings, 'SITE_URL', 'http://127.0.0.1:8000')
+            }
+            
+            # Рендерим HTML письма
+            html_message = render_to_string('mainapp/email/event_feedback_notification.html', email_context)
+            plain_message = strip_tags(html_message)
+            
+            subject = f"📝 Отзыв на заявку #{application.id} от {request.user.username}"
+            
+            receivers = EmailService.get_mail_receivers()
+            if receivers:
+                for receiver in receivers:
+                    send_mail(
+                        subject=subject,
+                        message=plain_message,
+                        from_email=settings.DEFAULT_FROM_EMAIL,
+                        recipient_list=[receiver.email],
+                        html_message=html_message,
+                        fail_silently=False
+                    )
+        except Exception as e:
+            print(f"Ошибка отправки email уведомления: {e}")
+        
+        return JsonResponse({
+            'success': True,
+            'message': 'Спасибо за отзыв! Статус заявки изменён на "Завершена".',
+            'feedback': {
+                'id': feedback.id,
+                'rating': event_rating,
+                'created_at': feedback.created_at.isoformat()
+            }
+        })
+        
+    except Application.DoesNotExist:
+        return JsonResponse({
+            'success': False,
+            'error': 'Заявка не найдена'
+        }, status=404)
+    except Exception as e:
+        print(f"Ошибка: {str(e)}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+                
         
 @csrf_exempt
 @api_view(['POST'])
@@ -407,9 +659,13 @@ def clear_old_history(request):
 def login_view(request):
     """Авторизация пользователя (по email или username)"""
     try:
-        data = json.loads(request.body)
-        username_or_email = data.get('username', '').strip().lower()
-        password = data.get('password')
+        # ✅ ПРАВИЛЬНЫЙ способ получить данные - через request.data (DRF)
+        # Не используем json.loads(request.body) напрямую!
+        username_or_email = request.data.get('username', '').strip().lower()
+        password = request.data.get('password', '')
+        
+        # Для отладки (можно убрать после проверки)
+        print(f"Login attempt: {username_or_email}")
         
         if not username_or_email or not password:
             return JsonResponse({
@@ -465,6 +721,7 @@ def login_view(request):
             }, status=401)
             
     except Exception as e:
+        print(f"Login error: {str(e)}")
         return JsonResponse({
             'success': False,
             'error': str(e)

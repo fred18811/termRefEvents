@@ -62,6 +62,9 @@ urlpatterns = [
     path('api/feedback/create/', views.create_feedback, name='create_feedback'),
     path('api/feedback/application/<int:app_id>/', views.get_application_feedback, name='get_application_feedback'),
     path('api/feedback/all/', views.get_all_feedback, name='get_all_feedback'),
+    path('feedback/application/<int:app_id>/', views.feedback_form, name='feedback_form'),
+    path('api/feedback/event-feedback/', views.submit_event_feedback, name='submit_event_feedback'),
+
     
     # ========== ПОДРАЗДЕЛЕНИЯ (DEPARTMENT) ==========
     path('api/departments/', views.get_departments, name='get_departments'),

@@ -166,13 +166,15 @@ export const api = {
     }),
 
     // ========== ОБРАТНАЯ СВЯЗЬ ==========
-    sendFeedback: (name, comment) => $.ajax({
+    sendFeedback: (name, comment, extraData = {}) => $.ajax({
         url: '/api/feedback/create/',
         method: 'POST',
         contentType: 'application/json',
         data: JSON.stringify({
             name: name || '',
-            comment: comment
+            comment: comment,
+            application_id: extraData.application_id || null,
+            // другие поля при необходимости
         })
     }),
     
