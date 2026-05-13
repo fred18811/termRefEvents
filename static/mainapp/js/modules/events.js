@@ -1,5 +1,5 @@
 import { state, loadCart } from './state.js';
-import { setMinDateTime, showNotification, validateDates } from './utils.js';
+import { formatDate, formatDate2, setMinDateTime, showNotification, validateDates } from './utils.js';
 import { setupAjax } from './api.js';
 import { updateCartDisplay, saveSingleOrder, saveMultipleOrders } from './cart.js';
 import { loadLocationPhoto, updateEquipmentList, addToCart } from './location.js';
@@ -33,13 +33,16 @@ const initDatePickersForLocation = (isEvent) => {
 
 // Получение текущих выбранных дат (только из видимой формы)
 const getSelectedDates = () => {
-    // Проверяем, виден ли блок аренды
-    if ($('#rentalDatesBlock').is(':visible')) {
+    const mode = localStorage.getItem('viewMode') || 'event';
+    
+    if (mode === 'slots') {
+        // В режиме "Слоты" используем даты из блока слотов
         return {
-            date_start: $('#rentalDateStart').val(),
-            date_end: $('#rentalDateEnd').val()
+            date_start: $('#slotDateStart').val(),
+            date_end: $('#slotDateEnd').val()
         };
     } else {
+        // В режиме "Мероприятие" используем основной блок дат
         return {
             date_start: $('#dateStart').val(),
             date_end: $('#dateEnd').val()
@@ -64,9 +67,10 @@ const getDatesForBusyCheck = () => {
 
 // Проверка, выбраны ли даты в видимой форме
 const areDatesSelected = () => {
-    if ($('#rentalDatesBlock').is(':visible')) {
-        // Для блока аренды - всегда считаем, что даты выбраны
-        return true;
+    const mode = localStorage.getItem('viewMode') || 'event';
+    
+    if (mode === 'slots') {
+        return $('#slotDateStart').val() && $('#slotDateEnd').val();
     } else {
         return $('#dateStart').val() && $('#dateEnd').val();
     }
@@ -104,18 +108,23 @@ const validateDatesByType = () => {
 
 // Валидация дат из видимой формы
 const validateVisibleDates = () => {
+    const mode = localStorage.getItem('viewMode') || 'event';
     let dateStart, dateEnd;
     
-    if ($('#rentalDatesBlock').is(':visible')) {
-        // Для блока аренды - НЕ проверяем даты, просто считаем их валидными
-        return { valid: true };
+    if (mode === 'slots') {
+        dateStart = $('#slotDateStart').val();
+        dateEnd = $('#slotDateEnd').val();
+        
+        if (!dateStart || !dateEnd) {
+            return { valid: false, error: 'Сначала выберите даты слота' };
+        }
     } else {
         dateStart = $('#dateStart').val();
         dateEnd = $('#dateEnd').val();
-    }
-    
-    if (!dateStart || !dateEnd) {
-        return { valid: false, error: 'Сначала выберите даты' };
+        
+        if (!dateStart || !dateEnd) {
+            return { valid: false, error: 'Сначала выберите даты мероприятия' };
+        }
     }
     
     const startDate = new Date(dateStart);
@@ -208,8 +217,6 @@ const initDateFields = () => {
     if (dateEndInput) dateEndInput.disabled = false;
     if (rentalDateStartInput) rentalDateStartInput.disabled = false;
     if (rentalDateEndInput) rentalDateEndInput.disabled = false;
-    
-    $('.date-hint').text('Выберите дату и время');
 };
 
 // Загрузка занятых дат с сервера
@@ -480,6 +487,107 @@ const initDateStartPicker = () => {
     });
 };
 
+// Инициализация переключателя режимов
+const initModeToggle = () => {
+    const toggleBtn = document.getElementById('modeToggleBtn');
+    if (!toggleBtn) return;
+    
+    // Получаем сохранённый режим из localStorage
+    const savedMode = localStorage.getItem('viewMode') || 'event';
+    
+    // Устанавливаем режим
+    setMode(savedMode);
+    
+    // Обработчик клика
+    toggleBtn.addEventListener('click', () => {
+        const currentMode = toggleBtn.classList.contains('event-mode') ? 'event' : 'slots';
+        const newMode = currentMode === 'event' ? 'slots' : 'event';
+        setMode(newMode);
+    });
+};
+
+// Обновление даты окончания на основе выбранного интервала
+const updateEndDateByInterval = () => {
+    const startDateStr = $('#slotDateStart').val();
+    if (!startDateStr) return;
+    
+    const intervalMinutes = parseInt($('#slotInterval').val(), 10);
+    if (isNaN(intervalMinutes)) return;
+    
+    const startDate = new Date(startDateStr);
+    const endDate = new Date(startDate.getTime() + intervalMinutes * 60000);
+    
+    // Форматируем дату для поля
+    const year = endDate.getFullYear();
+    const month = String(endDate.getMonth() + 1).padStart(2, '0');
+    const day = String(endDate.getDate()).padStart(2, '0');
+    const hours = String(endDate.getHours()).padStart(2, '0');
+    const minutes = String(endDate.getMinutes()).padStart(2, '0');
+    const seconds = String(endDate.getSeconds()).padStart(2, '0');
+    
+    const formattedEndDate = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
+    $('#slotDateEnd').val(formattedEndDate);
+    document.getElementById('slotDateEnd').nextSibling.value = formatDate2(formattedEndDate);
+    
+    // Если есть выбранная локация, обновляем оборудование
+    if (state.currentLocation) {
+        updateEquipmentList();
+    }
+};
+
+// Установка режима
+const setMode = (mode) => {
+    const toggleBtn = document.getElementById('modeToggleBtn');
+    if (!toggleBtn) return;
+    
+    const modeText = toggleBtn.querySelector('.mode-text');
+    const modeIcon = toggleBtn.querySelector('.mode-icon');
+    const slotsDatesBlock = document.getElementById('slotsDatesBlock');
+    const intervalSelectorBlock = document.getElementById('intervalSelectorBlock');
+    
+    if (mode === 'event') {
+        toggleBtn.classList.remove('slots-mode');
+        toggleBtn.classList.add('event-mode');
+        modeText.textContent = 'Мероприятие';
+        modeIcon.textContent = '🎯';
+        localStorage.setItem('viewMode', 'event');
+        
+        // Скрываем блок дат слотов и селектор интервала
+        if (slotsDatesBlock) slotsDatesBlock.style.display = 'none';
+        if (intervalSelectorBlock) intervalSelectorBlock.style.display = 'none';
+        
+        // Сбрасываем даты слотов
+        $('#slotDateStart, #slotDateEnd').val('');
+        
+    } else {
+        toggleBtn.classList.remove('event-mode');
+        toggleBtn.classList.add('slots-mode');
+        modeText.textContent = 'Слоты';
+        modeIcon.textContent = '⏰';
+        localStorage.setItem('viewMode', 'slots');
+        
+        // Показываем селектор интервала и блок дат слотов
+        if (intervalSelectorBlock) intervalSelectorBlock.style.display = 'flex';
+        if (slotsDatesBlock) slotsDatesBlock.style.display = 'flex';
+        
+        // Автоматически подставляем даты из основного блока
+        const mainDateStart = $('#dateStart').val();
+        const mainDateEnd = $('#dateEnd').val();
+        
+        if (mainDateStart) {
+            document.getElementById('slotDateStart').nextSibling.value = formatDate2(mainDateStart);
+            $('#slotDateStart').val(mainDateStart);
+        }
+
+        updateEndDateByInterval();
+    }
+    
+    // НЕ скрываем .date-section - он всегда видим
+    // Сбрасываем ошибку дат
+    $('#dateError').hide();
+    $('.date-input').removeClass('busy');
+};
+
 const initDateEndPicker = () => {
     const dateEndInput = document.getElementById('dateEnd');
     if (!dateEndInput) {
@@ -516,11 +624,55 @@ const initDateEndPicker = () => {
     });
 };
 
+// Инициализация календарей для режима "Слоты"
+const initSlotDatePickers = () => {
+    const slotDateStartInput = document.getElementById('slotDateStart');
+    const slotDateEndInput = document.getElementById('slotDateEnd');
+    
+    if (!slotDateStartInput || !slotDateEndInput) return;
+    
+    const minDate = new Date();
+    minDate.setHours(0, 0, 0, 0);
+    
+    flatpickr(slotDateStartInput, {
+        locale: 'ru',
+        enableTime: true,
+        dateFormat: 'Y-m-d H:i:S',
+        altFormat: 'd.m.Y H:i',
+        altInput: true,
+        time_24hr: true,
+        minDate: minDate,
+        minuteIncrement: 30,
+        onChange: async () => {
+            if (state.currentLocation && areDatesSelected()) {
+                await updateEquipmentList();
+            }
+        }
+    });
+    
+    flatpickr(slotDateEndInput, {
+        locale: 'ru',
+        enableTime: true,
+        dateFormat: 'Y-m-d H:i:S',
+        altFormat: 'd.m.Y H:i',
+        altInput: true,
+        time_24hr: true,
+        minDate: minDate,
+        minuteIncrement: 30,
+        onChange: async () => {
+            if (state.currentLocation && areDatesSelected()) {
+                await updateEquipmentList();
+            }
+        }
+    });
+};
+
 // Инициализация всех календарей
 const initAllDatePickers = () => {
     initDateStartPicker();
     initDateEndPicker();
     initRentalDatePickers();
+    initSlotDatePickers(); 
     initDateFields();
 };
 
@@ -535,7 +687,6 @@ export const initEventHandlers = () => {
     
     // По умолчанию: основной блок дат ВСЕГДА ВИДЕН, блок аренды скрыт
     $('#rentalDatesBlock').hide();
-    $('.date-section .date-hint').text('Выберите даты мероприятия');
     
     // Поля дат активны
     initDateFields();
@@ -685,6 +836,55 @@ export const initEventHandlers = () => {
     $('#cancelAddEquipmentBtn, #addEquipmentModal .modal-close').off('click').on('click', function() {
         $('#addEquipmentModal').hide();
     });
+
+    // Синхронизация дат: при изменении основных дат обновляем даты слотов
+    $('#dateStart, #dateEnd').on('change', function() {
+        const mode = localStorage.getItem('viewMode') || 'event';
+        
+        if (mode === 'slots') {
+            const mainDateStart = $('#dateStart').val();
+            const mainDateEnd = $('#dateEnd').val();
+            
+            if (mainDateStart) {
+                $('#slotDateStart').val(mainDateStart);
+                document.getElementById('slotDateStart').nextSibling.value = formatDate2(mainDateStart);
+                // Автоматически пересчитываем дату окончания по интервалу
+                updateEndDateByInterval();
+            }
+        }
+    });
+
+    // Обработчик изменения интервала
+    $('#slotInterval').on('change', function() {
+        const mode = localStorage.getItem('viewMode') || 'event';
+        if (mode === 'slots') {
+            updateEndDateByInterval();
+        }
+    });
+
+    // Обработчик изменения даты начала слота
+    $('#slotDateStart').on('change', function() {
+        const mode = localStorage.getItem('viewMode') || 'event';
+        if (mode === 'slots') {
+            updateEndDateByInterval();
+        }
+    });
+};
+
+const syncSlotDatesWithMain = () => {
+    const mode = localStorage.getItem('viewMode') || 'event';
+    
+    if (mode === 'slots') {
+        const mainDateStart = $('#dateStart').val();
+        const mainDateEnd = $('#dateEnd').val();
+        
+        if (mainDateStart) {
+            $('#slotDateStart').val(mainDateStart);
+        }
+        if (mainDateEnd) {
+            $('#slotDateEnd').val(mainDateEnd);
+        }
+    }
 };
 
 // ========== ИНИЦИАЛИЗАЦИЯ ПРИЛОЖЕНИЯ ==========
@@ -698,6 +898,9 @@ export const initApp = () => {
     $('#ordersPage, #roomsPage').hide();
     
     initEventHandlers();
+    initModeToggle();
+    syncSlotDatesWithMain();
+    
     console.log('Приложение инициализировано');
 };
 

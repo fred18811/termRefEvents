@@ -58,12 +58,10 @@
                     <div class="date-field">
                         <label>📅 Дата начала</label>
                         <input type="text" id="dateStart" class="date-input" placeholder="Выберите дату и время">
-                        <small class="date-hint">Выберите дату начала</small>
                     </div>
                     <div class="date-field">
                         <label>⏰ Дата окончания</label>
                         <input type="text" id="dateEnd" class="date-input" placeholder="Выберите дату и время">
-                        <small class="date-hint">Выберите дату окончания</small>
                     </div>
                 </div>
                 <div id="dateError" class="date-error" style="display: none;">
@@ -101,8 +99,7 @@
                                 <small class="date-hint">Выберите дату окончания аренды</small>
                             </div>
                         </div>
-                    </div>
-                    
+                    </div>                    
                     <div class="location-photo" id="locationPhoto">
                         <div class="photo-placeholder">📷 Выберите помещение</div>
                     </div>
@@ -123,6 +120,45 @@
                     </div>
                 </div>
                 <div class="equipment-list">
+
+
+                    <!-- Кнопка переключения режимов и поля дат для слотов -->
+                    <div class="mode-toggle-section">
+                        <button id="modeToggleBtn" class="mode-toggle-btn">
+                            <span class="mode-icon">🎯</span>
+                            <span class="mode-text">Мероприятие</span>
+                        </button>
+
+                        <!-- Селектор интервала времени (появляется только в режиме "Слоты") -->
+                        <div id="intervalSelectorBlock" class="interval-selector-block" style="display: none;">
+                            <label>⏱️ Интервал слота:</label>
+                            <select id="slotInterval" class="interval-select">
+                                <option value="5">5 минут</option>
+                                <option value="10">10 минут</option>
+                                <option value="15">15 минут</option>
+                                <option value="20">20 минут</option>
+                                <option value="30">30 минут</option>
+                                <option value="45">45 минут</option>
+                                <option value="60">1 час</option>
+                                <option value="90">1.5 часа</option>
+                                <option value="120">2 часа</option>
+                            </select>
+                        </div>
+                        
+                        <!-- Блок дат для режима "Слоты" (скрыт по умолчанию) -->
+                        <div id="slotsDatesBlock" class="slots-dates-block" style="display: none;">
+                            <div class="slot-date-field">
+                                <label>📅 Дата начала слота</label>
+                                <input type="text" id="slotDateStart" class="date-input" placeholder="Выберите дату и время">
+                            </div>
+                            <div class="slot-date-field">
+                                <label>⏰ Дата окончания слота</label>
+                                <input type="text" id="slotDateEnd" class="date-input" placeholder="Выберите дату и время">
+                            </div>
+                        </div>
+                    </div>
+
+
                     <div class="equipment-header">
                         <h2>Оборудование</h2>
                         <div class="equipment-search">

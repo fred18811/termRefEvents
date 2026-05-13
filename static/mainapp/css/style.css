@@ -3458,3 +3458,172 @@ nav {
         width: 100%;
     }
 }
+
+/* ========== МОДАЛЬНЫЙ ПЕРЕКЛЮЧАТЕЛЬ ========== */
+.mode-toggle-section {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 1.5rem;
+    margin-bottom: 1.5rem;
+    padding: 0.75rem 1rem;
+    background: var(--gray-50);
+    border-radius: var(--radius-xl);
+    border: 1px solid var(--gray-200);
+}
+
+.slots-dates-block {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+    animation: fadeIn 0.3s ease;
+}
+
+.slot-date-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.slot-date-field label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--color-blue);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.slot-date-field .date-input {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.85rem;
+    min-width: 200px;
+}
+
+.mode-toggle-btn {
+    background: linear-gradient(135deg, #f8fafc, #e2e8f0);
+    border: 2px solid #e2e8f0;
+    border-radius: 60px;
+    padding: 0.6rem 1.5rem;
+    cursor: pointer;
+    font-family: inherit;
+    font-weight: 700;
+    font-size: 0.9rem;
+    transition: all 0.3s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.mode-toggle-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.mode-toggle-btn .mode-icon {
+    font-size: 1.1rem;
+}
+
+.mode-toggle-btn .mode-text {
+    color: #1a1a2e;
+}
+
+/* Режим "Мероприятие" */
+.mode-toggle-btn.event-mode {
+    background: linear-gradient(135deg, #0039a6, #da291c);
+    border-color: #0039a6;
+}
+
+.mode-toggle-btn.event-mode .mode-text {
+    color: white;
+}
+
+/* Режим "Слоты" */
+.mode-toggle-btn.slots-mode {
+    background: linear-gradient(135deg, #f8fafc, #e2e8f0);
+    border-color: #28a745;
+}
+
+.mode-toggle-btn.slots-mode .mode-text {
+    color: #28a745;
+}
+
+/* Адаптив */
+@media (max-width: 768px) {
+    .mode-toggle-btn {
+        padding: 0.5rem 1.2rem;
+        font-size: 0.8rem;
+    }
+}
+
+@media (max-width: 768px) {
+    .mode-toggle-section {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .slots-dates-block {
+        flex-direction: column;
+        width: 100%;
+    }
+    
+    .slot-date-field .date-input {
+        width: 100%;
+        min-width: auto;
+    }
+}
+
+/* ========== СЕЛЕКТОР ИНТЕРВАЛА ========== */
+.interval-selector-block {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0 1rem;
+    border-left: 1px solid var(--gray-200);
+    border-right: 1px solid var(--gray-200);
+}
+
+.interval-selector-block label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--color-blue);
+    white-space: nowrap;
+}
+
+.interval-select {
+    padding: 0.5rem 0.75rem;
+    border: 2px solid var(--gray-200);
+    border-radius: 40px;
+    font-family: inherit;
+    font-size: 0.85rem;
+    background: white;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.interval-select:hover {
+    border-color: var(--color-blue);
+}
+
+.interval-select:focus {
+    outline: none;
+    border-color: var(--color-blue);
+    box-shadow: 0 0 0 3px rgba(0, 57, 166, 0.1);
+}
+
+@media (max-width: 768px) {
+    .interval-selector-block {
+        width: 100%;
+        justify-content: space-between;
+        border-left: none;
+        border-right: none;
+        border-top: 1px solid var(--gray-200);
+        border-bottom: 1px solid var(--gray-200);
+        padding: 0.75rem 0;
+    }
+    
+    .interval-select {
+        flex: 1;
+    }
+}
