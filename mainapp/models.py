@@ -512,6 +512,24 @@ class OrderItem(models.Model):
         default=False,
         help_text='Отметьте, если позиция согласована'
     )
+    # ========== НОВЫЕ ПОЛЯ ДЛЯ СЛОТОВ ==========
+    is_slot = models.BooleanField(
+        verbose_name=_('признак слота'),
+        default=False,
+        help_text='Отметьте, если эта позиция относится к слоту'
+    )
+    slot_date_start = models.DateTimeField(
+        verbose_name=_('дата начала слота'),
+        blank=True,
+        null=True,
+        help_text='Дата и время начала слота (заполняется для слотов)'
+    )
+    slot_date_end = models.DateTimeField(
+        verbose_name=_('дата окончания слота'),
+        blank=True,
+        null=True,
+        help_text='Дата и время окончания слота (заполняется для слотов)'
+    )
     
     class Meta:
         db_table = 'order_items'
@@ -532,7 +550,7 @@ class OrderItem(models.Model):
                     models.Q(equipment_location__isnull=True, common_equipment_location__isnull=False)
                 ),
                 name='one_of_equipment_locations_required'
-            )
+            ),
         ]
     
     def clean(self):
@@ -559,16 +577,28 @@ class OrderItem(models.Model):
                 raise ValidationError({
                     'quantity': f'Запрошенное количество ({self.quantity}) превышает доступное ({self.common_equipment_location.quantity})'
                 })
+        
+        # Для слотов проверяем наличие дат
+        if self.is_slot:
+            if not self.slot_date_start or not self.slot_date_end:
+                raise ValidationError({
+                    'slot_date_start': 'Для слота необходимо указать дату начала и окончания'
+                })
+            if self.slot_date_end <= self.slot_date_start:
+                raise ValidationError({
+                    'slot_date_end': 'Дата окончания слота должна быть позже даты начала'
+                })
     
     def save(self, *args, **kwargs):
         self.full_clean()
         super().save(*args, **kwargs)
     
     def __str__(self):
+        slot_marker = " [СЛОТ]" if self.is_slot else ""
         if self.equipment_location:
-            return f"{self.order} - {self.equipment_location} x{self.quantity}"
+            return f"{self.order} - {self.equipment_location} x{self.quantity}{slot_marker}"
         else:
-            return f"{self.order} - {self.common_equipment_location} x{self.quantity}"
+            return f"{self.order} - {self.common_equipment_location} x{self.quantity}{slot_marker}"
     
     @property
     def get_equipment_name(self):
@@ -594,6 +624,15 @@ class OrderItem(models.Model):
         elif self.common_equipment_location:
             return self.common_equipment_location.id_types_equipments.name
         return "Не указано"
+    
+    @property
+    def get_slot_time_range(self):
+        """Получить диапазон времени слота для отображения"""
+        if self.is_slot and self.slot_date_start and self.slot_date_end:
+            start_str = self.slot_date_start.strftime('%H:%M')
+            end_str = self.slot_date_end.strftime('%H:%M')
+            return f"{start_str} - {end_str}"
+        return None
 
 
 class Feedback(models.Model):

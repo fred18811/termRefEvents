@@ -88,6 +88,12 @@ class OrderItemForm(forms.ModelForm):
         self.fields['quantity'].help_text = 'Введите количество от 1 до 999'
         self.fields['can_provide'].help_text = 'Введите количество, которое может предоставить подразделение (0 - не может)'
         self.fields['is_agreed'].help_text = 'Отметьте, если позиция согласована'
+        # Новые поля
+        self.fields['is_slot'].help_text = 'Отметьте, если это позиция слота'
+        self.fields['slot_date_start'].help_text = 'Дата и время начала слота'
+        self.fields['slot_date_start'].widget = forms.DateTimeInput(attrs={'type': 'datetime-local'})
+        self.fields['slot_date_end'].help_text = 'Дата и время окончания слота'
+        self.fields['slot_date_end'].widget = forms.DateTimeInput(attrs={'type': 'datetime-local'})
     
     def clean(self):
         cleaned_data = super().clean()
@@ -95,6 +101,9 @@ class OrderItemForm(forms.ModelForm):
         common_equipment_location = cleaned_data.get('common_equipment_location')
         quantity = cleaned_data.get('quantity')
         can_provide = cleaned_data.get('can_provide')
+        is_slot = cleaned_data.get('is_slot')
+        slot_date_start = cleaned_data.get('slot_date_start')
+        slot_date_end = cleaned_data.get('slot_date_end')
         
         # Проверка: должно быть заполнено одно из полей
         if not equipment_location and not common_equipment_location:
@@ -121,6 +130,21 @@ class OrderItemForm(forms.ModelForm):
             raise forms.ValidationError({
                 'can_provide': f'Количество для предоставления ({can_provide}) не может превышать запрошенное количество ({quantity})'
             })
+        
+        # Проверка полей слота
+        if is_slot:
+            if not slot_date_start:
+                raise forms.ValidationError({
+                    'slot_date_start': 'Для слота необходимо указать дату начала'
+                })
+            if not slot_date_end:
+                raise forms.ValidationError({
+                    'slot_date_end': 'Для слота необходимо указать дату окончания'
+                })
+            if slot_date_start and slot_date_end and slot_date_end <= slot_date_start:
+                raise forms.ValidationError({
+                    'slot_date_end': 'Дата окончания слота должна быть позже даты начала'
+                })
         
         return cleaned_data
 
@@ -444,17 +468,19 @@ class OrderItemAdmin(admin.ModelAdmin):
         'quantity',
         'can_provide',
         'is_agreed',
+        'is_slot',
+        'get_slot_time_display',
         'available_quantity_display'
     ]
     list_display_links = ['id']
-    list_filter = ['order', 'equipment_location__id_locations', 'is_agreed']
+    list_filter = ['order', 'equipment_location__id_locations', 'is_agreed', 'is_slot']
     search_fields = [
         'order__id', 
         'equipment_location__id_equipments__name',
         'common_equipment_location__id_equipments__name'
     ]
     list_per_page = 20
-    list_editable = ['can_provide', 'is_agreed']
+    list_editable = ['can_provide', 'is_agreed', 'is_slot']
     autocomplete_fields = ['order', 'equipment_location', 'common_equipment_location']
     
     fieldsets = (
@@ -463,14 +489,25 @@ class OrderItemAdmin(admin.ModelAdmin):
         }),
         ('Оборудование', {
             'fields': ('equipment_location', 'common_equipment_location', 'quantity'),
-            'description': 'Выберите либо оборудование из конкретной локации, либо общее оборудование'
+        }),
+        ('Слот', {
+            'fields': ('is_slot', 'slot_date_start', 'slot_date_end'),
+            'classes': ('wide',)
         }),
         ('Согласование', {
             'fields': ('can_provide', 'is_agreed'),
-            'description': 'Укажите, сколько оборудования может предоставить подразделение и отметьте согласование',
             'classes': ('wide',)
         }),
     )
+    
+    def get_slot_time_display(self, obj):
+        """Отображение времени слота"""
+        if obj.is_slot and obj.slot_date_start and obj.slot_date_end:
+            start_str = obj.slot_date_start.strftime('%d.%m.%Y %H:%M')
+            end_str = obj.slot_date_end.strftime('%d.%m.%Y %H:%M')
+            return f"{start_str} - {end_str}"
+        return "-"
+    get_slot_time_display.short_description = 'Время слота'
     
     def get_equipment_display(self, obj):
         if obj.equipment_location:
@@ -485,6 +522,7 @@ class OrderItemAdmin(admin.ModelAdmin):
             return obj.equipment_location.id_locations.name
         elif obj.common_equipment_location:
             return "Общее (не привязано)"
+        return "-"
     get_location_display.short_description = 'Локация'
     
     def available_quantity_display(self, obj):

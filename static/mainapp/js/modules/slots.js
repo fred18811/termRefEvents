@@ -171,7 +171,7 @@ export const addNewSlot = () => {
         return false;
     }
     
-    // Добавляем слот
+    // Добавляем слот с датами
     slotsList.push({
         date_start: dateStart,
         date_end: dateEnd,
