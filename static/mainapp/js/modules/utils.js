@@ -33,7 +33,7 @@ export const formatDate = (dateStr) => {
     }
 };
 
-export const formatDate2 = (dateString) => {
+export const formatDateTimeForDisplay = (dateString) => {
     const date = new Date(dateString);
     
     const day = date.getDate().toString().padStart(2, '0');
@@ -93,44 +93,6 @@ export const validateDates = (dateStart, dateEnd) => {
     }
     
     return { valid: true };
-};
-
-// ========== ИНИЦИАЛИЗАЦИЯ ==========
-
-export const initDateStartPicker = () => {
-    const dateStartInput = document.getElementById('dateStart');
-    if (!dateStartInput) {
-        console.error('Элемент dateStart не найден');
-        return;
-    }
-    
-    const minDate = new Date();
-    minDate.setHours(0, 0, 0, 0);
-    
-    dateStartPicker = flatpickr(dateStartInput, {
-        locale: 'ru',
-        enableTime: true,
-        dateFormat: 'Y-m-d H:i:S',
-        altFormat: 'd.m.Y H:i',
-        altInput: true,
-        time_24hr: true,
-        minDate: minDate,
-        minuteIncrement: 30,
-        disable: [getDisabledDatesFunction()],
-        onDayCreate: (dObj, dStr, fp, dayElem) => {
-            // ... существующий код ...
-        },
-        onChange: async (selectedDates, dateStr, instance) => {
-            if (isUpdating) return;
-            if (selectedDates && selectedDates.length > 0 && state.currentLocation && currentLocationIsEvent) {
-                const dateEnd = $('#dateEnd').val();
-                if (dateEnd) {
-                    await checkLocationBusy(state.currentLocation.id, state.currentLocation.name);
-                    await updateEquipmentList();
-                }
-            }
-        }
-    });
 };
 
 // Установка минимальной даты
@@ -219,3 +181,58 @@ export const isDateTimeBusy = (dateTime, busySlots, isStart = true) => {
     }
     return false;
 };
+
+// Форматирование даты для отображения (день недели, дата)
+export const formatDateHeader = (dateStr) => {
+    if (!dateStr) return '';
+    const date = new Date(dateStr);
+    const days = ['Воскресенье', 'Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота'];
+    const months = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
+    
+    const dayName = days[date.getDay()];
+    const day = date.getDate();
+    const month = months[date.getMonth()];
+    const year = date.getFullYear();
+    
+    return `${dayName}, ${day} ${month} ${year}`;
+};
+
+// Форматирование времени для отображения
+export const formatTime = (dateStr) => {
+    if (!dateStr) return '';
+    const date = new Date(dateStr);
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    return `${hours}:${minutes}`;
+};
+
+// Форматирование полной даты для сравнения (YYYY-MM-DD)
+export const getDateKey = (dateStr) => {
+    if (!dateStr) return '';
+    const date = new Date(dateStr);
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+};
+
+// Форматирование даты для отображения
+export const formatDateTime = (dateStr) => {
+    if (!dateStr) return '';
+    const date = new Date(dateStr);
+    return date.toLocaleString('ru-RU', {
+        day: '2-digit',
+        month: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+};
+
+// Форматирование даты для input
+export const formatForInput = (date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    const seconds = String(date.getSeconds()).padStart(2, '0');
+    return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
+};
+

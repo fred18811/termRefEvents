@@ -108,17 +108,6 @@
 
             <!-- Блок типов оборудования и оборудования -->
             <div class="equipment-section">
-                <div class="types-list">
-                    <h2>Типы оборудования</h2>
-                    <div class="type-items" id="typeList">
-                        {% for type in type_equipments %}
-                        <label class="type-item">
-                            <input type="checkbox" value="{{ type.id }}">
-                            <span>{{ type.name }}</span>
-                        </label>
-                        {% endfor %}
-                    </div>
-                </div>
                 <div class="equipment-list">
 
 
@@ -157,15 +146,32 @@
                             </div>
                         </div>
                     </div>
-
-
                     <div class="equipment-header">
                         <h2>Оборудование</h2>
                         <div class="equipment-search">
+                            <div class="type-items" id="typeList">
+                                {% for type in type_equipments %}
+                                <label class="type-item">
+                                    <input type="checkbox" value="{{ type.id }}">
+                                    <span>{{ type.name }}</span>
+                                </label>
+                                {% endfor %}
+                            </div>
                             <input type="text" id="searchEquipment" class="search-equipment-input" placeholder="Поиск оборудования...">
                         </div>
                     </div>
                     <div id="equipmentContainer" class="info-message">📍 Сначала выберите даты, затем помещение</div>
+
+                    <!-- Кнопка добавления слота (появляется в режиме "Слоты") -->
+                    <div id="addSlotBtnBlock" class="add-slot-btn-block" style="display: none;">
+                        <button id="addSlotBtn" class="btn-add-slot">➕ Добавить слот</button>
+                    </div>
+
+                    <!-- Список добавленных слотов -->
+                    <div id="slotsList" class="slots-list">
+                        <!-- Сюда будут добавляться слоты -->
+                    </div>
+                    
                 </div>
             </div>
 
