@@ -1384,6 +1384,12 @@ def save_order(request):
         print(f"Дата окончания заявки (из date-section): {data.get('application_date_end')}")
         print(f"Application ID: {data.get('application_id')}")
         print(f"Location ID: {data.get('location_id')}")
+        print(f"Тип заказа: {data.get('type')}")  # 'slots' или 'regular'
+        print(f"Количество слотов: {len(data.get('slots', []))}")
+        
+        # ========== ПРОВЕРКА: ЭТО ЗАКАЗ СО СЛОТАМИ ==========
+        is_slots_order = data.get('type') == 'slots'
+        slots_data = data.get('slots', [])
         
         if not data.get('date_time_start'):
             return JsonResponse({
@@ -1392,7 +1398,9 @@ def save_order(request):
             }, status=400)
         
         items_data = data.get('items', [])
-        if not items_data:
+        
+        # Для слотов items_data может быть пустым, оборудование внутри слотов
+        if not items_data and not slots_data:
             return JsonResponse({
                 'success': False,
                 'error': 'Нет позиций для сохранения'
@@ -1410,25 +1418,47 @@ def save_order(request):
         # ========== СОБИРАЕМ ВСЕ ТИПЫ ОБОРУДОВАНИЯ ИЗ ТЕКУЩЕГО ЗАКАЗА ==========
         current_equipment_types = set()
         
-        for item in items_data:
-            equipment_id = item.get('equipment_id')
-            is_common = item.get('is_common', False)
-            
-            if is_common:
-                common_equipment = CommonEquipmentLocation.objects.filter(
-                    id_equipments_id=equipment_id
-                ).first()
-                if common_equipment:
-                    current_equipment_types.add(common_equipment.id_types_equipments.id)
-            else:
-                equipment_location = EquipmentLocation.objects.filter(
-                    id_equipments_id=equipment_id
-                ).first()
-                if equipment_location:
-                    current_equipment_types.add(equipment_location.id_types_equipments.id)
+        # Если это слоты, собираем типы из слотов
+        if is_slots_order and slots_data:
+            for slot in slots_data:
+                for item in slot.get('equipment', []):
+                    equipment_id = item.get('equipment_id')
+                    is_common = item.get('is_common', False)
+                    
+                    if is_common:
+                        common_equipment = CommonEquipmentLocation.objects.filter(
+                            id_equipments_id=equipment_id
+                        ).first()
+                        if common_equipment:
+                            current_equipment_types.add(common_equipment.id_types_equipments.id)
+                    else:
+                        equipment_location = EquipmentLocation.objects.filter(
+                            id_equipments_id=equipment_id
+                        ).first()
+                        if equipment_location:
+                            current_equipment_types.add(equipment_location.id_types_equipments.id)
+        else:
+            # Обычный режим
+            for item in items_data:
+                equipment_id = item.get('equipment_id')
+                is_common = item.get('is_common', False)
+                
+                if is_common:
+                    common_equipment = CommonEquipmentLocation.objects.filter(
+                        id_equipments_id=equipment_id
+                    ).first()
+                    if common_equipment:
+                        current_equipment_types.add(common_equipment.id_types_equipments.id)
+                else:
+                    equipment_location = EquipmentLocation.objects.filter(
+                        id_equipments_id=equipment_id
+                    ).first()
+                    if equipment_location:
+                        current_equipment_types.add(equipment_location.id_types_equipments.id)
         
-        print(f"Типы оборудования в текущем заказе: {current_equipment_types}")
+        print(f"Типы оборудования: {current_equipment_types}")
         
+        # ========== СОЗДАНИЕ ИЛИ ПОЛУЧЕНИЕ ЗАЯВКИ ==========
         if application_id:
             try:
                 application = Application.objects.get(id=application_id, id_user=request.user)
@@ -1440,16 +1470,9 @@ def save_order(request):
                     application.date_end = app_date_end
                 application.save(update_fields=['date_start', 'date_end'])
                 
-                # ========== ДЛЯ СУЩЕСТВУЮЩЕЙ ЗАЯВКИ: ОБНОВЛЯЕМ СОГЛАСОВАНИЯ ==========
-                # Получаем все типы оборудования из ВСЕХ заказов этой заявки
+                # Обновляем согласования
                 all_equipment_types = get_all_equipment_types_for_application(application)
-                
-                # Добавляем типы из текущего заказа
                 all_equipment_types.update(current_equipment_types)
-                
-                print(f"Все типы оборудования в заявке #{application.id}: {all_equipment_types}")
-                
-                # Обновляем согласования для заявки
                 update_application_approvals(application, all_equipment_types)
                 
             except Application.DoesNotExist:
@@ -1479,8 +1502,6 @@ def save_order(request):
             is_new_application = True
             print(f"Создана новая заявка №{application.id}")
             
-            # ========== СОЗДАНИЕ ЗАПИСЕЙ СОГЛАСОВАНИЯ ==========
-            # Используем типы оборудования из текущего заказа
             create_application_approvals(application, current_equipment_types)
             
             # Отправляем уведомление
@@ -1491,7 +1512,7 @@ def save_order(request):
             except Exception as e:
                 print(f"Ошибка отправки уведомления: {e}")
         
-        # Получаем location_id (если есть)
+        # ========== ПОЛУЧАЕМ ЛОКАЦИЮ ==========
         location_id = data.get('location_id')
         location = None
         if location_id:
@@ -1501,6 +1522,7 @@ def save_order(request):
             except Location.DoesNotExist:
                 print(f"Локация с ID {location_id} не найдена")
         
+        # ========== СОЗДАНИЕ ЗАКАЗА ==========
         date_start = data.get('date_time_start')
         date_end = data.get('date_time_end')
         
@@ -1518,95 +1540,212 @@ def save_order(request):
         items_added = 0
         items_failed = 0
         
-        for idx, item in enumerate(items_data):
-            try:
-                is_common = item.get('is_common', False)
-                equipment_id = item.get('equipment_id')
-                requested_qty = item.get('quantity', 0)
-                item_location_id = item.get('location_id')
+        # ========== ОБРАБОТКА СЛОТОВ ==========
+        if is_slots_order and slots_data:
+            print(f"\n=== ОБРАБОТКА СЛОТОВ ({len(slots_data)} слотов) ===")
+            
+            for slot_idx, slot in enumerate(slots_data):
+                slot_date_start = slot.get('date_start')
+                slot_date_end = slot.get('date_end')
+                slot_equipment = slot.get('equipment', [])
                 
-                print(f"  Позиция {idx + 1}: equipment_id={equipment_id}, location_id={item_location_id}, is_common={is_common}, qty={requested_qty}")
+                print(f"\nСлот {slot_idx + 1}: {slot_date_start} - {slot_date_end}")
+                print(f"  Оборудование: {len(slot_equipment)} позиций")
                 
-                if is_common:
-                    common_equipment = CommonEquipmentLocation.objects.filter(
-                        id_equipments_id=equipment_id
-                    ).first()
-                    
-                    if not common_equipment:
-                        items_failed += 1
-                        print(f"    ✗ Общее оборудование не найдено")
-                        continue
-                    
-                    busy_quantity = OrderItem.objects.filter(
-                        common_equipment_location=common_equipment,
-                        order__date_time_start__lt=date_end,
-                        order__date_time_end__gt=date_start
-                    ).exclude(
-                        order__date_time_end__isnull=True
-                    ).exclude(
-                        order__id_application__status='cancelled'
-                    ).aggregate(total=Sum('quantity'))['total'] or 0
-                    
-                    active_busy = OrderItem.objects.filter(
-                        common_equipment_location=common_equipment,
-                        order__date_time_end__isnull=True,
-                        order__date_time_start__lt=date_end
-                    ).exclude(
-                        order__id_application__status='cancelled'
-                    ).aggregate(total=Sum('quantity'))['total'] or 0
-                    
-                    total_busy = busy_quantity + active_busy
-                    available = common_equipment.quantity - total_busy
-                    
-                    quantity = min(requested_qty, max(available, 0))
-                    
-                    if quantity > 0:
-                        OrderItem.objects.create(
-                            order=order,
-                            common_equipment_location=common_equipment,
-                            quantity=quantity
-                        )
-                        items_added += 1
-                        print(f"    ✓ Сохранено общее оборудование: {common_equipment.id_equipments.name} x{quantity}")
-                    else:
-                        items_failed += 1
+                for eq_idx, eq in enumerate(slot_equipment):
+                    try:
+                        equipment_id = eq.get('equipment_id')
+                        quantity = eq.get('quantity', 0)
+                        is_common = eq.get('is_common', False)
                         
-                else:
-                    if not item_location_id:
+                        if quantity <= 0:
+                            continue
+                        
+                        if is_common:
+                            common_equipment = CommonEquipmentLocation.objects.filter(
+                                id_equipments_id=equipment_id
+                            ).first()
+                            
+                            if not common_equipment:
+                                print(f"    ✗ Общее оборудование ID {equipment_id} не найдено")
+                                items_failed += 1
+                                continue
+                            
+                            # Проверка доступности для общего оборудования
+                            busy_quantity = OrderItem.objects.filter(
+                                common_equipment_location=common_equipment,
+                                order__date_time_start__lt=slot_date_end,
+                                order__date_time_end__gt=slot_date_start
+                            ).exclude(
+                                order__date_time_end__isnull=True
+                            ).exclude(
+                                order__id_application__status='cancelled'
+                            ).exclude(
+                                order=order
+                            ).aggregate(total=Sum('quantity'))['total'] or 0
+                            
+                            active_busy = OrderItem.objects.filter(
+                                common_equipment_location=common_equipment,
+                                order__date_time_end__isnull=True,
+                                order__date_time_start__lt=slot_date_end
+                            ).exclude(
+                                order__id_application__status='cancelled'
+                            ).exclude(
+                                order=order
+                            ).aggregate(total=Sum('quantity'))['total'] or 0
+                            
+                            total_busy = busy_quantity + active_busy
+                            available = common_equipment.quantity - total_busy
+                            final_quantity = min(quantity, max(available, 0))
+                            
+                            if final_quantity > 0:
+                                OrderItem.objects.create(
+                                    order=order,
+                                    common_equipment_location=common_equipment,
+                                    quantity=final_quantity,
+                                    is_slot=True,
+                                    slot_date_start=slot_date_start,
+                                    slot_date_end=slot_date_end
+                                )
+                                items_added += 1
+                                print(f"    ✓ Общее: {common_equipment.id_equipments.name} x{final_quantity} [СЛОТ]")
+                            else:
+                                print(f"    ✗ Общее: {common_equipment.id_equipments.name} - недостаточно ({available} из {quantity})")
+                                items_failed += 1
+                        
+                        else:
+                            # Обычное оборудование из локации
+                            if not location_id:
+                                print(f"    ✗ Не указана локация для обычного оборудования")
+                                items_failed += 1
+                                continue
+                            
+                            equipment_location = EquipmentLocation.objects.filter(
+                                id_locations_id=location_id,
+                                id_equipments_id=equipment_id
+                            ).first()
+                            
+                            if not equipment_location:
+                                print(f"    ✗ EquipmentLocation не найден (location={location_id}, equipment={equipment_id})")
+                                items_failed += 1
+                                continue
+                            
+                            final_quantity = min(quantity, equipment_location.quantity)
+                            
+                            if final_quantity > 0:
+                                OrderItem.objects.create(
+                                    order=order,
+                                    equipment_location=equipment_location,
+                                    quantity=final_quantity,
+                                    is_slot=True,
+                                    slot_date_start=slot_date_start,
+                                    slot_date_end=slot_date_end
+                                )
+                                items_added += 1
+                                print(f"    ✓ {equipment_location.id_equipments.name} x{final_quantity} [СЛОТ]")
+                            else:
+                                print(f"    ✗ {equipment_location.id_equipments.name} - недостаточно ({equipment_location.quantity} из {quantity})")
+                                items_failed += 1
+                                
+                    except Exception as e:
                         items_failed += 1
-                        print(f"    ✗ Не указан location_id для обычного оборудования")
-                        continue
-                    
-                    equipment_location = EquipmentLocation.objects.filter(
-                        id_locations_id=item_location_id,
-                        id_equipments_id=equipment_id
-                    ).first()
-                    
-                    if not equipment_location:
-                        items_failed += 1
-                        print(f"    ✗ EquipmentLocation не найден")
-                        continue
-                    
-                    total_quantity = equipment_location.quantity
-                    quantity = min(requested_qty, total_quantity)
-                    
-                    if quantity > 0:
-                        OrderItem.objects.create(
-                            order=order,
-                            equipment_location=equipment_location,
-                            quantity=quantity
-                        )
-                        items_added += 1
-                        print(f"    ✓ Сохранено: {equipment_location.id_equipments.name} x{quantity}")
-                    else:
-                        items_failed += 1
-                    
-            except Exception as e:
-                items_failed += 1
-                print(f"    ✗ Ошибка: {str(e)}")
-                continue
+                        print(f"    ✗ Ошибка при сохранении оборудования: {str(e)}")
         
-        print(f"ИТОГ: добавлено {items_added} позиций, пропущено {items_failed}")
+        # ========== ОБЫЧНЫЙ РЕЖИМ (НЕ СЛОТЫ) ==========
+        else:
+            print("\n=== ОБЫЧНЫЙ РЕЖИМ ===")
+            for idx, item in enumerate(items_data):
+                try:
+                    is_common = item.get('is_common', False)
+                    equipment_id = item.get('equipment_id')
+                    requested_qty = item.get('quantity', 0)
+                    item_location_id = item.get('location_id')
+                    
+                    print(f"  Позиция {idx + 1}: equipment_id={equipment_id}, location_id={item_location_id}, is_common={is_common}, qty={requested_qty}")
+                    
+                    if is_common:
+                        common_equipment = CommonEquipmentLocation.objects.filter(
+                            id_equipments_id=equipment_id
+                        ).first()
+                        
+                        if not common_equipment:
+                            items_failed += 1
+                            print(f"    ✗ Общее оборудование не найдено")
+                            continue
+                        
+                        busy_quantity = OrderItem.objects.filter(
+                            common_equipment_location=common_equipment,
+                            order__date_time_start__lt=date_end,
+                            order__date_time_end__gt=date_start
+                        ).exclude(
+                            order__date_time_end__isnull=True
+                        ).exclude(
+                            order__id_application__status='cancelled'
+                        ).exclude(
+                            order=order
+                        ).aggregate(total=Sum('quantity'))['total'] or 0
+                        
+                        active_busy = OrderItem.objects.filter(
+                            common_equipment_location=common_equipment,
+                            order__date_time_end__isnull=True,
+                            order__date_time_start__lt=date_end
+                        ).exclude(
+                            order__id_application__status='cancelled'
+                        ).exclude(
+                            order=order
+                        ).aggregate(total=Sum('quantity'))['total'] or 0
+                        
+                        total_busy = busy_quantity + active_busy
+                        available = common_equipment.quantity - total_busy
+                        quantity = min(requested_qty, max(available, 0))
+                        
+                        if quantity > 0:
+                            OrderItem.objects.create(
+                                order=order,
+                                common_equipment_location=common_equipment,
+                                quantity=quantity
+                            )
+                            items_added += 1
+                            print(f"    ✓ Сохранено общее оборудование: {common_equipment.id_equipments.name} x{quantity}")
+                        else:
+                            items_failed += 1
+                            
+                    else:
+                        if not item_location_id:
+                            items_failed += 1
+                            print(f"    ✗ Не указан location_id для обычного оборудования")
+                            continue
+                        
+                        equipment_location = EquipmentLocation.objects.filter(
+                            id_locations_id=item_location_id,
+                            id_equipments_id=equipment_id
+                        ).first()
+                        
+                        if not equipment_location:
+                            items_failed += 1
+                            print(f"    ✗ EquipmentLocation не найден")
+                            continue
+                        
+                        total_quantity = equipment_location.quantity
+                        quantity = min(requested_qty, total_quantity)
+                        
+                        if quantity > 0:
+                            OrderItem.objects.create(
+                                order=order,
+                                equipment_location=equipment_location,
+                                quantity=quantity
+                            )
+                            items_added += 1
+                            print(f"    ✓ Сохранено: {equipment_location.id_equipments.name} x{quantity}")
+                        else:
+                            items_failed += 1
+                        
+                except Exception as e:
+                    items_failed += 1
+                    print(f"    ✗ Ошибка: {str(e)}")
+                    continue
+        
+        print(f"\nИТОГ: добавлено {items_added} позиций, пропущено {items_failed}")
         print("=" * 60)
         
         if items_added == 0:
@@ -1620,7 +1759,7 @@ def save_order(request):
         
         HistoryService.add_entry(
             request.user,
-            f"Создан заказ #{order.id} для локации {location.name if location else 'Общее оборудование'}"
+            f"Создан заказ #{order.id} для локации {location.name if location else 'Общее оборудование'} с {items_added} позициями"
         )
         
         return JsonResponse({
@@ -1630,6 +1769,8 @@ def save_order(request):
             'location_id': location.id if location else None,
             'items_added': items_added,
             'items_failed': items_failed,
+            'is_slots_order': is_slots_order,
+            'slots_count': len(slots_data) if is_slots_order else 0,
             'message': f'Заказ №{order.id} сохранен. Добавлено позиций: {items_added}'
         })
         

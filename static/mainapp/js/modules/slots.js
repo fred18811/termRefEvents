@@ -32,7 +32,17 @@ export const displaySlotsList = () => {
             
             let equipmentHtml = '';
             slot.equipment.forEach(eq => {
-                equipmentHtml += `<div class="slot-equipment-item"><span>${escapeHtml(eq.name)}</span><span>${eq.quantity} шт.</span></div>`;
+                // ========== ОТОБРАЖАЕМ ТИП ОБОРУДОВАНИЯ ==========
+                const typeBadge = eq.type_name ? `<span class="equipment-type-badge">${escapeHtml(eq.type_name)}</span>` : '';
+                equipmentHtml += `
+                    <div class="slot-equipment-item">
+                        <div>
+                            <span class="equipment-name-in-slot">${escapeHtml(eq.name)}</span>
+                            ${typeBadge}
+                        </div>
+                        <span>${eq.quantity} шт.</span>
+                    </div>
+                `;
             });
             
             // Находим глобальный индекс слота для удаления
@@ -74,6 +84,18 @@ export const removeSlot = (index) => {
 export const clearAllSlots = () => {
     slotsList = [];
     displaySlotsList();
+    
+    // Восстанавливаем дату начала слота из общей даты
+    const mainDateStart = $('#dateStart').val();
+    if (mainDateStart) {
+        $('#slotDateStart').val(mainDateStart);
+        if (document.getElementById('slotDateStart').nextSibling) {
+            document.getElementById('slotDateStart').nextSibling.value = formatDateTimeForDisplay(new Date(mainDateStart));
+        }
+        updateEndDateByInterval();
+    } else {
+        $('#slotDateStart, #slotDateEnd').val('');
+    }
 };
 
 // Получение всех слотов
@@ -157,9 +179,16 @@ export const addNewSlot = () => {
     $('.equipment-item').each(function() {
         const quantity = parseInt($(this).find('.qty-input').val());
         if (quantity > 0) {
+            let typeName = 'Оборудование';
+            const typeElement = $(this).find('.equipment-type');
+            if (typeElement.length) {
+                typeName = typeElement.text().replace('📌 ', '').trim();
+            }
+            
             selectedEquipment.push({
                 id: $(this).data('id'),
                 name: $(this).data('name'),
+                type_name: typeName,
                 quantity: quantity,
                 is_common: $(this).data('is-common') || false
             });
@@ -171,7 +200,7 @@ export const addNewSlot = () => {
         return false;
     }
     
-    // Добавляем слот с датами
+    // Добавляем слот
     slotsList.push({
         date_start: dateStart,
         date_end: dateEnd,
@@ -184,8 +213,23 @@ export const addNewSlot = () => {
     $('.qty-input').val(0);
     window.equipmentQuantities = {};
     
-    // Обновляем даты для следующего слота
-    updateNextSlotDates();
+    // ========== ОБНОВЛЯЕМ ДАТЫ ДЛЯ СЛЕДУЮЩЕГО СЛОТА, НО НЕ СБРАСЫВАЕМ ==========
+    // Получаем общую дату начала из основного блока
+    const mainDateStart = $('#dateStart').val();
+    
+    if (mainDateStart) {
+        // Если есть общая дата, используем её
+        $('#slotDateStart').val(mainDateStart);
+        if (document.getElementById('slotDateStart').nextSibling) {
+            document.getElementById('slotDateStart').nextSibling.value = formatDateTimeForDisplay(new Date(mainDateStart));
+        }
+    } else {
+        // Если нет общей даты, используем дату окончания последнего слота
+        updateNextSlotDates();
+    }
+    
+    // Пересчитываем дату окончания по интервалу
+    updateEndDateByInterval();
     
     showNotification(`Слот добавлен! Всего слотов: ${slotsList.length}`, 'success');
     return true;

@@ -43,46 +43,115 @@ export const updateCartDisplay = () => {
         return;
     }
     
-    countSpan.text(state.orderCart.length);
-    
-    let totalItems = 0;
-    let totalEquipment = 0;
-    
+    // Подсчитываем общее количество позиций (слотов)
+    let totalSlots = 0;
     state.orderCart.forEach(item => {
-        totalEquipment += item.equipment.length;
-        totalItems += item.equipment.reduce((s, e) => s + e.quantity, 0);
+        if (item.type === 'slots') {
+            totalSlots += item.slots.length;
+        } else {
+            totalSlots += 1;
+        }
     });
+    countSpan.text(totalSlots);
     
     let html = '';
     
     state.orderCart.forEach((item, i) => {
-        const startDate = new Date(item.date_start).toLocaleString('ru-RU');
-        const endDate = new Date(item.date_end).toLocaleString('ru-RU');
-        
-        html += `
-            <div class="cart-item" data-index="${i}">
-                <div class="cart-item-info">
-                    <div class="cart-item-location" data-index="${i}">
-                        📍 ${escapeHtml(item.location_name)}
+        if (item.type === 'slots') {
+            // Отображение заказа со слотами
+            // Форматируем общую дату локации
+            const commonStartDate = item.common_date_start ? new Date(item.common_date_start).toLocaleString('ru-RU') : 'Не указана';
+            const commonEndDate = item.common_date_end ? new Date(item.common_date_end).toLocaleString('ru-RU') : 'Не указана';
+            
+            // Группируем слоты по датам
+            const groupedSlots = groupSlotsByDateForCart(item.slots);
+            
+            html += `
+                <div class="cart-item cart-item-slots" data-index="${i}">
+                    <div class="cart-item-info">
+                        <div class="cart-item-location" data-index="${i}">
+                            📍 ${escapeHtml(item.location_name)}
+                            <span class="slots-badge">🎯 Слоты</span>
+                        </div>
+                        <div class="cart-item-dates">
+                            📅 ${commonStartDate} - ${commonEndDate}
+                        </div>
+                        ${item.comment ? `<div class="cart-item-comment">💬 ${escapeHtml(item.comment)}</div>` : ''}
+                        <div class="slots-list-cart">
+            `;
+            
+            // Выводим слоты с группировкой по датам
+            for (const [dateKey, slots] of groupedSlots) {
+                const dateObj = new Date(dateKey);
+                const dateHeader = dateObj.toLocaleDateString('ru-RU', {
+                    day: 'numeric',
+                    month: 'long',
+                    year: 'numeric'
+                });
+                
+                html += `<div class="slots-date-group-cart">
+                            <div class="slots-date-header-cart">📅 ${dateHeader}</div>`;
+                
+                slots.forEach(slot => {
+                    const startTime = new Date(slot.date_start).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+                    const endTime = new Date(slot.date_end).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+                    
+                    html += `<div class="slot-item-cart">
+                                <div class="slot-time-cart">⏰ ${startTime} - ${endTime}</div>
+                                <div class="slot-equipment-cart">`;
+                    
+                    slot.equipment.forEach(eq => {
+                        html += `<div class="slot-equipment-item-cart">
+                                    <span>${escapeHtml(eq.equipment_name)}</span>
+                                    <span>${eq.quantity} шт.</span>
+                                </div>`;
+                    });
+                    
+                    html += `</div></div>`;
+                });
+                
+                html += `</div>`;
+            }
+            
+            html += `
+                        </div>
                     </div>
-                    <div class="cart-item-dates">
-                        📅 ${startDate} - ${endDate}
+                    <div class="cart-item-actions">
+                        <button class="cart-remove-btn" data-index="${i}" title="Удалить">🗑️</button>
                     </div>
-                    <div class="cart-item-equipment">
-                        ${item.equipment.map(e => `• ${escapeHtml(e.equipment_name)}: ${e.quantity} шт.`).join('<br>')}
-                    </div>
-                    ${item.comment ? `<div class="cart-item-comment">💬 ${escapeHtml(item.comment)}</div>` : ''}
                 </div>
-                <div class="cart-item-actions">
-                    <button class="cart-edit-btn" data-index="${i}" title="Редактировать">✏️</button>
-                    <button class="cart-remove-btn" data-index="${i}" title="Удалить">🗑️</button>
+            `;
+        } else {
+            // Обычный заказ (существующий код)
+            const startDate = new Date(item.date_start).toLocaleString('ru-RU');
+            const endDate = new Date(item.date_end).toLocaleString('ru-RU');
+            
+            html += `
+                <div class="cart-item" data-index="${i}">
+                    <div class="cart-item-info">
+                        <div class="cart-item-location" data-index="${i}">
+                            📍 ${escapeHtml(item.location_name)}
+                        </div>
+                        <div class="cart-item-dates">
+                            📅 ${startDate} - ${endDate}
+                        </div>
+                        <div class="cart-item-equipment">
+                            ${item.equipment.map(e => `• ${escapeHtml(e.equipment_name)}: ${e.quantity} шт.`).join('<br>')}
+                        </div>
+                        ${item.comment ? `<div class="cart-item-comment">💬 ${escapeHtml(item.comment)}</div>` : ''}
+                    </div>
+                    <div class="cart-item-actions">
+                        <button class="cart-edit-btn" data-index="${i}" title="Редактировать">✏️</button>
+                        <button class="cart-remove-btn" data-index="${i}" title="Удалить">🗑️</button>
+                    </div>
                 </div>
-            </div>
-        `;
+            `;
+        }
     });
     
     container.html(html);
     
+    // Обработчики кнопок
     $('.cart-edit-btn').click(function() {
         const index = $(this).data('index');
         openEditModal(index);
@@ -95,8 +164,34 @@ export const updateCartDisplay = () => {
     
     $('.cart-item-location').click(function() {
         const index = $(this).data('index');
-        openEditModal(index);
+        const item = state.orderCart[index];
+        if (item.type !== 'slots') {
+            openEditModal(index);
+        }
     });
+};
+
+// Функция группировки слотов по датам для отображения в корзине
+const groupSlotsByDateForCart = (slots) => {
+    const groups = new Map();
+    
+    slots.forEach(slot => {
+        const dateKey = new Date(slot.date_start).toDateString();
+        if (!groups.has(dateKey)) {
+            groups.set(dateKey, []);
+        }
+        groups.get(dateKey).push(slot);
+    });
+    
+    // Сортируем слоты внутри каждой группы по времени
+    for (const [dateKey, slotsInGroup] of groups) {
+        slotsInGroup.sort((a, b) => {
+            return new Date(a.date_start) - new Date(b.date_start);
+        });
+    }
+    
+    // Сортируем группы по дате
+    return new Map([...groups.entries()].sort());
 };
 
 // Удаление элемента из корзины
@@ -686,8 +781,7 @@ export const saveSingleOrder = async () => {
     const appDateEnd = $('#dateEnd').val();
     
     console.log('Даты для заявки (из date-section):', { appDateStart, appDateEnd });
-    console.log('Количество локаций в корзине:', state.orderCart.length);
-    console.log('Комментарий к заявке:', applicationComment);
+    console.log('Количество позиций в корзине:', state.orderCart.length);
     
     const saveBtn = $('#saveOrderFromCartBtn');
     const originalText = saveBtn.text();
@@ -702,90 +796,154 @@ export const saveSingleOrder = async () => {
         
         for (let i = 0; i < state.orderCart.length; i++) {
             const cartItem = state.orderCart[i];
-            const orderComment = cartItem.comment || '';
             
-            console.log(`\nШаг ${i + 1}: Создание заказа для локации "${cartItem.location_name}"`);
-            console.log(`  Дата начала заказа: ${cartItem.date_start}`);
-            console.log(`  Дата окончания заказа: ${cartItem.date_end}`);
-            console.log(`  Комментарий к заказу: ${orderComment}`);
+            console.log(`\nШаг ${i + 1}: Обработка позиции "${cartItem.location_name}"`);
+            console.log('Тип позиции:', cartItem.type || 'regular');
             
-            // Формируем данные для заказа
-            const orderData = {
-                date_time_start: cartItem.date_start,
-                date_time_end: cartItem.date_end,
-                comment: orderComment,
-                location_id: cartItem.location_id,
-                items: []
-            };
-            
-            // Для первого заказа передаём данные заявки
-            if (i === 0) {
-                orderData.application_name = applicationName;
-                orderData.application_comment = applicationComment;
-                // ДАТЫ ДЛЯ ЗАЯВКИ ВСЕГДА ИЗ date-section
-                orderData.application_date_start = appDateStart;
-                orderData.application_date_end = appDateEnd;
-            } else if (createdApplicationId) {
-                orderData.application_id = createdApplicationId;
-            }
-            
-            // Добавляем оборудование
-            for (const equip of cartItem.equipment) {
-                const itemData = {
-                    equipment_id: equip.equipment_id,
-                    quantity: equip.quantity,
-                    is_common: equip.is_common || false
+            // ========== ЕСЛИ ЭТО ЗАКАЗ СО СЛОТАМИ ==========
+            if (cartItem.type === 'slots') {
+                console.log(`  Режим: СЛОТЫ (${cartItem.slots.length} слотов)`);
+                
+                const orderData = {
+                    type: 'slots',
+                    date_time_start: cartItem.common_date_start,
+                    date_time_end: cartItem.common_date_end,
+                    comment: cartItem.comment || '',
+                    location_id: cartItem.location_id,
+                    slots: cartItem.slots,
+                    application_comment: applicationComment
                 };
                 
-                if (!equip.is_common) {
-                    itemData.location_id = cartItem.location_id;
+                // Для первого заказа передаём данные заявки
+                if (i === 0) {
+                    orderData.application_name = applicationName;
+                    orderData.application_comment = applicationComment;
+                    orderData.application_date_start = appDateStart;
+                    orderData.application_date_end = appDateEnd;
+                } else if (createdApplicationId) {
+                    orderData.application_id = createdApplicationId;
                 }
                 
-                orderData.items.push(itemData);
-                console.log(`    - Оборудование: ${equip.equipment_name}, кол-во ${equip.quantity}, is_common: ${equip.is_common}`);
-            }
-            
-            console.log(`Отправка заказа для локации ${cartItem.location_name}...`);
-            
-            const orderResponse = await fetch('/api/save-order/', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': csrftoken
-                },
-                credentials: 'include',
-                body: JSON.stringify(orderData)
-            });
-            
-            const orderResponseData = await orderResponse.json();
-            console.log(`Ответ для локации ${cartItem.location_name}:`, orderResponseData);
-            
-            if (orderResponseData.success) {
-                if (i === 0 && orderResponseData.application_id) {
-                    createdApplicationId = orderResponseData.application_id;
-                }
-                createdOrders.push({
-                    location_name: cartItem.location_name,
-                    order_id: orderResponseData.order_id,
-                    comment: orderComment
+                console.log(`Отправка заказа со слотами для локации ${cartItem.location_name}...`);
+                console.log('  Общая дата:', cartItem.common_date_start, '-', cartItem.common_date_end);
+                console.log('  Слотов:', cartItem.slots.length);
+                
+                const orderResponse = await fetch('/api/save-order/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrftoken
+                    },
+                    credentials: 'include',
+                    body: JSON.stringify(orderData)
                 });
+                
+                const orderResponseData = await orderResponse.json();
+                console.log(`Ответ для ${cartItem.location_name}:`, orderResponseData);
+                
+                if (orderResponseData.success) {
+                    if (i === 0 && orderResponseData.application_id) {
+                        createdApplicationId = orderResponseData.application_id;
+                    }
+                    createdOrders.push({
+                        location_name: cartItem.location_name,
+                        order_id: orderResponseData.order_id,
+                        slots_count: cartItem.slots.length,
+                        comment: cartItem.comment
+                    });
+                } else {
+                    hasErrors = true;
+                    showNotification(`❌ Ошибка при создании заказа для "${cartItem.location_name}": ${orderResponseData.error}`, 'error');
+                }
+                
             } else {
-                hasErrors = true;
-                showNotification(`❌ Ошибка при создании заказа для "${cartItem.location_name}": ${orderResponseData.error}`, 'error');
+                // ========== ОБЫЧНЫЙ ЗАКАЗ (НЕ СЛОТЫ) ==========
+                console.log(`  Режим: ОБЫЧНЫЙ`);
+                
+                const orderComment = cartItem.comment || '';
+                
+                const orderData = {
+                    date_time_start: cartItem.date_start,
+                    date_time_end: cartItem.date_end,
+                    comment: orderComment,
+                    location_id: cartItem.location_id,
+                    items: []
+                };
+                
+                // Для первого заказа передаём данные заявки
+                if (i === 0) {
+                    orderData.application_name = applicationName;
+                    orderData.application_comment = applicationComment;
+                    orderData.application_date_start = appDateStart;
+                    orderData.application_date_end = appDateEnd;
+                } else if (createdApplicationId) {
+                    orderData.application_id = createdApplicationId;
+                }
+                
+                // Добавляем оборудование
+                for (const equip of cartItem.equipment) {
+                    const itemData = {
+                        equipment_id: equip.equipment_id,
+                        quantity: equip.quantity,
+                        is_common: equip.is_common || false
+                    };
+                    
+                    if (!equip.is_common) {
+                        itemData.location_id = cartItem.location_id;
+                    }
+                    
+                    orderData.items.push(itemData);
+                    console.log(`    - Оборудование: ${equip.equipment_name}, кол-во ${equip.quantity}`);
+                }
+                
+                console.log(`Отправка обычного заказа для локации ${cartItem.location_name}...`);
+                
+                const orderResponse = await fetch('/api/save-order/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrftoken
+                    },
+                    credentials: 'include',
+                    body: JSON.stringify(orderData)
+                });
+                
+                const orderResponseData = await orderResponse.json();
+                console.log(`Ответ для ${cartItem.location_name}:`, orderResponseData);
+                
+                if (orderResponseData.success) {
+                    if (i === 0 && orderResponseData.application_id) {
+                        createdApplicationId = orderResponseData.application_id;
+                    }
+                    createdOrders.push({
+                        location_name: cartItem.location_name,
+                        order_id: orderResponseData.order_id,
+                        comment: orderComment
+                    });
+                } else {
+                    hasErrors = true;
+                    showNotification(`❌ Ошибка при создании заказа для "${cartItem.location_name}": ${orderResponseData.error}`, 'error');
+                }
             }
         }
         
+        // ========== РЕЗУЛЬТАТ ==========
         if (createdOrders.length > 0) {
             let message = `✅ Заявка "${applicationName}" создана!\n`;
             message += `Создано заказов: ${createdOrders.length}\n`;
             createdOrders.forEach(order => {
-                message += `\n📦 ${order.location_name} - Заказ №${order.order_id}`;
+                if (order.slots_count) {
+                    message += `\n📦 ${order.location_name} - Заказ №${order.order_id} (${order.slots_count} слотов)`;
+                } else {
+                    message += `\n📦 ${order.location_name} - Заказ №${order.order_id}`;
+                }
                 if (order.comment) {
                     message += `\n   💬 ${order.comment.substring(0, 50)}${order.comment.length > 50 ? '...' : ''}`;
                 }
             });
             showNotification(message, 'success');
             
+            // Очищаем корзину
             clearCart();
             $('#applicationName').val('');
             $('#orderComment').val('');
@@ -793,6 +951,12 @@ export const saveSingleOrder = async () => {
             $('.location-item').removeClass('disabled');
             $('#dateStart, #dateEnd').val('');
             $('#rentalDateStart, #rentalDateEnd').val('');
+            $('#slotDateStart, #slotDateEnd').val('');
+            
+            // Очищаем слоты в глобальном массиве
+            if (typeof window.clearAllSlots === 'function') {
+                window.clearAllSlots();
+            }
         } else {
             showNotification('❌ Не удалось создать ни одного заказа', 'error');
         }

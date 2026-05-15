@@ -15,9 +15,13 @@ import {
     updateEndDateByInterval,
     removeSlot,
     displaySlotsList,
-    addNewSlot
+    addNewSlot,
+    getAllSlots
 } from './slots.js';
 
+// Сделать глобальными
+window.getAllSlots = getAllSlots;
+window.clearAllSlots = clearAllSlots;
 
 // ========== ПЕРЕМЕННЫЕ ==========
 let busyDates = new Set();
@@ -27,6 +31,68 @@ let rentalDateStartPicker = null;
 let rentalDateEndPicker = null;
 let isUpdating = false;
 let currentLocationIsEvent = false;
+
+// ========== ЛИПКИЙ БЛОК ФИЛЬТРОВ ==========
+let isSticky = false;
+
+// Функция для инициализации sticky блока
+const initStickyTypes = () => {
+    const typesElement = document.querySelector('.type-items');
+    if (!typesElement) return;
+    
+    // Находим родительский контейнер для определения позиции
+    const equipmentHeader = document.querySelector('.equipment-header');
+    if (!equipmentHeader) return;
+    
+    // Создаём элемент-заглушку
+    const spacer = document.createElement('div');
+    spacer.className = 'type-items-spacer';
+    typesElement.parentNode.insertBefore(spacer, typesElement);
+    
+    // Получаем позицию блока
+    const getOffsetTop = () => {
+        const rect = equipmentHeader.getBoundingClientRect();
+        return rect.top + window.scrollY;
+    };
+    
+    let offsetTop = getOffsetTop();
+    
+    // Функция проверки
+    const checkSticky = () => {
+        const scrollY = window.scrollY;
+        const stickyTop = 80; // Отступ от верха
+        
+        if (scrollY + stickyTop > offsetTop && !isSticky) {
+            // Прилипаем
+            const rect = typesElement.getBoundingClientRect();
+            typesElement.classList.add('sticky');
+            typesElement.style.width = `${rect.width}px`;
+            spacer.style.display = 'block';
+            spacer.style.height = `${typesElement.offsetHeight}px`;
+            isSticky = true;
+        } else if (scrollY + stickyTop <= offsetTop && isSticky) {
+            // Отлипаем
+            typesElement.classList.remove('sticky');
+            typesElement.style.width = '';
+            spacer.style.display = 'none';
+            isSticky = false;
+        }
+    };
+    
+    // Обновляем offsetTop при ресайзе
+    const updateOffset = () => {
+        offsetTop = getOffsetTop();
+        if (isSticky) {
+            checkSticky();
+        }
+    };
+    
+    window.addEventListener('scroll', checkSticky, { passive: true });
+    window.addEventListener('resize', updateOffset);
+    
+    // Первоначальная проверка
+    checkSticky();
+};
 
 // Форматирование даты для отображения
 const formatDateTime = (dateStr) => {
@@ -54,7 +120,7 @@ const initDatePickersForLocation = (isEvent) => {
 };
 
 // Получение текущих выбранных дат (только из видимой формы)
-const getSelectedDates = () => {
+export const getSelectedDates = () => {
     const mode = localStorage.getItem('viewMode') || 'event';
     
     if (mode === 'slots') {
@@ -818,6 +884,7 @@ export const initApp = () => {
     
     initEventHandlers();
     initModeToggle();
+    initStickyTypes();
     
     console.log('Приложение инициализировано');
 };

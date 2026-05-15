@@ -10,6 +10,32 @@ export let state = {
     currentRooms: []
 };
 
+// Структура обычного заказа:
+// {
+//     type: 'regular',
+//     location_id: id,
+//     location_name: name,
+//     date_start: date,
+//     date_end: date,
+//     equipment: [...],
+//     comment: ''
+// }
+
+// Структура заказа со слотами:
+// {
+//     type: 'slots',
+//     location_id: id,
+//     location_name: name,
+//     comment: '',
+//     slots: [
+//         {
+//             date_start: date,
+//             date_end: date,
+//             equipment: [...]
+//         }
+//     ]
+// }
+
 // Ключи для localStorage
 const STORAGE_KEYS = {
     ORDER_CART: 'orderCart',
