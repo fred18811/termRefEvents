@@ -167,6 +167,7 @@ export const addNewSlot = () => {
         return false;
     }
     
+    // Получаем выбранное оборудование
     const selectedEquipment = [];
     $('.equipment-item').each(function() {
         const quantity = parseInt($(this).find('.qty-input').val());
@@ -192,20 +193,55 @@ export const addNewSlot = () => {
         return false;
     }
     
-    slotsList.push({
-        date_start: dateStart,
-        date_end: dateEnd,
-        equipment: selectedEquipment
-    });
+    // ========== ПРОВЕРЯЕМ, ЕСТЬ ЛИ УЖЕ СЛОТ С ТАКИМ ЖЕ ВРЕМЕНЕМ ==========
+    const existingSlotIndex = slotsList.findIndex(slot => 
+        slot.date_start === dateStart && slot.date_end === dateEnd
+    );
+    
+    if (existingSlotIndex !== -1) {
+        // Слот с таким временем уже существует — объединяем оборудование
+        console.log('Найден существующий слот, объединяем оборудование');
+        
+        const existingSlot = slotsList[existingSlotIndex];
+        
+        // Объединяем оборудование
+        selectedEquipment.forEach(newEq => {
+            const existingEqIndex = existingSlot.equipment.findIndex(eq => eq.id === newEq.id);
+            
+            if (existingEqIndex !== -1) {
+                // Оборудование уже есть в слоте — складываем количество
+                existingSlot.equipment[existingEqIndex].quantity += newEq.quantity;
+                console.log(`  Объединено оборудование: ${newEq.name}, новое количество: ${existingSlot.equipment[existingEqIndex].quantity}`);
+            } else {
+                // Новое оборудование — добавляем
+                existingSlot.equipment.push(newEq);
+                console.log(`  Добавлено новое оборудование: ${newEq.name}`);
+            }
+        });
+        
+        // Обновляем слот в массиве
+        slotsList[existingSlotIndex] = existingSlot;
+        
+        showNotification(`Оборудование добавлено в существующий слот! Всего слотов: ${slotsList.length}`, 'success');
+    } else {
+        // Новый слот — просто добавляем
+        slotsList.push({
+            date_start: dateStart,
+            date_end: dateEnd,
+            equipment: selectedEquipment
+        });
+        showNotification(`Слот добавлен! Всего слотов: ${slotsList.length}`, 'success');
+    }
     
     displaySlotsList();
     
+    // Очищаем выбранное оборудование
     $('.qty-input').val(0);
     window.equipmentQuantities = {};
     
+    // Обновляем даты для следующего слота
     updateNextSlotDates();
     
-    showNotification(`Слот добавлен! Всего слотов: ${slotsList.length}`, 'success');
     return true;
 };
 
