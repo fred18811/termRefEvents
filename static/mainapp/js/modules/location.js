@@ -5,9 +5,8 @@ import { state, saveCart } from './state.js';
 import { escapeHtml, showNotification, validateDates, debounce } from './utils.js';
 import { api } from './api.js';
 import { updateCartDisplay } from './cart.js';
-import {getSelectedDates} from './events.js'
-import {updateEndDateByInterval} from './slots.js'
-import {formatDateTimeForDisplay} from './utils.js'
+import { clearAllSlots } from './slots.js';
+import { checkLocationBusy, initDatePickersForLocation, loadBusyDates } from './events.js';
 
 
 // Глобальное хранилище для количества оборудования
@@ -19,7 +18,7 @@ let currentSearchQuery = '';
 
 // Загрузка фото локации
 export const loadLocationPhoto = async (id) => {
-    console.log('Загрузка фото для локации:', id);
+
     $('#locationPhoto').html('<div class="loading">Загрузка фото...</div>');
     try {
         const res = await api.getLocationPhoto(id);
@@ -47,6 +46,57 @@ const getCurrentDates = () => {
             date_end: $('#dateEnd').val()
         };
     }
+};
+
+// Обработчик выбора локации
+export const handleLocationSelect = async (locationId, locationName, isEvent) => {
+    
+    console.log(`handleLocationSelect: очистка слотов для новой локации ${locationId}`);
+    
+    // ========== ПРИНУДИТЕЛЬНАЯ ОЧИСТКА СЛОТОВ ==========
+    // Очищаем глобальный массив слотов
+    if (typeof clearAllSlots === 'function') {
+        clearAllSlots();
+    } else {
+        import('./slots.js').then(module => {
+            module.clearAllSlots();
+        });
+    }
+    
+    // Очищаем также глобальную переменную если есть
+    if (window.slotsList) {
+        window.slotsList = [];
+    }
+    if (window.clearAllSlots) {
+        window.clearAllSlots();
+    }
+    
+    // Проверяем занятость помещения
+    const isAvailable = await checkLocationBusy(locationId, locationName);
+    if (!isAvailable) return false;
+    
+    // Снимаем активный класс со всех локаций
+    $('.location-item').removeClass('active');
+    // Добавляем активный класс выбранной локации
+    $(`.location-item[data-id="${locationId}"]`).addClass('active');
+    
+    state.currentLocation = { id: locationId, name: locationName, is_event: isEvent };
+    
+    // Настраиваем отображение блока аренды
+    initDatePickersForLocation(isEvent);
+    
+    // Загружаем фото
+    loadLocationPhoto(locationId);
+    
+    // Загружаем занятые даты для календаря (только для мероприятий)
+    if (isEvent) {
+        await loadBusyDates();
+    }
+    
+    // Обновляем список оборудования
+    await updateEquipmentList();
+    
+    return true;
 };
 
 // Загрузка ВСЕГО оборудования для локации (без фильтрации по типам)
@@ -87,10 +137,9 @@ const loadAllEquipment = async () => {
             allEquipment = [...allEquipment, ...commonWithFlag];
         }
         
-        console.log('Загружено всего оборудования:', allEquipment.length);
         return allEquipment;
     } catch (error) {
-        console.error('Ошибка загрузки всего оборудования:', error);
+
         return [];
     }
 };
@@ -127,8 +176,6 @@ const updateDisplayWithSearch = () => {
     
     // Затем фильтруем по поисковому запросу
     const filteredBySearch = filterEquipmentBySearch(filteredByType, currentSearchQuery);
-    
-    console.log(`Поиск: "${currentSearchQuery}" - найдено: ${filteredBySearch.length} из ${filteredByType.length}`);
     
     // Обновляем счетчик результатов поиска
     updateSearchResultCount(filteredBySearch.length, filteredByType.length);
@@ -199,20 +246,12 @@ export const initEquipmentSearch = () => {
 // Проверка доступности оборудования
 export const checkAvailability = async () => {
     if (!state.currentLocation) {
-        console.log('Нет выбранной локации');
         return;
     }
     
     const dateStart = $('#dateStart').val();
     const dateEnd = $('#dateEnd').val();
     const typeIds = [...state.selectedTypes];
-    
-    console.log('Проверка доступности:', {
-        location_id: state.currentLocation.id,
-        date_start: dateStart,
-        date_end: dateEnd,
-        type_ids: typeIds
-    });
     
     $('#equipmentContainer').html('<div class="loading">⏳ Проверка доступности оборудования...</div>');
     
@@ -223,8 +262,6 @@ export const checkAvailability = async () => {
             dateEnd,
             typeIds
         );
-        
-        console.log('Ответ API по доступности:', response);
         
         if (response.success) {
             if (response.equipment && response.equipment.length > 0) {
@@ -287,8 +324,7 @@ const checkAvailabilityWithData = async (equipmentData) => {
 
 // Обновление списка оборудования
 export const updateEquipmentList = async () => {
-    console.log('updateEquipmentList вызван');
-    
+
     if (!state.currentLocation) {
         $('#equipmentContainer').html('<div class="info-message">📍 Выберите помещение</div>');
         return;
@@ -350,8 +386,7 @@ export const updateEquipmentList = async () => {
 
 // Отображение списка оборудования
 export const displayEquipmentList = (equipment) => {
-    console.log('Отображение оборудования:', equipment.length, 'позиций');
-    
+
     if (!equipment?.length) {
         $('#equipmentContainer').html('<div class="info-message">📭 Нет оборудования для выбранных параметров</div>');
         return;
@@ -420,7 +455,7 @@ export const displayEquipmentList = (equipment) => {
         $(this).val(val);
         
         window.equipmentQuantities[equipmentId] = val;
-        console.log(`Сохранено количество для оборудования ${equipmentId}: ${val} (доступно: ${max})`);
+
     });
 };
 
@@ -436,13 +471,11 @@ const processSlotsToCart = (slots) => {
         return;
     }
     
-    // Проверяем, есть ли выбранная локация
     if (!state.currentLocation) {
         showNotification('❌ Выберите помещение', 'error');
         return;
     }
     
-    // Проверяем, не добавлена ли уже эта локация
     if (state.selectedLocations.has(state.currentLocation.id.toString())) {
         showNotification('⚠️ Это помещение уже добавлено в заказ', 'warning');
         return;
@@ -450,11 +483,18 @@ const processSlotsToCart = (slots) => {
     
     const comment = $('#orderComment').val().trim();
     
-    // Получаем общую дату локации из полей dateStart и dateEnd
-    const commonDateStart = $('#dateStart').val();
-    const commonDateEnd = $('#dateEnd').val();
+    // ========== ПОЛУЧАЕМ ОБЩУЮ ДАТУ В ЗАВИСИМОСТИ ОТ ТИПА ПОМЕЩЕНИЯ ==========
+    const isEvent = state.currentLocation.is_event;
+    let commonDateStart, commonDateEnd;
     
-    // Создаём один заказ со слотами
+    if (isEvent) {
+        commonDateStart = $('#dateStart').val();
+        commonDateEnd = $('#dateEnd').val();
+    } else {
+        commonDateStart = $('#rentalDateStart').val();
+        commonDateEnd = $('#rentalDateEnd').val();
+    }
+    
     const slotOrder = {
         type: 'slots',
         location_id: state.currentLocation.id,
@@ -462,15 +502,16 @@ const processSlotsToCart = (slots) => {
         comment: comment || '',
         common_date_start: commonDateStart,
         common_date_end: commonDateEnd,
+        is_event: isEvent,
         slots: []
     };
     
-    // Добавляем каждый слот с его оборудованием
+    // Добавляем каждый слот
     slots.forEach(slot => {
         if (!slot.equipment || slot.equipment.length === 0) return;
         
         slotOrder.slots.push({
-            date_start: slot.date_start,  // Сохраняем свою дату начала слота
+            date_start: slot.date_start,
             date_end: slot.date_end,
             equipment: slot.equipment.map(eq => ({
                 equipment_id: eq.id,
@@ -488,15 +529,10 @@ const processSlotsToCart = (slots) => {
         return;
     }
     
-    // Сортируем слоты по дате и времени
-    slotOrder.slots.sort((a, b) => {
-        return new Date(a.date_start) - new Date(b.date_start);
-    });
+    // Сортируем слоты
+    slotOrder.slots.sort((a, b) => new Date(a.date_start) - new Date(b.date_start));
     
-    // Добавляем в корзину
     state.orderCart.push(slotOrder);
-    
-    // Отмечаем локацию как добавленную
     state.selectedLocations.add(state.currentLocation.id.toString());
     $(`.location-item[data-id="${state.currentLocation.id}"]`).addClass('disabled');
     
@@ -508,7 +544,7 @@ const processSlotsToCart = (slots) => {
         window.clearAllSlots();
     }
     
-    // Сбрасываем состояние, НО НЕ СБРАСЫВАЕМ ДАТЫ
+    // Сброс состояния
     state.currentLocation = null;
     state.selectedTypes.clear();
     $('#searchEquipment').val('');
@@ -516,24 +552,7 @@ const processSlotsToCart = (slots) => {
     $('.type-item input').prop('checked', false);
     $('#equipmentContainer').html('<div class="info-message">📍 Выберите локацию, даты и типы оборудования</div>');
     $('#orderComment').val('');
-    
-    // ОЧИЩАЕМ ПОЛЯ СЛОТОВ, НО НЕ ОБЩУЮ ДАТУ
     $('#slotDateStart, #slotDateEnd').val('');
-    
-    // Восстанавливаем дату начала слота из общей даты
-    const mainDateStart = $('#dateStart').val();
-    if (mainDateStart) {
-        $('#slotDateStart').val(mainDateStart);
-        // Обновляем отображение в flatpickr
-        if (document.getElementById('slotDateStart').nextSibling) {
-            const formattedDate = formatDateTimeForDisplay(new Date(mainDateStart));
-            document.getElementById('slotDateStart').nextSibling.value = formattedDate;
-        }
-        // Пересчитываем дату окончания по интервалу
-        if (typeof updateEndDateByInterval === 'function') {
-            updateEndDateByInterval();
-        }
-    }
     
     window.equipmentQuantities = {};
     
@@ -542,48 +561,62 @@ const processSlotsToCart = (slots) => {
 
 // Добавление в корзину
 export const addToCart = () => {
-    console.log('addToCart вызван');
     
     const mode = localStorage.getItem('viewMode') || 'event';
     
     // ========== РЕЖИМ "СЛОТЫ" ==========
     if (mode === 'slots') {
-        // Получаем все слоты из глобального массива
         let allSlots = [];
         if (typeof window.getAllSlots === 'function') {
             allSlots = window.getAllSlots();
+            processSlotsToCart(allSlots);
         } else {
             import('./slots.js').then(module => {
                 allSlots = module.getAllSlots();
                 processSlotsToCart(allSlots);
             });
-            return;
         }
-        processSlotsToCart(allSlots);
         return;
     }
     
-    // ========== РЕЖИМ "МЕРОПРИЯТИЕ" (существующая логика) ==========
+    // ========== РЕЖИМ "МЕРОПРИЯТИЕ" (ОБЫЧНЫЙ РЕЖИМ) ==========
     if (!state.currentLocation) {
         showNotification('❌ Выберите помещение', 'error');
         return;
     }
     
-    const dates = getSelectedDates();
-    const dateStart = dates.date_start;
-    const dateEnd = dates.date_end;
+    // ========== ПОЛУЧАЕМ ДАТЫ В ЗАВИСИМОСТИ ОТ ТИПА ПОМЕЩЕНИЯ ==========
+    const isEvent = state.currentLocation.is_event;
+    let dateStart, dateEnd;
     
-    if (!dateStart || !dateEnd) {
-        showNotification('❌ Выберите даты', 'error');
-        return;
+    if (isEvent) {
+        // Для мероприятий - используем основной блок дат
+        dateStart = $('#dateStart').val();
+        dateEnd = $('#dateEnd').val();
+        
+        if (!dateStart || !dateEnd) {
+            showNotification('❌ Выберите даты мероприятия', 'error');
+            return;
+        }
+    } else {
+        // Для обычных помещений (аренда) - используем блок аренды
+        dateStart = $('#rentalDateStart').val();
+        dateEnd = $('#rentalDateEnd').val();
+        
+        if (!dateStart || !dateEnd) {
+            showNotification('❌ Выберите даты аренды', 'error');
+            return;
+        }
     }
     
+    // Валидация дат
     const dateValid = validateDates(dateStart, dateEnd);
     if (!dateValid.valid) {
         showNotification(dateValid.error, 'error');
         return;
     }
     
+    // Собираем оборудование
     const selected = [];
     let hasLocationEquipment = false;
     let hasCommonEquipment = false;
@@ -625,16 +658,19 @@ export const addToCart = () => {
     
     const comment = $('#orderComment').val().trim();
     
-    state.orderCart.push({
-        location_id: state.currentLocation?.id || null,
-        location_name: state.currentLocation?.name || 'Общее оборудование',
+    // Создаём объект заказа
+    const orderItem = {
+        type: 'regular',
+        location_id: state.currentLocation.id,
+        location_name: state.currentLocation.name,
         date_start: dateStart,
         date_end: dateEnd,
-        is_event: state.currentLocation?.is_event || false,
+        is_event: state.currentLocation.is_event,
         equipment: selected,
-        comment: comment || '',
-        is_slots_mode: false
-    });
+        comment: comment || ''
+    };
+    
+    state.orderCart.push(orderItem);
     
     if (state.currentLocation) {
         state.selectedLocations.add(state.currentLocation.id.toString());
@@ -644,6 +680,7 @@ export const addToCart = () => {
     saveCart();
     updateCartDisplay();
     
+    // Сброс состояния
     state.currentLocation = null;
     state.selectedTypes.clear();
     currentSearchQuery = '';
@@ -657,92 +694,4 @@ export const addToCart = () => {
     allEquipmentData = [];
     
     showNotification(`✅ Добавлено в заказ!`, 'success');
-};
-
-// Функция обработки слотов
-const processSlots = (slots) => {
-    if (!slots || slots.length === 0) {
-        showNotification('⚠️ Нет добавленных слотов', 'warning');
-        return;
-    }
-    
-    const comment = $('#orderComment').val().trim();
-    let addedCount = 0;
-    
-    // Проверяем, есть ли выбранная локация
-    if (!state.currentLocation) {
-        showNotification('❌ Выберите помещение', 'error');
-        return;
-    }
-    
-    // Проверяем, не добавлена ли уже эта локация
-    if (state.selectedLocations.has(state.currentLocation.id.toString())) {
-        showNotification('⚠️ Это помещение уже добавлено в заказ', 'warning');
-        return;
-    }
-    
-    // Добавляем каждый слот как отдельный заказ в корзину
-    slots.forEach(slot => {
-        // Проверяем, что в слоте есть оборудование
-        if (!slot.equipment || slot.equipment.length === 0) {
-            console.warn('Слот без оборудования пропущен:', slot);
-            return;
-        }
-        
-        state.orderCart.push({
-            location_id: state.currentLocation.id,
-            location_name: state.currentLocation.name,
-            date_start: slot.date_start,
-            date_end: slot.date_end,
-            is_event: state.currentLocation.is_event || false,
-            equipment: slot.equipment.map(eq => ({
-                equipment_id: eq.id,
-                equipment_name: eq.name,
-                type_name: eq.type_name || 'Оборудование',
-                quantity: eq.quantity,
-                max_quantity: eq.quantity,
-                is_common: eq.is_common || false
-            })),
-            comment: comment || '',
-            is_slots_mode: true,
-            slot_time_start: slot.date_start,
-            slot_time_end: slot.date_end
-        });
-        addedCount++;
-    });
-    
-    if (addedCount === 0) {
-        showNotification('⚠️ Нет валидных слотов для добавления', 'warning');
-        return;
-    }
-    
-    // Отмечаем локацию как добавленную
-    state.selectedLocations.add(state.currentLocation.id.toString());
-    $(`.location-item[data-id="${state.currentLocation.id}"]`).addClass('disabled');
-    
-    saveCart();
-    updateCartDisplay();
-    
-    // Очищаем слоты после добавления
-    if (typeof window.clearAllSlots === 'function') {
-        window.clearAllSlots();
-    } else {
-        import('./slots.js').then(module => {
-            module.clearAllSlots();
-        });
-    }
-    
-    // Сбрасываем состояние
-    state.currentLocation = null;
-    state.selectedTypes.clear();
-    $('#searchEquipment').val('');
-    $('.location-item').removeClass('active');
-    $('.type-item input').prop('checked', false);
-    $('#equipmentContainer').html('<div class="info-message">📍 Выберите локацию, даты и типы оборудования</div>');
-    $('#orderComment').val('');
-    $('#slotDateStart, #slotDateEnd').val('');
-    
-    window.equipmentQuantities = {};
-    
-    showNotification(`✅ Добавлено ${addedCount} слотов в заявку!`, 'success');
 };

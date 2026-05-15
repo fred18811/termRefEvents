@@ -2394,11 +2394,17 @@ def room_detail(request, room_id):
 
 @login_required
 def check_datetime_busy(request):
-    """Проверка, занято ли оборудование на выбранные даты (только для предупреждения)"""
+    """Проверка, занято ли оборудование на выбранные даты"""
     try:
         location_id = request.GET.get('location_id')
         date_start = request.GET.get('date_start')
         date_end = request.GET.get('date_end')
+        
+        print("=" * 60)
+        print("check_datetime_busy ВЫЗОВ")
+        print(f"location_id: {location_id}")
+        print(f"date_start: {date_start}")
+        print(f"date_end: {date_end}")
         
         if not location_id or not date_start or not date_end:
             return JsonResponse({
@@ -2407,67 +2413,140 @@ def check_datetime_busy(request):
                 'error': 'Не указаны все параметры'
             }, status=400)
         
-        start_date = datetime.fromisoformat(date_start)
-        end_date = datetime.fromisoformat(date_end)
+        # Парсим даты
+        try:
+            start_date = datetime.strptime(date_start, '%Y-%m-%d %H:%M:%S')
+            end_date = datetime.strptime(date_end, '%Y-%m-%d %H:%M:%S')
+            print(f"start_date (parsed): {start_date}")
+            print(f"end_date (parsed): {end_date}")
+        except ValueError:
+            try:
+                start_date = datetime.fromisoformat(date_start)
+                end_date = datetime.fromisoformat(date_end)
+                print(f"start_date (iso parsed): {start_date}")
+                print(f"end_date (iso parsed): {end_date}")
+            except Exception as e2:
+                return JsonResponse({
+                    'busy': False,
+                    'partially_busy': False,
+                    'error': f'Ошибка формата дат: {e2}'
+                }, status=400)
         
-        # Проверяем ТОЛЬКО локационное оборудование для блокировки дат
+        # ========== УЧИТЫВАЕМ ТОЛЬКО АКТИВНЫЕ ЗАЯВКИ (НЕ отменённые и НЕ завершённые) ==========
+        # Статусы, которые считаются активными: 'new', 'in_progress'
+        active_statuses = ['new', 'in_progress']
+        
+        all_orders_for_location = Order.objects.filter(
+            id_location_id=location_id,
+            id_application__status__in=active_statuses  # Только активные заявки
+        ).exclude(
+            id_user=request.user  # Исключаем свои заказы
+        )
+        
+        print(f"Всего активных заказов для локации: {all_orders_for_location.count()}")
+        
+        for order in all_orders_for_location:
+            order_start = order.date_time_start
+            order_end = order.date_time_end
+            print(f"  Заказ #{order.id}: {order_start} - {order_end}")
+            print(f"    user={order.id_user_id}, app_status={order.id_application.status if order.id_application else 'None'}")
+        
+        # Проверяем пересечение
+        overlapping_orders = []
+        busy_intervals = []
+        
+        for order in all_orders_for_location:
+            order_start = order.date_time_start
+            order_end = order.date_time_end
+            
+            if not order_end:
+                # Если нет даты окончания, считаем что заказ активен бесконечно
+                order_end = timezone.now() + timedelta(days=365)
+            
+            # Преобразуем в naive для сравнения
+            order_start_naive = order_start.replace(tzinfo=None)
+            order_end_naive = order_end.replace(tzinfo=None)
+            
+            # Проверяем пересечение
+            if order_start_naive < end_date and order_end_naive > start_date:
+                overlapping_orders.append(order)
+                busy_intervals.append({
+                    'start': order_start.isoformat(),
+                    'end': order_end.isoformat(),
+                    'order_id': order.id,
+                    'application_name': order.id_application.name if order.id_application else 'Без названия'
+                })
+                print(f"    ✅ ПЕРЕСЕКАЕТСЯ!")
+            else:
+                print(f"    ❌ НЕ пересекается")
+        
+        print(f"Найдено пересекающихся активных заказов: {len(overlapping_orders)}")
+        
+        # Проверяем оборудование (только для активных заказов)
         equipment_locations = EquipmentLocation.objects.filter(id_locations_id=location_id)
         
         total_available = 0
         total_busy = 0
         
         for eq_loc in equipment_locations:
-            # Учитываем только НЕ отмененные заказы ДРУГИХ пользователей
             busy_quantity = OrderItem.objects.filter(
                 equipment_location=eq_loc,
+                order__id_application__status__in=active_statuses,
                 order__date_time_start__lt=end_date,
                 order__date_time_end__gt=start_date
             ).exclude(
-                order__date_time_end__isnull=True
-            ).exclude(
-                order__id_application__status='cancelled'
-            ).exclude(
-                order__id_user=request.user  # Исключаем заказы текущего пользователя
+                order__id_user=request.user
             ).aggregate(total=Sum('quantity'))['total'] or 0
             
-            active_busy = OrderItem.objects.filter(
-                equipment_location=eq_loc,
-                order__date_time_end__isnull=True,
-                order__date_time_start__lt=end_date
-            ).exclude(
-                order__id_application__status='cancelled'
-            ).exclude(
-                order__id_user=request.user  # Исключаем заказы текущего пользователя
-            ).aggregate(total=Sum('quantity'))['total'] or 0
-            
-            total_busy += busy_quantity + active_busy
+            total_busy += busy_quantity
             total_available += eq_loc.quantity
         
+        print(f"Оборудование: доступно={total_available}, занято={total_busy}")
+        
         # Определяем статус занятости
-        if total_busy >= total_available and total_available > 0:
+        if len(overlapping_orders) > 0:
+            print("Результат: ПОМЕЩЕНИЕ ЗАНЯТО!")
             return JsonResponse({
                 'busy': True,
                 'partially_busy': False,
                 'busy_count': total_busy,
                 'total_available': total_available,
+                'busy_orders': busy_intervals,
+                'message': 'Помещение занято на выбранные даты'
+            })
+        elif total_busy > 0 and total_busy >= total_available:
+            print("Результат: ПОМЕЩЕНИЕ ЗАНЯТО (оборудование)!")
+            return JsonResponse({
+                'busy': True,
+                'partially_busy': False,
+                'busy_count': total_busy,
+                'total_available': total_available,
+                'busy_orders': busy_intervals,
                 'message': 'Помещение занято на выбранные даты'
             })
         elif total_busy > 0:
+            print("Результат: ЧАСТИЧНАЯ ЗАНЯТОСТЬ")
             return JsonResponse({
                 'busy': False,
                 'partially_busy': True,
                 'busy_count': total_busy,
                 'total_available': total_available,
-                'message': f'Часть оборудования занята'
+                'busy_orders': busy_intervals,
+                'message': 'Часть оборудования занята'
             })
         else:
+            print("Результат: ПОМЕЩЕНИЕ СВОБОДНО")
             return JsonResponse({
                 'busy': False,
                 'partially_busy': False,
+                'busy_orders': [],
                 'message': 'Помещение доступно'
             })
             
     except Exception as e:
+        print(f"Ошибка в check_datetime_busy: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return JsonResponse({
             'busy': False,
             'partially_busy': False,

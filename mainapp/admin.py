@@ -88,7 +88,6 @@ class OrderItemForm(forms.ModelForm):
         self.fields['quantity'].help_text = 'Введите количество от 1 до 999'
         self.fields['can_provide'].help_text = 'Введите количество, которое может предоставить подразделение (0 - не может)'
         self.fields['is_agreed'].help_text = 'Отметьте, если позиция согласована'
-        # Новые поля
         self.fields['is_slot'].help_text = 'Отметьте, если это позиция слота'
         self.fields['slot_date_start'].help_text = 'Дата и время начала слота'
         self.fields['slot_date_start'].widget = forms.DateTimeInput(attrs={'type': 'datetime-local'})
@@ -154,21 +153,21 @@ class OrderItemInline(admin.TabularInline):
     model = OrderItem
     form = OrderItemForm
     extra = 1
-    fields = ['equipment_location', 'common_equipment_location', 'quantity', 'get_equipment_info']
+    fields = ['equipment_location', 'common_equipment_location', 'quantity', 'is_slot', 'slot_date_start', 'slot_date_end', 'can_provide', 'is_agreed']
     readonly_fields = ['get_equipment_info']
     show_change_link = True
     autocomplete_fields = ['equipment_location', 'common_equipment_location']
     
     def get_equipment_info(self, obj):
         """Отображает информацию о выбранном оборудовании"""
-        if obj.equipment_location:
+        if obj.pk and obj.equipment_location:
             return format_html(
                 '<span style="color: #0039a6;">📍 {}</span> - {} (доступно: {} шт.)',
                 obj.equipment_location.id_locations.name,
                 obj.equipment_location.id_equipments.name,
                 obj.equipment_location.quantity
             )
-        elif obj.common_equipment_location:
+        elif obj.pk and obj.common_equipment_location:
             return format_html(
                 '<span style="color: #da291c;">🌍 {}</span> (доступно: {} шт.)',
                 obj.common_equipment_location.id_equipments.name,

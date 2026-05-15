@@ -1,6 +1,6 @@
 // modules/slots.js
 import { state } from './state.js';
-import { showNotification, escapeHtml, formatDateHeader, formatTime, getDateKey, formatDateTime, formatDateTimeForDisplay, formatForInput} from './utils.js';
+import { showNotification, escapeHtml, formatDateHeader, formatTime, getDateKey, formatDateTime, formatDateTimeForDisplay, formatForInput } from './utils.js';
 import { updateEquipmentList } from './location.js';
 
 // ========== ПЕРЕМЕННЫЕ ==========
@@ -32,7 +32,6 @@ export const displaySlotsList = () => {
             
             let equipmentHtml = '';
             slot.equipment.forEach(eq => {
-                // ========== ОТОБРАЖАЕМ ТИП ОБОРУДОВАНИЯ ==========
                 const typeBadge = eq.type_name ? `<span class="equipment-type-badge">${escapeHtml(eq.type_name)}</span>` : '';
                 equipmentHtml += `
                     <div class="slot-equipment-item">
@@ -45,7 +44,6 @@ export const displaySlotsList = () => {
                 `;
             });
             
-            // Находим глобальный индекс слота для удаления
             const globalIndex = slotsList.findIndex(s => s.date_start === slot.date_start && s.date_end === slot.date_end);
             
             html += `
@@ -66,7 +64,6 @@ export const displaySlotsList = () => {
     
     container.html(html);
     
-    // Обработчики удаления слотов
     $('.slot-remove-btn').off('click').on('click', function() {
         const index = $(this).data('slot-index');
         removeSlot(index);
@@ -82,20 +79,9 @@ export const removeSlot = (index) => {
 
 // Очистка всех слотов
 export const clearAllSlots = () => {
+    console.log('clearAllSlots вызвана, очищаем слоты');
     slotsList = [];
-    displaySlotsList();
-    
-    // Восстанавливаем дату начала слота из общей даты
-    const mainDateStart = $('#dateStart').val();
-    if (mainDateStart) {
-        $('#slotDateStart').val(mainDateStart);
-        if (document.getElementById('slotDateStart').nextSibling) {
-            document.getElementById('slotDateStart').nextSibling.value = formatDateTimeForDisplay(new Date(mainDateStart));
-        }
-        updateEndDateByInterval();
-    } else {
-        $('#slotDateStart, #slotDateEnd').val('');
-    }
+    displaySlotsList();  // Это обновит DOM и покажет "Нет добавленных слотов"
 };
 
 // Получение всех слотов
@@ -117,12 +103,10 @@ export const updateEndDateByInterval = () => {
     const formattedEndDate = formatForInput(endDate);
     $('#slotDateEnd').val(formattedEndDate);
     
-    // Обновляем altInput для flatpickr
     if (document.getElementById('slotDateEnd').nextSibling) {
         document.getElementById('slotDateEnd').nextSibling.value = formatDateTimeForDisplay(endDate);
     }
     
-    // Если есть выбранная локация, обновляем оборудование
     if (state.currentLocation) {
         updateEquipmentList();
     }
@@ -132,28 +116,33 @@ export const updateEndDateByInterval = () => {
 export const updateNextSlotDates = () => {
     if (slotsList.length === 0) return;
     
-    // Находим последний слот по времени (с учётом сортировки)
     const sortedSlots = sortSlots(slotsList);
     const lastSlot = sortedSlots[sortedSlots.length - 1];
     if (!lastSlot) return;
     
     const intervalMinutes = parseInt($('#slotInterval').val(), 10);
+    if (isNaN(intervalMinutes)) return;
+    
     const lastEndDate = new Date(lastSlot.date_end);
-    
-    // Новая дата начала = предыдущая дата окончания
     const newStartDate = new Date(lastEndDate);
-    
-    // Новая дата окончания = новая дата начала + интервал
     const newEndDate = new Date(newStartDate.getTime() + intervalMinutes * 60000);
     
-    // Обновляем поля
-    $('#slotDateStart').val(formatForInput(newStartDate));
-    $('#slotDateEnd').val(formatForInput(newEndDate));
+    const formattedStartDate = formatForInput(newStartDate);
+    const formattedEndDate = formatForInput(newEndDate);
     
-    // Обновляем altInput для flatpickr
+    $('#slotDateStart').val(formattedStartDate);
+    $('#slotDateEnd').val(formattedEndDate);
+    
     if (document.getElementById('slotDateStart').nextSibling) {
         document.getElementById('slotDateStart').nextSibling.value = formatDateTimeForDisplay(newStartDate);
         document.getElementById('slotDateEnd').nextSibling.value = formatDateTimeForDisplay(newEndDate);
+    }
+    
+    if (window.slotDateStartPicker) {
+        window.slotDateStartPicker.setDate(newStartDate, false);
+    }
+    if (window.slotDateEndPicker) {
+        window.slotDateEndPicker.setDate(newEndDate, false);
     }
 };
 
@@ -165,7 +154,11 @@ export const addNewSlot = () => {
         return false;
     }
     
-    // Получаем текущие даты
+    if (!state.currentLocation) {
+        showNotification('Сначала выберите помещение', 'warning');
+        return false;
+    }
+    
     const dateStart = $('#slotDateStart').val();
     const dateEnd = $('#slotDateEnd').val();
     
@@ -174,7 +167,6 @@ export const addNewSlot = () => {
         return false;
     }
     
-    // Получаем выбранное оборудование
     const selectedEquipment = [];
     $('.equipment-item').each(function() {
         const quantity = parseInt($(this).find('.qty-input').val());
@@ -200,7 +192,6 @@ export const addNewSlot = () => {
         return false;
     }
     
-    // Добавляем слот
     slotsList.push({
         date_start: dateStart,
         date_end: dateEnd,
@@ -209,27 +200,10 @@ export const addNewSlot = () => {
     
     displaySlotsList();
     
-    // Очищаем выбранное оборудование
     $('.qty-input').val(0);
     window.equipmentQuantities = {};
     
-    // ========== ОБНОВЛЯЕМ ДАТЫ ДЛЯ СЛЕДУЮЩЕГО СЛОТА, НО НЕ СБРАСЫВАЕМ ==========
-    // Получаем общую дату начала из основного блока
-    const mainDateStart = $('#dateStart').val();
-    
-    if (mainDateStart) {
-        // Если есть общая дата, используем её
-        $('#slotDateStart').val(mainDateStart);
-        if (document.getElementById('slotDateStart').nextSibling) {
-            document.getElementById('slotDateStart').nextSibling.value = formatDateTimeForDisplay(new Date(mainDateStart));
-        }
-    } else {
-        // Если нет общей даты, используем дату окончания последнего слота
-        updateNextSlotDates();
-    }
-    
-    // Пересчитываем дату окончания по интервалу
-    updateEndDateByInterval();
+    updateNextSlotDates();
     
     showNotification(`Слот добавлен! Всего слотов: ${slotsList.length}`, 'success');
     return true;
@@ -245,8 +219,7 @@ export const initSlotDatePickers = () => {
     const minDate = new Date();
     minDate.setHours(0, 0, 0, 0);
     
-    // Календарь для даты начала слота
-    slotDateStartPicker = flatpickr(slotDateStartInput, {
+    window.slotDateStartPicker = flatpickr(slotDateStartInput, {
         locale: 'ru',
         enableTime: true,
         dateFormat: 'Y-m-d H:i:S',
@@ -260,8 +233,7 @@ export const initSlotDatePickers = () => {
         }
     });
     
-    // Календарь для даты окончания слота
-    slotDateEndPicker = flatpickr(slotDateEndInput, {
+    window.slotDateEndPicker = flatpickr(slotDateEndInput, {
         locale: 'ru',
         enableTime: true,
         dateFormat: 'Y-m-d H:i:S',
@@ -278,7 +250,7 @@ export const initSlotDatePickers = () => {
     });
 };
 
-// Показать/скрыть элементы слотов в зависимости от режима
+// Показать/скрыть элементы слотов
 export const toggleSlotsUI = (show) => {
     const slotsDatesBlock = document.getElementById('slotsDatesBlock');
     const intervalSelectorBlock = document.getElementById('intervalSelectorBlock');
@@ -295,10 +267,6 @@ export const toggleSlotsUI = (show) => {
         if (intervalSelectorBlock) intervalSelectorBlock.style.display = 'none';
         if (addSlotBtnBlock) addSlotBtnBlock.style.display = 'none';
         slotsListContainer.hide();
-        
-        // Очищаем слоты при скрытии
-        slotsList = [];
-        displaySlotsList();
         $('#slotDateStart, #slotDateEnd').val('');
     }
 };
@@ -322,12 +290,10 @@ export const syncSlotDatesWithMain = () => {
 
 // Инициализация обработчиков для слотов
 export const initSlotsHandlers = () => {
-    // Обработчик кнопки "Добавить слот"
     $('#addSlotBtn').off('click').on('click', function() {
         addNewSlot();
     });
     
-    // Обработчик изменения интервала
     $('#slotInterval').off('change').on('change', function() {
         const mode = localStorage.getItem('viewMode') || 'event';
         if (mode === 'slots') {
@@ -335,7 +301,6 @@ export const initSlotsHandlers = () => {
         }
     });
     
-    // Обработчик изменения даты начала слота
     $('#slotDateStart').off('change').on('change', function() {
         const mode = localStorage.getItem('viewMode') || 'event';
         if (mode === 'slots') {
@@ -343,9 +308,6 @@ export const initSlotsHandlers = () => {
         }
     });
 };
-
-// Экспорт для доступа из других модулей
-export { slotsList, formatDateTimeForDisplay };
 
 // Сортировка слотов по дате и времени
 const sortSlots = (slots) => {
@@ -369,7 +331,6 @@ const groupSlotsByDate = (slots) => {
         groups.get(dateKey).push(slot);
     });
     
-    // Сортируем слоты внутри каждой группы по времени
     for (const [dateKey, slotsInGroup] of groups) {
         slotsInGroup.sort((a, b) => {
             const timeA = new Date(a.date_start);
