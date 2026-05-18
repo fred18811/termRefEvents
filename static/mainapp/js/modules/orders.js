@@ -84,6 +84,24 @@ export const loadOrders = async () => {
             allOrders.forEach(order => {
                 console.log(`  Заявка №${order.id}: статус = ${order.status} (${order.status_display})`);
             });
+
+            for (const order of allOrders) {
+                try {
+                    const itemsRes = await api.getOrderItems(order.id);
+                    if (itemsRes.success && itemsRes.items) {
+                        const locations = new Set();
+                        itemsRes.items.forEach(item => {
+                            if (item.location_name) {
+                                locations.add(item.location_name);
+                            }
+                        });
+                        order.locations = Array.from(locations);
+                    }
+                } catch (error) {
+                    console.error(`Ошибка загрузки локаций для заявки ${order.id}:`, error);
+                    order.locations = [];
+                }
+            }
             
             applyFiltersAndDisplay();
             initOrderFilters();
@@ -1005,43 +1023,102 @@ export const displayOrderItems = async (applicationId, items, canEdit = false) =
                 location_id: item.location_id,
                 location_name: item.location_name,
                 order_comment: item.order_comment || '',
-                common_date_start: item.date_start,  // общая дата начала для помещения
-                common_date_end: item.date_end,      // общая дата окончания для помещения
-                slotGroups: new Map(),     // ключ: slot_time_key, значение: массив items
-                regularItems: []           // обычные позиции (не слоты)
+                common_date_start: item.date_start,
+                common_date_end: item.date_end,
+                slotGroups: new Map(),
+                regularItems: []
             });
         }
         
         const orderData = ordersByOrderId.get(orderId);
         
         if (item.is_slot === true && item.slot_date_start && item.slot_date_end) {
-            // Создаем ключ для группировки слотов по времени (только время, без даты)
-            const slotDate = new Date(item.slot_date_start);
-            const slotDateKey = slotDate.toDateString(); // для группировки по дням
             const slotTimeKey = `${item.slot_date_start}_${item.slot_date_end}`;
-            
             if (!orderData.slotGroups.has(slotTimeKey)) {
                 orderData.slotGroups.set(slotTimeKey, {
                     items: [],
-                    date_key: slotDateKey,
                     slot_date_start: item.slot_date_start,
                     slot_date_end: item.slot_date_end
                 });
             }
             orderData.slotGroups.get(slotTimeKey).items.push(item);
         } else {
-            // Обычная позиция (не слот)
             orderData.regularItems.push(item);
         }
     });
     
+    // ========== ПРОВЕРКА ПЕРЕСЕЧЕНИЙ МЕЖДУ РАЗНЫМИ ЗАЯВКАМИ ДЛЯ КОНКРЕТНОЙ ЛОКАЦИИ ==========
+    
+    const checkOverlap = (date1_start, date1_end, date2_start, date2_end) => {
+        if (!date1_start || !date1_end || !date2_start || !date2_end) return false;
+        const start1 = new Date(date1_start);
+        const end1 = new Date(date1_end);
+        const start2 = new Date(date2_start);
+        const end2 = new Date(date2_end);
+        return (start1 < end2 && start2 < end1);
+    };
+    
+    const formatDateTime = (dateStr) => {
+        if (!dateStr) return 'Дата не указана';
+        const date = new Date(dateStr);
+        return date.toLocaleString('ru-RU', {
+            day: 'numeric', month: 'long',
+            hour: '2-digit', minute: '2-digit'
+        });
+    };
+    
+    // Функция получения HTML иконки для конкретного помещения
+    const getOverlapIconHtmlForLocation = (locationName, currentDateStart, currentDateEnd) => {
+        const overlappingApps = [];
+        
+        for (const otherApp of allOrders) {
+            if (otherApp.id === applicationId) continue;
+            if (!otherApp.date_time_start || !otherApp.date_time_end) continue;
+            
+            // ПРОВЕРКА: использует ли другая заявка ТО ЖЕ САМОЕ помещение?
+            const otherAppLocations = otherApp.locations || [];
+            if (!otherAppLocations.includes(locationName)) continue;  // ← КЛЮЧЕВАЯ ПРОВЕРКА
+            
+            // Проверяем пересечение дат
+            if (checkOverlap(currentDateStart, currentDateEnd, otherApp.date_time_start, otherApp.date_time_end)) {
+                overlappingApps.push({
+                    app2_id: otherApp.id,
+                    app2_name: otherApp.application_name || `Заявка №${otherApp.id}`,
+                    date2: formatDateTime(otherApp.date_time_start),
+                    end2: formatDateTime(otherApp.date_time_end)
+                });
+            }
+        }
+        
+        if (!overlappingApps.length) return '';
+        
+        let tooltipText = `⚠️ Обнаружены пересечения по датам для помещения "${locationName}":\n`;
+        overlappingApps.forEach((overlap, idx) => {
+            tooltipText += `\n${idx + 1}. ${overlap.app2_name}: ${overlap.date2} - ${overlap.end2}`;
+        });
+        
+        return `<span class="overlap-warning-icon" title="${escapeHtml(tooltipText)}">⚠️</span>`;
+    };
+    
     // ========== ГЕНЕРАЦИЯ HTML ==========
     let html = '';
+
+    const canViewOverlaps = userPermissions.can_view_all || userPermissions.can_edit_all || userPermissions.is_superuser;
     
     for (const [_, orderData] of ordersByOrderId) {
         // Форматируем общую дату помещения
-        const commonStartDate = orderData.common_date_start ? new Date(orderData.common_date_start).toLocaleString('ru-RU') : 'Дата не указана';
-        const commonEndDate = orderData.common_date_end ? new Date(orderData.common_date_end).toLocaleString('ru-RU') : 'Дата не указана';
+        const commonStartDate = orderData.common_date_start ? new Date(orderData.common_date_start).toLocaleDateString('ru-RU') : 'Дата не указана';
+        const commonEndDate = orderData.common_date_end ? new Date(orderData.common_date_end).toLocaleDateString('ru-RU') : 'Дата не указана';
+        
+        // Получаем иконку для КОНКРЕТНОГО помещения (только для пользователей с правами)
+        let locationOverlapIcon = '';
+        if (canViewOverlaps) {
+            locationOverlapIcon = getOverlapIconHtmlForLocation(
+                orderData.location_name,
+                orderData.common_date_start,
+                orderData.common_date_end
+            );
+        }
         
         // Кнопки действий (один раз на весь заказ)
         const showActionButtons = canEditOrder && (applicationStatus === 'new');
@@ -1058,16 +1135,18 @@ export const displayOrderItems = async (applicationId, items, canEdit = false) =
             <div class="location-order-card" data-order-id="${orderData.order_id}">
                 <div class="location-order-header">
                     <div class="location-order-info">
-                        <span class="location-name">📍 ${escapeHtml(orderData.location_name)}</span>
+                        <span class="location-name">
+                            📍 ${escapeHtml(orderData.location_name)}
+                            ${locationOverlapIcon}
+                        </span>
                         <span class="location-common-dates">📅 ${commonStartDate} - ${commonEndDate}</span>
                     </div>
                     ${actionButtons}
                 </div>
         `;
         
-        // ========== 1. ОТОБРАЖАЕМ ВСЕ СЛОТЫ (каждая группа - отдельная таблица) ==========
+        // ========== 1. ОТОБРАЖАЕМ ВСЕ СЛОТЫ ==========
         if (orderData.slotGroups.size > 0) {
-            // Преобразуем Map в массив и сортируем по времени начала
             const sortedSlotGroups = Array.from(orderData.slotGroups.entries());
             sortedSlotGroups.sort((a, b) => {
                 const dateA = new Date(a[1].slot_date_start);
@@ -1079,19 +1158,16 @@ export const displayOrderItems = async (applicationId, items, canEdit = false) =
                 const slotItems = slotGroup.items;
                 const firstSlot = slotItems[0];
                 
-                // Форматируем только время для слота (дата уже общая)
                 const startTime = firstSlot.slot_date_start ? new Date(firstSlot.slot_date_start).toLocaleTimeString('ru-RU', {hour:'2-digit', minute:'2-digit'}) : '';
                 const endTime = firstSlot.slot_date_end ? new Date(firstSlot.slot_date_end).toLocaleTimeString('ru-RU', {hour:'2-digit', minute:'2-digit'}) : '';
                 const slotTimeBadge = `<span class="slot-time-badge">⏰ ${startTime} - ${endTime}</span>`;
                 
-                // Собираем typesMap для этой группы слотов
                 const typesMap = new Map();
                 slotItems.forEach(item => {
                     const typeName = item.type_name;
                     if (!typesMap.has(typeName)) {
                         typesMap.set(typeName, []);
                     }
-                    
                     const equipmentName = item.is_common ? `🌍 ${item.equipment_name}` : item.equipment_name;
                     typesMap.get(typeName).push({
                         name: equipmentName,
@@ -1108,7 +1184,6 @@ export const displayOrderItems = async (applicationId, items, canEdit = false) =
                     });
                 });
                 
-                // Генерируем таблицу для слота (только время в заголовке)
                 orderCardHtml += generateSlotTableHtml(
                     orderData.order_id,
                     typesMap,
@@ -1121,9 +1196,8 @@ export const displayOrderItems = async (applicationId, items, canEdit = false) =
             }
         }
         
-        // ========== 2. ОТОБРАЖАЕМ ОБЫЧНЫЕ ПОЗИЦИИ (НЕ СЛОТЫ) ==========
+        // ========== 2. ОТОБРАЖАЕМ ОБЫЧНЫЕ ПОЗИЦИИ ==========
         if (orderData.regularItems.length > 0) {
-            // Собираем typesMap для обычных позиций
             const typesMap = new Map();
             
             orderData.regularItems.forEach(item => {
@@ -1131,7 +1205,6 @@ export const displayOrderItems = async (applicationId, items, canEdit = false) =
                 if (!typesMap.has(typeName)) {
                     typesMap.set(typeName, []);
                 }
-                
                 const equipmentName = item.is_common ? `🌍 ${item.equipment_name}` : item.equipment_name;
                 typesMap.get(typeName).push({
                     name: equipmentName,
@@ -1158,7 +1231,7 @@ export const displayOrderItems = async (applicationId, items, canEdit = false) =
             );
         }
         
-        // Добавляем комментарий, если есть
+        // Добавляем комментарий
         if (orderData.order_comment) {
             orderCardHtml += `
                 <div class="order-comment-inline">
@@ -1168,7 +1241,6 @@ export const displayOrderItems = async (applicationId, items, canEdit = false) =
             `;
         }
         
-        // Закрываем контейнер заказа
         orderCardHtml += `</div>`;
         html += orderCardHtml;
     }
@@ -1184,7 +1256,6 @@ export const displayOrderItems = async (applicationId, items, canEdit = false) =
         bindOrderCardButtons();
     }
 };
-
 // ========== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ДЛЯ ГЕНЕРАЦИИ HTML ==========
 
 // Генерация HTML для таблицы слота
