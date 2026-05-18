@@ -9,7 +9,8 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from .models import Location, TypeEquipment, Equipment, EquipmentLocation, Photo,\
     Order, OrderItem, CommonEquipmentLocation, Application, History,Feedback,\
-        Department, UserDepartment, DepartmentTypeEquipment, ApplicationApproval, GroupProfile  
+        Department, UserDepartment, DepartmentTypeEquipment, ApplicationApproval, GroupProfile
+import json  
 
 # Настройка заголовков админ-панели
 admin.site.site_header = "Управление локациями и оборудованием"
@@ -802,8 +803,6 @@ class FeedbackAdmin(admin.ModelAdmin):
         """Подробный просмотр JSON в админке с экранированием"""
         if not obj.data:
             return "Нет дополнительных данных"
-        
-        import json
         
         # Форматируем JSON с отступами
         json_str = json.dumps(obj.data, ensure_ascii=False, indent=2)
