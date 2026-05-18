@@ -4,7 +4,7 @@
 import { state, saveCart } from './state.js';
 import { escapeHtml, showNotification, validateDates, debounce } from './utils.js';
 import { api } from './api.js';
-import { updateCartDisplay } from './cart.js';
+import { updateCartDisplay } from './cart/cartDisplay.js';
 import { clearAllSlots } from './slots.js';
 import { checkLocationBusy, initDatePickersForLocation, loadBusyDates } from './events.js';
 
