@@ -1040,8 +1040,8 @@ export const displayOrderItems = async (applicationId, items, canEdit = false) =
     
     for (const [_, orderData] of ordersByOrderId) {
         // Форматируем общую дату помещения
-        const commonStartDate = orderData.common_date_start ? new Date(orderData.common_date_start).toLocaleDateString('ru-RU') : 'Дата не указана';
-        const commonEndDate = orderData.common_date_end ? new Date(orderData.common_date_end).toLocaleDateString('ru-RU') : 'Дата не указана';
+        const commonStartDate = orderData.common_date_start ? new Date(orderData.common_date_start).toLocaleString('ru-RU') : 'Дата не указана';
+        const commonEndDate = orderData.common_date_end ? new Date(orderData.common_date_end).toLocaleString('ru-RU') : 'Дата не указана';
         
         // Кнопки действий (один раз на весь заказ)
         const showActionButtons = canEditOrder && (applicationStatus === 'new');
