@@ -3953,3 +3953,197 @@ nav {
         white-space: nowrap;
     }
 }
+
+/* ========== РЕДАКТИРОВАНИЕ СЛОТОВ В МОДАЛЬНОМ ОКНЕ ========== */
+.edit-slots-container {
+    max-height: 70vh;
+    overflow-y: auto;
+    padding-right: 0.5rem;
+}
+
+.edit-slots-list {
+    margin-top: 1rem;
+}
+
+.edit-slot-item {
+    background: var(--gray-50);
+    border-radius: var(--radius-lg);
+    padding: 1rem;
+    margin-bottom: 1rem;
+    border: 1px solid var(--gray-200);
+    transition: all var(--transition-fast);
+}
+
+.edit-slot-item:hover {
+    box-shadow: var(--shadow-sm);
+    border-color: var(--color-blue);
+}
+
+.edit-slot-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--gray-200);
+}
+
+.edit-slot-time {
+    font-weight: 600;
+    color: var(--color-blue);
+    font-size: 0.9rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.edit-slot-time input {
+    padding: 0.3rem 0.5rem;
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-sm);
+    font-family: inherit;
+    font-size: 0.8rem;
+}
+
+.edit-slot-time input:focus {
+    outline: none;
+    border-color: var(--color-blue);
+    box-shadow: 0 0 0 2px rgba(0, 57, 166, 0.1);
+}
+
+.remove-slot-btn {
+    background: none;
+    border: none;
+    color: var(--color-red);
+    cursor: pointer;
+    font-size: 0.75rem;
+    padding: 0.3rem 0.6rem;
+    border-radius: 20px;
+    transition: all var(--transition-fast);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+.remove-slot-btn:hover {
+    background: rgba(218, 41, 28, 0.1);
+}
+
+.edit-slot-equipment-list {
+    margin: 0.75rem 0;
+    padding: 0.5rem;
+    background: white;
+    border-radius: var(--radius-md);
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.edit-slot-equipment-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem;
+    border-bottom: 1px dashed var(--gray-200);
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.edit-slot-equipment-item:last-child {
+    border-bottom: none;
+}
+
+.edit-slot-equipment-item span {
+    flex: 1;
+    font-size: 0.85rem;
+    color: var(--gray-700);
+}
+
+.edit-slot-equipment-item .edit-slot-qty {
+    width: 70px;
+    padding: 0.3rem;
+    text-align: center;
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-sm);
+    font-size: 0.8rem;
+}
+
+.edit-slot-equipment-item .edit-slot-qty:focus {
+    outline: none;
+    border-color: var(--color-blue);
+}
+
+.remove-slot-equipment-btn {
+    background: none;
+    border: none;
+    color: var(--color-red);
+    cursor: pointer;
+    font-size: 0.9rem;
+    padding: 0.2rem 0.4rem;
+    border-radius: 4px;
+    transition: all var(--transition-fast);
+}
+
+.remove-slot-equipment-btn:hover {
+    background: rgba(218, 41, 28, 0.1);
+}
+
+.add-equipment-to-slot-btn {
+    background: linear-gradient(135deg, var(--color-green), var(--color-green-dark));
+    color: white;
+    border: none;
+    padding: 0.4rem 0.8rem;
+    border-radius: 20px;
+    cursor: pointer;
+    font-size: 0.75rem;
+    font-weight: 500;
+    transition: all var(--transition-fast);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+.add-equipment-to-slot-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(40, 167, 69, 0.3);
+}
+
+.text-muted {
+    color: var(--gray-400);
+    text-align: center;
+    padding: 1rem;
+    font-size: 0.8rem;
+}
+
+/* Адаптив для редактирования слотов */
+@media (max-width: 768px) {
+    .edit-slot-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .edit-slot-time {
+        flex-direction: column;
+        align-items: flex-start;
+        width: 100%;
+    }
+    
+    .edit-slot-time input {
+        width: 100%;
+    }
+    
+    .edit-slot-equipment-item {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .edit-slot-equipment-item span {
+        width: 100%;
+    }
+    
+    .edit-slot-equipment-item .edit-slot-qty {
+        width: 100%;
+    }
+}

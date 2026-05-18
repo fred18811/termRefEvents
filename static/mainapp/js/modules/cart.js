@@ -77,7 +77,12 @@ export const updateCartDisplay = () => {
                             📅 ${commonStartDate} - ${commonEndDate}
                         </div>
                         ${item.comment ? `<div class="cart-item-comment">💬 ${escapeHtml(item.comment)}</div>` : ''}
-                        <div class="slots-list-cart">
+                    </div>
+                    <div class="cart-item-actions">
+                        <button class="cart-edit-slots-btn" data-index="${i}" title="Редактировать слоты">✏️</button>
+                        <button class="cart-remove-btn" data-index="${i}" title="Удалить">🗑️</button>
+                    </div>
+                </div>
             `;
             
             // Выводим слоты с группировкой по датам
@@ -161,7 +166,12 @@ export const updateCartDisplay = () => {
         const index = $(this).data('index');
         removeCartItem(index);
     });
-    
+
+    $('.cart-edit-slots-btn').click(function() {
+        const index = $(this).data('index');
+        openEditSlotsModal(index);
+    });
+        
     $('.cart-item-location').click(function() {
         const index = $(this).data('index');
         const item = state.orderCart[index];
@@ -288,6 +298,477 @@ const loadAvailableEquipment = async (locationId, dateStart = null, dateEnd = nu
         return [];
     }
 };
+
+// Удаление слота из редактирования
+const removeSlotFromEdit = (slotIndex) => {
+    if (confirm('Удалить этот слот?')) {
+        $(`.edit-slot-item[data-slot-index="${slotIndex}"]`).remove();
+        showNotification('Слот удален', 'info');
+    }
+};
+
+// Переиндексация слотов после удаления
+const reindexSlots = () => {
+    $('.edit-slot-item').each(function(index) {
+        $(this).attr('data-slot-index', index);
+        $(this).find('.remove-slot-btn').attr('data-slot-index', index);
+        $(this).find('.add-equipment-to-slot-btn').attr('data-slot-index', index);
+    });
+};
+
+// Функция для привязки обработчиков к новому слоту
+const bindNewSlotHandlers = () => {
+    // Обработчик удаления слота
+    $('.remove-slot-btn').off('click').on('click', function() {
+        const slotIndex = $(this).data('slot-index');
+        $(`.edit-slot-item[data-slot-index="${slotIndex}"]`).remove();
+        // Переиндексируем оставшиеся слоты
+        reindexSlots();
+        showNotification('Слот удален', 'info');
+    });
+    
+    // Обработчик добавления оборудования в слот
+    $('.add-equipment-to-slot-btn').off('click').on('click', function() {
+        const slotIndex = $(this).data('slot-index');
+        console.log('Кнопка добавления оборудования нажата, slotIndex:', slotIndex);
+        if (slotIndex !== undefined && slotIndex !== null) {
+            openAddEquipmentForSlot(parseInt(slotIndex));
+        } else {
+            // Если data-slot-index не установлен, получаем индекс из DOM
+            const $slot = $(this).closest('.edit-slot-item');
+            const index = $('.edit-slot-item').index($slot);
+            $(this).data('slot-index', index);
+            console.log('Индекс получен из DOM:', index);
+            openAddEquipmentForSlot(index);
+        }
+    });
+};
+
+// Добавление нового пустого слота
+const addNewEmptySlot = () => {
+    const now = new Date();
+    const nextHour = new Date(now.getTime() + 60 * 60000);
+    
+    // ========== ФОРМАТИРУЕМ ДАТЫ В ЕДИНЫЙ ФОРМАТ ==========
+    const formatDateTime = (date) => {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        const hours = String(date.getHours()).padStart(2, '0');
+        const minutes = String(date.getMinutes()).padStart(2, '0');
+        const seconds = String(date.getSeconds()).padStart(2, '0');
+        // Используем пробел вместо T
+        return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+    };
+    
+    const startFormatted = formatDateTime(now);
+    const endFormatted = formatDateTime(nextHour);
+    
+    // Получаем текущее количество слотов для правильного индекса
+    const slotIndex = $('.edit-slot-item').length;
+    
+    const slotHtml = `
+        <div class="edit-slot-item" data-slot-index="${slotIndex}">
+            <div class="edit-slot-header">
+                <div class="edit-slot-time">
+                    <input type="datetime-local" class="edit-slot-start-input" value="${startFormatted.replace(' ', 'T')}" style="width: 160px;">
+                    -
+                    <input type="datetime-local" class="edit-slot-end-input" value="${endFormatted.replace(' ', 'T')}" style="width: 160px;">
+                </div>
+                <button class="remove-slot-btn" data-slot-index="${slotIndex}" title="Удалить слот">🗑️ Удалить слот</button>
+            </div>
+            <div class="edit-slot-equipment-list">
+                <div class="text-muted">Нет оборудования</div>
+            </div>
+            <button class="add-equipment-to-slot-btn" data-slot-index="${slotIndex}">➕ Добавить оборудование</button>
+        </div>
+    `;
+    
+    $('.edit-slots-list').append(slotHtml);
+    
+    // Привязываем обработчики к новым элементам
+    bindNewSlotHandlers();
+    
+    showNotification('Новый слот добавлен', 'success');
+};
+
+// Открытие модального окна добавления оборудования для слота
+const openAddEquipmentForSlot = (slotIndex) => {
+    console.log('openAddEquipmentForSlot: slotIndex=', slotIndex, 'availableEquipment.length=', availableEquipment.length);
+    
+    // Если availableEquipment пуст, загружаем заново
+    if (!availableEquipment.length && state.currentLocation) {
+        console.log('Загружаем оборудование для локации');
+        loadAvailableEquipment(state.currentLocation.id).then(() => {
+            openAddEquipmentForSlot(slotIndex);
+        });
+        return;
+    }
+    
+    const index = parseInt(slotIndex);
+    const $slotItem = $(`.edit-slot-item[data-slot-index="${index}"]`);
+    if (!$slotItem.length) {
+        console.error('Слот не найден по индексу:', index);
+        showNotification('Ошибка: слот не найден', 'error');
+        return;
+    }
+    
+    if (!availableEquipment.length) {
+        showNotification('Нет доступного оборудования', 'warning');
+        return;
+    }
+    
+    // Собираем уже добавленные ID оборудования
+    const addedIds = [];
+    $slotItem.find('.edit-slot-equipment-item').each(function() {
+        const eqId = $(this).data('eq-id');
+        if (eqId) addedIds.push(parseInt(eqId));
+    });
+    
+    console.log('Уже добавленные ID:', addedIds);
+    
+    let html = '<div class="available-equipment-list">';
+    let hasAvailable = false;
+    
+    availableEquipment.forEach(eq => {
+        if (!addedIds.includes(eq.equipment_id)) {
+            hasAvailable = true;
+            const commonBadge = eq.is_common ? '<span class="common-badge-small">🌍 Общее</span>' : '';
+            // Используем type_name из availableEquipment
+            const displayTypeName = eq.type_name || 'Оборудование';
+            
+            html += `
+                <div class="available-equipment-item" data-eq-id="${eq.equipment_id}" data-is-common="${eq.is_common || false}">
+                    <div>
+                        <div class="available-equipment-name">
+                            ${escapeHtml(eq.name)}
+                            ${commonBadge}
+                        </div>
+                        <div class="available-equipment-type">${escapeHtml(displayTypeName)}</div>
+                        <div class="available-equipment-quantity">📦 Доступно: <strong>${eq.quantity}</strong> шт.</div>
+                    </div>
+                    <div>
+                        <label>Количество:</label>
+                        <input type="number" 
+                               min="0" 
+                               max="${eq.quantity}" 
+                               value="0"
+                               class="equipment-select-qty" 
+                               data-max="${eq.quantity}">
+                    </div>
+                </div>
+            `;
+        }
+    });
+    
+    if (!hasAvailable) {
+        html = '<div class="text-center" style="padding: 2rem;">Все оборудование уже добавлено</div>';
+    }
+    html += '</div>';
+    
+    $('#addEquipmentContent').html(html);
+    $('#addEquipmentModal').show();
+    
+    // Сохраняем slotIndex для использования при подтверждении
+    $('#addEquipmentModal').data('current-slot-index', index);
+    
+    $('#confirmAddEquipmentBtn').off('click').one('click', () => {
+        const currentSlotIndex = $('#addEquipmentModal').data('current-slot-index');
+        console.log('Подтверждение добавления для слота:', currentSlotIndex);
+        addEquipmentToSlot(currentSlotIndex);
+    });
+};
+
+// Добавление оборудования в слот
+const addEquipmentToSlot = (slotIndex) => {
+    console.log('addEquipmentToSlot: slotIndex=', slotIndex);
+    
+    const index = parseInt(slotIndex);
+    const $slotItem = $(`.edit-slot-item[data-slot-index="${index}"]`);
+    
+    if (!$slotItem.length) {
+        console.error('Слот не найден для добавления оборудования, index=', index);
+        showNotification('Ошибка: слот не найден', 'error');
+        $('#addEquipmentModal').hide();
+        return;
+    }
+    
+    let $equipmentList = $slotItem.find('.edit-slot-equipment-list');
+    
+    // Если внутри есть .text-muted, очищаем контейнер
+    if ($equipmentList.find('.text-muted').length) {
+        $equipmentList.html('');
+    }
+    
+    let addedCount = 0;
+    
+    $('.available-equipment-item').each(function() {
+        const eqId = $(this).data('eq-id');
+        const eqName = $(this).find('.available-equipment-name').clone().children().remove().end().text().trim();
+        const qty = parseInt($(this).find('.equipment-select-qty').val());
+        const maxQty = parseInt($(this).find('.equipment-select-qty').data('max'));
+        
+        // Получаем правильный type_name из availableEquipment или из DOM
+        let eqType = $(this).find('.available-equipment-type').text().trim();
+        if (!eqType || eqType === 'Оборудование') {
+            // Пробуем найти в availableEquipment
+            const eqData = availableEquipment.find(e => e.equipment_id == eqId);
+            if (eqData && eqData.type_name) {
+                eqType = eqData.type_name;
+            }
+        }
+        
+        console.log(`Обработка оборудования: ${eqName}, qty=${qty}, type=${eqType}`);
+        
+        if (qty > 0) {
+            // Проверяем, нет ли уже такого оборудования
+            const existing = $equipmentList.find(`.edit-slot-equipment-item[data-eq-id="${eqId}"]`);
+            
+            if (existing.length) {
+                // Обновляем количество
+                const $input = existing.find('.edit-slot-qty');
+                const newQty = parseInt($input.val()) + qty;
+                const finalQty = Math.min(newQty, maxQty);
+                $input.val(finalQty);
+                console.log(`Обновлено количество для ${eqName}: ${finalQty}`);
+            } else {
+                // Добавляем новое оборудование с правильным type_name
+                const equipmentHtml = `
+                    <div class="edit-slot-equipment-item" data-eq-id="${eqId}" data-type-name="${escapeHtml(eqType)}">
+                        <span>${escapeHtml(eqName)} (${escapeHtml(eqType)})</span>
+                        <input type="number" 
+                               min="0" 
+                               max="${maxQty}" 
+                               value="${qty}" 
+                               class="edit-slot-qty" 
+                               data-eq-id="${eqId}"
+                               data-max="${maxQty}"
+                               style="width: 70px;">
+                        <button class="remove-slot-equipment-btn" data-eq-id="${eqId}">🗑️</button>
+                    </div>
+                `;
+                $equipmentList.append(equipmentHtml);
+                console.log(`Добавлено новое оборудование: ${eqName}, тип: ${eqType}`);
+            }
+            addedCount++;
+        }
+    });
+    
+    if (addedCount > 0) {
+        // Привязываем обработчики к новым элементам
+        $equipmentList.find('.edit-slot-qty').off('change').on('change', function() {
+            let val = parseInt($(this).val());
+            const max = parseInt($(this).data('max'));
+            if (isNaN(val)) val = 0;
+            if (val < 0) val = 0;
+            if (val > max) val = max;
+            $(this).val(val);
+        });
+        
+        $equipmentList.find('.remove-slot-equipment-btn').off('click').on('click', function() {
+            $(this).closest('.edit-slot-equipment-item').remove();
+            if ($equipmentList.children().length === 0) {
+                $equipmentList.html('<div class="text-muted">Нет оборудования</div>');
+            }
+            showNotification('Оборудование удалено из слота', 'info');
+        });
+        
+        showNotification(`Добавлено ${addedCount} позиций`, 'success');
+    } else {
+        if ($equipmentList.children().length === 0) {
+            $equipmentList.html('<div class="text-muted">Нет оборудования</div>');
+        }
+        showNotification('Выберите оборудование для добавления (укажите количество больше 0)', 'warning');
+    }
+    
+    $('#addEquipmentModal').hide();
+};
+
+// Сохранение изменений слотов
+const saveEditedSlots = () => {
+    if (currentEditIndex === null) return;
+    
+    const item = state.orderCart[currentEditIndex];
+    if (!item || item.type !== 'slots') return;
+    
+    // Получаем общие даты
+    const newCommonStart = $('#editSlotsCommonStart').val();
+    const newCommonEnd = $('#editSlotsCommonEnd').val();
+    const newComment = $('#editSlotsComment').val();
+    
+    // Собираем слоты
+    const newSlots = [];
+    let hasError = false;
+    
+    // Функция преобразования даты из datetime-local в единый формат
+    const convertToCommonFormat = (dateStr) => {
+        if (!dateStr) return null;
+        // Если уже в формате с пробелом, возвращаем как есть
+        if (dateStr.includes(' ') && !dateStr.includes('T')) {
+            // Проверяем наличие секунд
+            if (dateStr.split(' ')[1].split(':').length === 2) {
+                return dateStr + ':00';
+            }
+            return dateStr;
+        }
+        // Если в формате ISO с T, преобразуем
+        const date = new Date(dateStr);
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        const hours = String(date.getHours()).padStart(2, '0');
+        const minutes = String(date.getMinutes()).padStart(2, '0');
+        const seconds = String(date.getSeconds()).padStart(2, '0');
+        return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+    };
+    
+    $('.edit-slot-item').each(function(index) {
+        const $slot = $(this);
+        
+        // Получаем даты из input (формат datetime-local с T)
+        let dateStart = $slot.find('.edit-slot-start-input').val();
+        let dateEnd = $slot.find('.edit-slot-end-input').val();
+        
+        if (!dateStart) {
+            dateStart = $slot.find('.edit-slot-start').val();
+        }
+        if (!dateEnd) {
+            dateEnd = $slot.find('.edit-slot-end').val();
+        }
+        
+        if (!dateStart || !dateEnd) {
+            showNotification(`Ошибка: не указаны даты для слота ${index + 1}`, 'error');
+            hasError = true;
+            return false;
+        }
+        
+        // Преобразуем в единый формат
+        const convertedStart = convertToCommonFormat(dateStart);
+        const convertedEnd = convertToCommonFormat(dateEnd);
+        
+        if (!convertedStart || !convertedEnd) {
+            showNotification(`Ошибка: неверный формат дат для слота ${index + 1}`, 'error');
+            hasError = true;
+            return false;
+        }
+        
+        // Проверяем даты
+        const startDate = new Date(convertedStart);
+        const endDate = new Date(convertedEnd);
+        const now = new Date();
+        
+        if (startDate < now) {
+            showNotification(`Дата начала слота ${index + 1} не может быть в прошлом`, 'error');
+            hasError = true;
+            return false;
+        }
+        if (endDate <= startDate) {
+            showNotification(`Дата окончания слота ${index + 1} должна быть позже начала`, 'error');
+            hasError = true;
+            return false;
+        }
+        
+        // Собираем оборудование
+        const equipment = [];
+        $slot.find('.edit-slot-equipment-item').each(function() {
+            const eqId = $(this).data('eq-id');
+            const eqName = $(this).find('span').first().text().split('(')[0].trim();
+            // Получаем type_name из data-атрибута или из текста
+            let eqType = $(this).data('type-name');
+            if (!eqType) {
+                eqType = $(this).find('span').first().text().match(/\((.*?)\)/)?.[1] || 'Оборудование';
+            }
+            const quantity = parseInt($(this).find('.edit-slot-qty').val());
+            
+            if (quantity > 0) {
+                equipment.push({
+                    equipment_id: eqId,
+                    equipment_name: eqName,
+                    type_name: eqType,
+                    quantity: quantity,
+                    max_quantity: quantity,
+                    is_common: false
+                });
+            }
+        });
+        
+        if (equipment.length === 0) {
+            showNotification(`Слот ${index + 1} не содержит оборудования`, 'warning');
+            hasError = true;
+            return false;
+        }
+        
+        newSlots.push({
+            date_start: convertedStart,
+            date_end: convertedEnd,
+            equipment: equipment
+        });
+    });
+    
+    if (hasError) return;
+    
+    if (newSlots.length === 0) {
+        showNotification('Добавьте хотя бы один слот', 'warning');
+        return;
+    }
+    
+    // Обновляем заказ
+    item.common_date_start = newCommonStart;
+    item.common_date_end = newCommonEnd;
+    item.comment = newComment;
+    item.slots = newSlots;
+    
+    state.orderCart[currentEditIndex] = item;
+    saveCart();
+    updateCartDisplay();
+    
+    $('#editOrderModal').hide();
+    currentEditIndex = null;
+    showNotification('Слоты успешно обновлены', 'success');
+};
+
+// Привязка обработчиков для редактирования слотов
+const bindEditSlotsHandlers = () => {
+    // Кнопка сохранения
+    $('#saveEditBtn').off('click').on('click', () => {
+        saveEditedSlots();
+    });
+    
+    // Удаление слота
+    $('.remove-slot-btn').off('click').on('click', function() {
+        const slotIndex = $(this).data('slot-index');
+        removeSlotFromEdit(slotIndex);
+    });
+    
+    // Удаление оборудования из слота
+    $('.remove-slot-equipment-btn').off('click').on('click', function() {
+        const eqId = $(this).data('eq-id');
+        $(this).closest('.edit-slot-equipment-item').remove();
+        showNotification('Оборудование удалено из слота', 'info');
+    });
+    
+    // Изменение количества оборудования
+    $('.edit-slot-qty').off('change').on('change', function() {
+        let val = parseInt($(this).val());
+        const max = parseInt($(this).data('max'));
+        if (isNaN(val)) val = 0;
+        if (val < 0) val = 0;
+        if (val > max) val = max;
+        $(this).val(val);
+    });
+    
+    // Добавление оборудования в слот
+    $('.add-equipment-to-slot-btn').off('click').on('click', function() {
+        const slotIndex = $(this).data('slot-index');
+        openAddEquipmentForSlot(slotIndex);
+    });
+    
+    // Добавление нового слота
+    $('#addNewSlotToEdit').off('click').on('click', () => {
+        addNewEmptySlot();
+    });
+};
+
 
 // Открытие модального окна редактирования
 export const openEditModal = async (index) => {
@@ -485,6 +966,102 @@ export const openEditModal = async (index) => {
     });
     
     console.log('Установлен комментарий в textarea:', $('#editComment').val());
+};
+
+// Открытие модального окна редактирования слотов
+export const openEditSlotsModal = async (index) => {
+    currentEditIndex = index;
+    const item = state.orderCart[index];
+    
+    if (!item || item.type !== 'slots') return;
+    
+    console.log('Редактирование слотов:', item);
+    
+    // Загружаем оборудование для локации
+    await loadAvailableEquipment(item.location_id);
+    
+    // Формируем HTML для редактирования слотов
+    let slotsHtml = '';
+    
+    item.slots.forEach((slot, slotIndex) => {
+        const startTime = new Date(slot.date_start).toLocaleString('ru-RU', {
+            day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'
+        });
+        const endTime = new Date(slot.date_end).toLocaleString('ru-RU', {
+            day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'
+        });
+        
+        let equipmentHtml = '';
+        slot.equipment.forEach(eq => {
+            // Сохраняем правильный type_name из данных слота
+            const displayTypeName = eq.type_name || 'Оборудование';
+            
+            equipmentHtml += `
+                <div class="edit-slot-equipment-item" data-eq-id="${eq.equipment_id}" data-type-name="${escapeHtml(displayTypeName)}">
+                    <span>${escapeHtml(eq.equipment_name)} (${escapeHtml(displayTypeName)})</span>
+                    <input type="number" 
+                           min="0" 
+                           max="${eq.max_quantity || eq.quantity}" 
+                           value="${eq.quantity}" 
+                           class="edit-slot-qty" 
+                           data-eq-id="${eq.equipment_id}"
+                           data-max="${eq.max_quantity || eq.quantity}"
+                           style="width: 70px;">
+                    <button class="remove-slot-equipment-btn" data-eq-id="${eq.equipment_id}">🗑️</button>
+                </div>
+            `;
+        });
+        
+        slotsHtml += `
+            <div class="edit-slot-item" data-slot-index="${slotIndex}">
+                <div class="edit-slot-header">
+                    <div class="edit-slot-time">
+                        ⏰ ${startTime} - ${endTime}
+                        <input type="hidden" class="edit-slot-start" value="${slot.date_start}">
+                        <input type="hidden" class="edit-slot-end" value="${slot.date_end}">
+                    </div>
+                    <button class="remove-slot-btn" data-slot-index="${slotIndex}" title="Удалить слот">🗑️ Удалить слот</button>
+                </div>
+                <div class="edit-slot-equipment-list">
+                    ${equipmentHtml || '<div class="text-muted">Нет оборудования</div>'}
+                </div>
+                <button class="add-equipment-to-slot-btn" data-slot-index="${slotIndex}">➕ Добавить оборудование</button>
+            </div>
+        `;
+    });
+    
+    const modalContent = `
+        <div class="edit-slots-container">
+            <div class="edit-location-info">
+                <p><strong>📍 Локация:</strong> ${escapeHtml(item.location_name)}</p>
+                <div class="date-fields" style="margin-top: 1rem; padding: 0;">
+                    <div class="date-field">
+                        <label>📅 Общая дата начала</label>
+                        <input type="datetime-local" id="editSlotsCommonStart" class="date-input" value="${formatDateTimeForInput(item.common_date_start)}">
+                    </div>
+                    <div class="date-field">
+                        <label>⏰ Общая дата окончания</label>
+                        <input type="datetime-local" id="editSlotsCommonEnd" class="date-input" value="${formatDateTimeForInput(item.common_date_end)}">
+                    </div>
+                </div>
+            </div>
+            <div class="edit-comment-section">
+                <label>💬 Комментарий к заказу</label>
+                <textarea id="editSlotsComment" class="edit-comment-input" rows="2">${escapeHtml(item.comment || '')}</textarea>
+            </div>
+            <div class="edit-slots-list">
+                <h4>📋 Слоты</h4>
+                ${slotsHtml}
+            </div>
+            <button id="addNewSlotToEdit" class="btn-add-slot" style="margin-top: 1rem;">➕ Добавить новый слот</button>
+        </div>
+    `;
+    
+    $('#editOrderContent').html(modalContent);
+    $('#editOrderModal').show();
+    
+    // Привязываем обработчики
+    bindEditSlotsHandlers();
 };
 
 // Удаление оборудования из редактируемого заказа
@@ -827,7 +1404,8 @@ export const saveSingleOrder = async () => {
                 console.log(`Отправка заказа со слотами для локации ${cartItem.location_name}...`);
                 console.log('  Общая дата:', cartItem.common_date_start, '-', cartItem.common_date_end);
                 console.log('  Слотов:', cartItem.slots.length);
-                
+                console.log('Отправляемые данные для слотов:', JSON.stringify(orderData, null, 2));
+
                 const orderResponse = await fetch('/api/save-order/', {
                     method: 'POST',
                     headers: {

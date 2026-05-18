@@ -123,16 +123,39 @@ export const updateNextSlotDates = () => {
     const intervalMinutes = parseInt($('#slotInterval').val(), 10);
     if (isNaN(intervalMinutes)) return;
     
-    const lastEndDate = new Date(lastSlot.date_end);
+    // Парсим дату из формата "YYYY-MM-DD HH:MM:SS"
+    const parseDate = (dateStr) => {
+        if (dateStr.includes(' ')) {
+            const [datePart, timePart] = dateStr.split(' ');
+            const [year, month, day] = datePart.split('-');
+            const [hours, minutes, seconds] = timePart.split(':');
+            return new Date(year, month - 1, day, hours, minutes, seconds || 0);
+        }
+        return new Date(dateStr);
+    };
+    
+    const lastEndDate = parseDate(lastSlot.date_end);
     const newStartDate = new Date(lastEndDate);
     const newEndDate = new Date(newStartDate.getTime() + intervalMinutes * 60000);
     
-    const formattedStartDate = formatForInput(newStartDate);
-    const formattedEndDate = formatForInput(newEndDate);
+    // Форматируем в единый формат
+    const formatDateTime = (date) => {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        const hours = String(date.getHours()).padStart(2, '0');
+        const minutes = String(date.getMinutes()).padStart(2, '0');
+        const seconds = String(date.getSeconds()).padStart(2, '0');
+        return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+    };
+    
+    const formattedStartDate = formatDateTime(newStartDate);
+    const formattedEndDate = formatDateTime(newEndDate);
     
     $('#slotDateStart').val(formattedStartDate);
     $('#slotDateEnd').val(formattedEndDate);
     
+    // Обновляем altInput для flatpickr
     if (document.getElementById('slotDateStart').nextSibling) {
         document.getElementById('slotDateStart').nextSibling.value = formatDateTimeForDisplay(newStartDate);
         document.getElementById('slotDateEnd').nextSibling.value = formatDateTimeForDisplay(newEndDate);
@@ -159,13 +182,40 @@ export const addNewSlot = () => {
         return false;
     }
     
-    const dateStart = $('#slotDateStart').val();
-    const dateEnd = $('#slotDateEnd').val();
+    const dateStartRaw = $('#slotDateStart').val();
+    const dateEndRaw = $('#slotDateEnd').val();
     
-    if (!dateStart || !dateEnd) {
+    if (!dateStartRaw || !dateEndRaw) {
         showNotification('Выберите даты слота', 'warning');
         return false;
     }
+    
+    // ========== ФОРМАТИРУЕМ ДАТЫ В ЕДИНЫЙ ФОРМАТ ==========
+    // Преобразуем в единый формат "YYYY-MM-DD HH:MM:SS"
+    const formatDateTime = (dateStr) => {
+        // Если уже в формате с пробелом, возвращаем как есть
+        if (dateStr.includes(' ') && !dateStr.includes('T')) {
+            // Проверяем, есть ли секунды
+            if (dateStr.split(' ')[1].split(':').length === 2) {
+                return dateStr + ':00';
+            }
+            return dateStr;
+        }
+        // Если в формате ISO с T, преобразуем
+        const date = new Date(dateStr);
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        const hours = String(date.getHours()).padStart(2, '0');
+        const minutes = String(date.getMinutes()).padStart(2, '0');
+        const seconds = String(date.getSeconds()).padStart(2, '0');
+        return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+    };
+    
+    const dateStart = formatDateTime(dateStartRaw);
+    const dateEnd = formatDateTime(dateEndRaw);
+    
+    console.log('Отформатированные даты:', { dateStart, dateEnd });
     
     // Получаем выбранное оборудование
     const selectedEquipment = [];
@@ -193,38 +243,27 @@ export const addNewSlot = () => {
         return false;
     }
     
-    // ========== ПРОВЕРЯЕМ, ЕСТЬ ЛИ УЖЕ СЛОТ С ТАКИМ ЖЕ ВРЕМЕНЕМ ==========
+    // Проверяем, есть ли уже слот с таким временем
     const existingSlotIndex = slotsList.findIndex(slot => 
         slot.date_start === dateStart && slot.date_end === dateEnd
     );
     
     if (existingSlotIndex !== -1) {
-        // Слот с таким временем уже существует — объединяем оборудование
-        console.log('Найден существующий слот, объединяем оборудование');
-        
         const existingSlot = slotsList[existingSlotIndex];
         
-        // Объединяем оборудование
         selectedEquipment.forEach(newEq => {
             const existingEqIndex = existingSlot.equipment.findIndex(eq => eq.id === newEq.id);
             
             if (existingEqIndex !== -1) {
-                // Оборудование уже есть в слоте — складываем количество
                 existingSlot.equipment[existingEqIndex].quantity += newEq.quantity;
-                console.log(`  Объединено оборудование: ${newEq.name}, новое количество: ${existingSlot.equipment[existingEqIndex].quantity}`);
             } else {
-                // Новое оборудование — добавляем
                 existingSlot.equipment.push(newEq);
-                console.log(`  Добавлено новое оборудование: ${newEq.name}`);
             }
         });
         
-        // Обновляем слот в массиве
         slotsList[existingSlotIndex] = existingSlot;
-        
-        showNotification(`Оборудование добавлено в существующий слот! Всего слотов: ${slotsList.length}`, 'success');
+        showNotification(`Оборудование добавлено в существующий слот!`, 'success');
     } else {
-        // Новый слот — просто добавляем
         slotsList.push({
             date_start: dateStart,
             date_end: dateEnd,

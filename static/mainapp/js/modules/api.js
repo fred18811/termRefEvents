@@ -1,6 +1,4 @@
-const getCSRFToken = () => {
-    return document.cookie.split('; ').find(row => row.startsWith('csrftoken='))?.split('=')[1];
-};
+import { getCSRFToken } from './utils.js';
 
 // Настройка AJAX с CSRF
 export const setupAjax = () => {
@@ -183,9 +181,6 @@ export const api = {
         limit: limit,
         offset: offset
     }),
-
-    // ========== ПОДРАЗДЕЛЕНИЯ ==========
-    getUserDepartments: () => $.get('/api/user/department/'),
 
     // ========== ПОДРАЗДЕЛЕНИЯ ==========
     getUserDepartments: () => $.get('/api/user/departments/'),

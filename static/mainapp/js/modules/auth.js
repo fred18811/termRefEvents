@@ -1,11 +1,6 @@
 import { showNotification } from './utils.js';
 import { api } from './api.js';
-
-
-// Получение CSRF токена
-const getCSRFToken = () => {
-    return document.cookie.split('; ').find(row => row.startsWith('csrftoken='))?.split('=')[1];
-};
+import { getCSRFToken } from './utils.js';
 
 // Роли пользователей
 const USER_ROLES = {

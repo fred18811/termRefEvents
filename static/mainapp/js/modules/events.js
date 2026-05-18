@@ -1,7 +1,7 @@
 import { state, loadCart } from './state.js';
 import { formatDate, formatDateTimeForDisplay, setMinDateTime, showNotification, validateDates } from './utils.js';
 import { setupAjax } from './api.js';
-import { updateCartDisplay, saveSingleOrder, saveMultipleOrders } from './cart.js';
+import { updateCartDisplay, saveSingleOrder, initCart } from './cart/index.js';
 import { loadLocationPhoto, updateEquipmentList, addToCart, handleLocationSelect } from './location.js';
 import { loadOrders, selectAllOrders, deselectAllOrders, exportOrdersToExcel, initOrderFilters } from './orders.js';
 import { loadRooms, filterRooms } from './rooms.js';
@@ -959,6 +959,7 @@ export const initApp = () => {
     setMinDateTime();
     loadCart();
     updateCartDisplay();
+    initCart();
     
     $('#mainPage').show();
     $('#ordersPage, #roomsPage').hide();

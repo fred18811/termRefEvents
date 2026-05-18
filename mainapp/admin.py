@@ -3,7 +3,8 @@ from django.contrib.auth.admin import UserAdmin, GroupAdmin as BaseGroupAdmin
 from django.contrib.auth.models import User, Group
 from django.contrib.auth.models import Group as BaseGroup
 from django import forms
-from django.utils.html import format_html
+from django.utils.html import escape, format_html
+from django.utils.safestring import mark_safe
 from django.core.exceptions import ValidationError
 from django.db import models
 from .models import Location, TypeEquipment, Equipment, EquipmentLocation, Photo,\
@@ -159,19 +160,27 @@ class OrderItemInline(admin.TabularInline):
     autocomplete_fields = ['equipment_location', 'common_equipment_location']
     
     def get_equipment_info(self, obj):
-        """Отображает информацию о выбранном оборудовании"""
+        """Отображает информацию о выбранном оборудовании с экранированием"""
         if obj.pk and obj.equipment_location:
+            # ✅ Экранируем все пользовательские данные
+            location_name = escape(obj.equipment_location.id_locations.name)
+            equipment_name = escape(obj.equipment_location.id_equipments.name)
+            quantity = escape(str(obj.equipment_location.quantity))
+            
             return format_html(
                 '<span style="color: #0039a6;">📍 {}</span> - {} (доступно: {} шт.)',
-                obj.equipment_location.id_locations.name,
-                obj.equipment_location.id_equipments.name,
-                obj.equipment_location.quantity
+                location_name,
+                equipment_name,
+                quantity
             )
         elif obj.pk and obj.common_equipment_location:
+            equipment_name = escape(obj.common_equipment_location.id_equipments.name)
+            quantity = escape(str(obj.common_equipment_location.quantity))
+            
             return format_html(
                 '<span style="color: #da291c;">🌍 {}</span> (доступно: {} шт.)',
-                obj.common_equipment_location.id_equipments.name,
-                obj.common_equipment_location.quantity
+                equipment_name,
+                quantity
             )
         return "Не выбрано"
     get_equipment_info.short_description = 'Информация об оборудовании'
@@ -397,6 +406,7 @@ class ApplicationAdmin(admin.ModelAdmin):
     name_preview.short_description = 'Название'
     
     def get_status_display(self, obj):
+        """Отображение статуса с экранированием"""
         colors = {
             'new': '#28a745',
             'in_progress': '#ffc107',
@@ -404,12 +414,16 @@ class ApplicationAdmin(admin.ModelAdmin):
             'cancelled': '#da291c',
         }
         color = colors.get(obj.status, '#6c757d')
+        # ✅ Экранируем статус
+        status_text = escape(dict(Application._meta.get_field('status').choices).get(obj.status, obj.status))
+        
         return format_html(
             '<span style="background-color: {}; color: white; padding: 2px 8px; border-radius: 12px;">{}</span>',
             color,
-            dict(Application._meta.get_field('status').choices).get(obj.status, obj.status)
+            status_text
         )
     get_status_display.short_description = 'Статус (цветной)'
+
 
     
 # ========== Регистрация Order ==========    
@@ -479,7 +493,8 @@ class OrderItemAdmin(admin.ModelAdmin):
         'common_equipment_location__id_equipments__name'
     ]
     list_per_page = 20
-    list_editable = ['can_provide', 'is_agreed', 'is_slot']
+    # Временно убираем list_editable для диагностики
+    # list_editable = ['can_provide', 'is_agreed', 'is_slot']
     autocomplete_fields = ['order', 'equipment_location', 'common_equipment_location']
     
     fieldsets = (
@@ -500,7 +515,6 @@ class OrderItemAdmin(admin.ModelAdmin):
     )
     
     def get_slot_time_display(self, obj):
-        """Отображение времени слота"""
         if obj.is_slot and obj.slot_date_start and obj.slot_date_end:
             start_str = obj.slot_date_start.strftime('%d.%m.%Y %H:%M')
             end_str = obj.slot_date_end.strftime('%d.%m.%Y %H:%M')
@@ -583,11 +597,13 @@ class LocationAdmin(admin.ModelAdmin):
     )
     
     def description_preview(self, obj):
-        """Предпросмотр описания в списке (очищаем HTML)"""
+        """Предпросмотр описания в списке (очищаем HTML и экранируем)"""
         if obj.description:
             from django.utils.html import strip_tags
+            # ✅ Сначала удаляем HTML теги, потом экранируем
             plain_text = strip_tags(obj.description)
-            return plain_text[:100] + '...' if len(plain_text) > 100 else plain_text
+            safe_text = escape(plain_text)
+            return safe_text[:100] + '...' if len(safe_text) > 100 else safe_text
         return '-'
     description_preview.short_description = 'Описание (кратко)'
 
@@ -711,15 +727,22 @@ class PhotoAdmin(admin.ModelAdmin):
     get_location_name.admin_order_field = 'id_location__name'
     
     def description_preview(self, obj):
-        if len(obj.description) > 50:
-            return obj.description[:50] + '...'
-        return obj.description
+        """Предпросмотр описания с экранированием"""
+        # ✅ Экранируем описание
+        if obj.description:
+            safe_description = escape(obj.description)
+            if len(safe_description) > 50:
+                return safe_description[:50] + '...'
+            return safe_description
+        return '-'
     description_preview.short_description = 'Описание (кратко)'
     
     def photo_preview(self, obj):
+        """Превью фото с экранированием"""
         if obj.photo:
             border_color = '#da291c' if obj.is_main else '#e2e8f0'
             border_width = '3px' if obj.is_main else '1px'
+            # ✅ URL фото не требует экранирования, это системный путь
             return format_html(
                 '<img src="{}" style="width: 100px; height: auto; border-radius: 8px; border: {} solid {};" />',
                 obj.photo.url,
@@ -776,18 +799,17 @@ class FeedbackAdmin(admin.ModelAdmin):
     get_data_summary.short_description = 'Доп. данные'
     
     def data_preview(self, obj):
-        """Подробный просмотр JSON в админке"""
+        """Подробный просмотр JSON в админке с экранированием"""
         if not obj.data:
             return "Нет дополнительных данных"
         
         import json
-        from django.utils.safestring import mark_safe
         
         # Форматируем JSON с отступами
         json_str = json.dumps(obj.data, ensure_ascii=False, indent=2)
         
-        # Экранируем для HTML (чтобы не было проблем с кавычками и тегами)
-        json_str = json_str.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+        # ✅ Экранируем JSON строку для HTML
+        json_str = escape(json_str)
         
         html = f'''
         <div style="background: #f5f5f5; padding: 10px; border-radius: 8px; font-family: monospace; font-size: 12px; max-height: 300px; overflow: auto;">
@@ -805,11 +827,19 @@ class FeedbackAdmin(admin.ModelAdmin):
     get_application_display.short_description = 'Заявка'
     
     def get_short_name(self, obj):
-        return obj.get_short_name()
+        """Короткое название с экранированием"""
+        if obj.name:
+            # ✅ Экранируем имя
+            safe_name = escape(obj.name)
+            return safe_name[:50] + '...' if len(safe_name) > 50 else safe_name
+        return '—'
     get_short_name.short_description = 'Название'
     
     def get_short_comment(self, obj):
-        return obj.get_short_comment()
+        """Короткий комментарий с экранированием"""
+        # ✅ Экранируем комментарий
+        safe_comment = escape(obj.comment)
+        return safe_comment[:100] + '...' if len(safe_comment) > 100 else safe_comment
     get_short_comment.short_description = 'Комментарий'
     
     # Действие для экспорта в CSV
@@ -1124,8 +1154,11 @@ class GroupAdmin(BaseGroupAdmin):
     inlines = [GroupProfileInline]
     
     def get_comment_preview(self, obj):
+        """Предпросмотр комментария группы с экранированием"""
         if hasattr(obj, 'profile') and obj.profile and obj.profile.comment:
-            return obj.profile.comment[:100] + '...' if len(obj.profile.comment) > 100 else obj.profile.comment
+            # ✅ Экранируем комментарий
+            safe_comment = escape(obj.profile.comment)
+            return safe_comment[:100] + '...' if len(safe_comment) > 100 else safe_comment
         return '-'
     get_comment_preview.short_description = 'Комментарий'
     
