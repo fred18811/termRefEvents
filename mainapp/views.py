@@ -2172,7 +2172,10 @@ def get_order_items(request):
                         'date_end': order.date_time_end.isoformat() if order.date_time_end else None,
                         'order_comment': order.comment or '',
                         'can_provide': item.can_provide,
-                        'is_agreed': item.is_agreed
+                        'is_agreed': item.is_agreed,
+                        'is_slot': item.is_slot,
+                        'slot_date_start': item.slot_date_start.isoformat() if item.slot_date_start else None,
+                        'slot_date_end': item.slot_date_end.isoformat() if item.slot_date_end else None
                     })
                 elif item.common_equipment_location:
                     items_list.append({
@@ -2189,7 +2192,10 @@ def get_order_items(request):
                         'date_end': order.date_time_end.isoformat() if order.date_time_end else None,
                         'order_comment': order.comment or '',
                         'can_provide': item.can_provide,
-                        'is_agreed': item.is_agreed
+                        'is_agreed': item.is_agreed,
+                        'is_slot': item.is_slot,
+                        'slot_date_start': item.slot_date_start.isoformat() if item.slot_date_start else None,
+                        'slot_date_end': item.slot_date_end.isoformat() if item.slot_date_end else None
                     })
         
         return JsonResponse({

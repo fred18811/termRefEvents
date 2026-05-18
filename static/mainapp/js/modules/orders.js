@@ -987,86 +987,253 @@ export const displayOrderItems = async (applicationId, items, canEdit = false) =
     const applicationStatus = application ? application.status : 'new';
     
     // Редактирование доступно только если статус 'new' (Новая)
-    // Для 'in_progress' и 'completed' редактирование недоступно
     const canEditOrder = canEdit && (applicationStatus === 'new');
     
     console.log('Заявка ID:', applicationId);
     console.log('Статус заявки:', applicationStatus);
     console.log('Можно редактировать заказ:', canEditOrder);
     
-    const ordersMap = new Map();
+    // ========== ГРУППИРУЕМ СНАЧАЛА ПО order_id, ПОТОМ ПО СЛОТАМ ==========
+    const ordersByOrderId = new Map();
     
     items.forEach(item => {
-        const currentOrderId = item.order_id;
+        const orderId = item.order_id;
         
-        if (!ordersMap.has(currentOrderId)) {
-            ordersMap.set(currentOrderId, {
-                order_id: currentOrderId,
+        if (!ordersByOrderId.has(orderId)) {
+            ordersByOrderId.set(orderId, {
+                order_id: orderId,
                 location_id: item.location_id,
                 location_name: item.location_name,
-                date_start: item.date_start,
-                date_end: item.date_end,
                 order_comment: item.order_comment || '',
-                typesMap: new Map()
+                common_date_start: item.date_start,  // общая дата начала для помещения
+                common_date_end: item.date_end,      // общая дата окончания для помещения
+                slotGroups: new Map(),     // ключ: slot_time_key, значение: массив items
+                regularItems: []           // обычные позиции (не слоты)
             });
         }
         
-        const orderData = ordersMap.get(currentOrderId);
-        const typeName = item.type_name;
+        const orderData = ordersByOrderId.get(orderId);
         
-        if (!orderData.typesMap.has(typeName)) {
-            orderData.typesMap.set(typeName, []);
+        if (item.is_slot === true && item.slot_date_start && item.slot_date_end) {
+            // Создаем ключ для группировки слотов по времени (только время, без даты)
+            const slotDate = new Date(item.slot_date_start);
+            const slotDateKey = slotDate.toDateString(); // для группировки по дням
+            const slotTimeKey = `${item.slot_date_start}_${item.slot_date_end}`;
+            
+            if (!orderData.slotGroups.has(slotTimeKey)) {
+                orderData.slotGroups.set(slotTimeKey, {
+                    items: [],
+                    date_key: slotDateKey,
+                    slot_date_start: item.slot_date_start,
+                    slot_date_end: item.slot_date_end
+                });
+            }
+            orderData.slotGroups.get(slotTimeKey).items.push(item);
+        } else {
+            // Обычная позиция (не слот)
+            orderData.regularItems.push(item);
         }
-        
-        const equipmentName = item.is_common ? `🌍 ${item.equipment_name}` : item.equipment_name;
-        
-        orderData.typesMap.get(typeName).push({
-            name: equipmentName,
-            quantity: item.quantity,
-            is_common: item.is_common || false,
-            equipment_id: item.equipment_id,
-            type_name: item.type_name,
-            order_item_id: item.id,
-            can_provide: item.can_provide || 0,
-            is_agreed: item.is_agreed || false
-        });
     });
     
+    // ========== ГЕНЕРАЦИЯ HTML ==========
     let html = '';
     
-    for (const [_, orderData] of ordersMap) {
-        const startDate = orderData.date_start ? new Date(orderData.date_start).toLocaleString('ru-RU') : 'Не указана';
-        const endDate = orderData.date_end ? new Date(orderData.date_end).toLocaleString('ru-RU') : 'Не завершен';
+    for (const [_, orderData] of ordersByOrderId) {
+        // Форматируем общую дату помещения
+        const commonStartDate = orderData.common_date_start ? new Date(orderData.common_date_start).toLocaleDateString('ru-RU') : 'Дата не указана';
+        const commonEndDate = orderData.common_date_end ? new Date(orderData.common_date_end).toLocaleDateString('ru-RU') : 'Дата не указана';
         
-        html += generateLocationCardWithButtons(
-            orderData.order_id,
-            orderData.location_name,
-            startDate,
-            endDate,
-            orderData.typesMap,
-            orderData.order_comment,
-            canEditOrder,  // Передаем флаг возможности редактирования заказа
-            userDepartments,
-            departmentTypes,
-            canEditApproval,
-            applicationStatus
-        );
+        // Кнопки действий (один раз на весь заказ)
+        const showActionButtons = canEditOrder && (applicationStatus === 'new');
+        const actionButtons = showActionButtons ? `
+            <div class="order-card-actions">
+                <button class="order-edit-btn-small" data-order-id="${orderData.order_id}" title="Редактировать заказ">✏️ Редактировать</button>
+                <button class="order-cancel-btn-small" data-order-id="${orderData.order_id}" title="Отменить заказ">🚫 Отменить</button>
+                <button class="order-duplicate-btn-small" data-order-id="${orderData.order_id}" title="Создать копию">📋 Копировать</button>
+            </div>
+        ` : '';
+        
+        // Начинаем контейнер заказа
+        let orderCardHtml = `
+            <div class="location-order-card" data-order-id="${orderData.order_id}">
+                <div class="location-order-header">
+                    <div class="location-order-info">
+                        <span class="location-name">📍 ${escapeHtml(orderData.location_name)}</span>
+                        <span class="location-common-dates">📅 ${commonStartDate} - ${commonEndDate}</span>
+                    </div>
+                    ${actionButtons}
+                </div>
+        `;
+        
+        // ========== 1. ОТОБРАЖАЕМ ВСЕ СЛОТЫ (каждая группа - отдельная таблица) ==========
+        if (orderData.slotGroups.size > 0) {
+            // Преобразуем Map в массив и сортируем по времени начала
+            const sortedSlotGroups = Array.from(orderData.slotGroups.entries());
+            sortedSlotGroups.sort((a, b) => {
+                const dateA = new Date(a[1].slot_date_start);
+                const dateB = new Date(b[1].slot_date_start);
+                return dateA - dateB;
+            });
+            
+            for (const [slotKey, slotGroup] of sortedSlotGroups) {
+                const slotItems = slotGroup.items;
+                const firstSlot = slotItems[0];
+                
+                // Форматируем только время для слота (дата уже общая)
+                const startTime = firstSlot.slot_date_start ? new Date(firstSlot.slot_date_start).toLocaleTimeString('ru-RU', {hour:'2-digit', minute:'2-digit'}) : '';
+                const endTime = firstSlot.slot_date_end ? new Date(firstSlot.slot_date_end).toLocaleTimeString('ru-RU', {hour:'2-digit', minute:'2-digit'}) : '';
+                const slotTimeBadge = `<span class="slot-time-badge">⏰ ${startTime} - ${endTime}</span>`;
+                
+                // Собираем typesMap для этой группы слотов
+                const typesMap = new Map();
+                slotItems.forEach(item => {
+                    const typeName = item.type_name;
+                    if (!typesMap.has(typeName)) {
+                        typesMap.set(typeName, []);
+                    }
+                    
+                    const equipmentName = item.is_common ? `🌍 ${item.equipment_name}` : item.equipment_name;
+                    typesMap.get(typeName).push({
+                        name: equipmentName,
+                        quantity: item.quantity,
+                        is_common: item.is_common || false,
+                        equipment_id: item.equipment_id,
+                        type_name: item.type_name,
+                        order_item_id: item.id,
+                        can_provide: item.can_provide || 0,
+                        is_agreed: item.is_agreed || false,
+                        is_slot: true,
+                        slot_date_start: item.slot_date_start,
+                        slot_date_end: item.slot_date_end
+                    });
+                });
+                
+                // Генерируем таблицу для слота (только время в заголовке)
+                orderCardHtml += generateSlotTableHtml(
+                    orderData.order_id,
+                    typesMap,
+                    slotTimeBadge,
+                    userDepartments,
+                    departmentTypes,
+                    canEditApproval,
+                    applicationStatus
+                );
+            }
+        }
+        
+        // ========== 2. ОТОБРАЖАЕМ ОБЫЧНЫЕ ПОЗИЦИИ (НЕ СЛОТЫ) ==========
+        if (orderData.regularItems.length > 0) {
+            // Собираем typesMap для обычных позиций
+            const typesMap = new Map();
+            
+            orderData.regularItems.forEach(item => {
+                const typeName = item.type_name;
+                if (!typesMap.has(typeName)) {
+                    typesMap.set(typeName, []);
+                }
+                
+                const equipmentName = item.is_common ? `🌍 ${item.equipment_name}` : item.equipment_name;
+                typesMap.get(typeName).push({
+                    name: equipmentName,
+                    quantity: item.quantity,
+                    is_common: item.is_common || false,
+                    equipment_id: item.equipment_id,
+                    type_name: item.type_name,
+                    order_item_id: item.id,
+                    can_provide: item.can_provide || 0,
+                    is_agreed: item.is_agreed || false,
+                    is_slot: false,
+                    slot_date_start: null,
+                    slot_date_end: null
+                });
+            });
+            
+            orderCardHtml += generateRegularTableHtml(
+                orderData.order_id,
+                typesMap,
+                userDepartments,
+                departmentTypes,
+                canEditApproval,
+                applicationStatus
+            );
+        }
+        
+        // Добавляем комментарий, если есть
+        if (orderData.order_comment) {
+            orderCardHtml += `
+                <div class="order-comment-inline">
+                    <span class="comment-label">Комментарий:</span>
+                    <span class="comment-text">${escapeHtml(orderData.order_comment)}</span>
+                </div>
+            `;
+        }
+        
+        // Закрываем контейнер заказа
+        orderCardHtml += `</div>`;
+        html += orderCardHtml;
     }
     
     $(`#order-items-${applicationId}`).html(html);
     
-    // Загружаем сохраненные значения из БД в интерфейс
-    loadApprovalValuesFromItems();
-    
-    // Привязываем обработчики для полей согласования только если есть права и заявка активна
+    // Привязываем обработчики
     if (canEditApproval && (applicationStatus === 'new' || applicationStatus === 'in_progress')) {
         bindApprovalControls();
     }
     
-    // Привязываем обработчики кнопок только если есть права на редактирование заказа
     if (canEditOrder) {
         bindOrderCardButtons();
     }
+};
+
+// ========== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ДЛЯ ГЕНЕРАЦИИ HTML ==========
+
+// Генерация HTML для таблицы слота
+const generateSlotTableHtml = (orderId, typesMap, slotTimeBadge, userDepartments, departmentTypes, canEditApproval, applicationStatus) => {
+    const allTypes = Array.from(typesMap.keys());
+    const maxRows = getMaxRows(typesMap);
+    
+    return `
+        <div class="slot-table-wrapper">
+            <div class="slot-header">
+                ${slotTimeBadge}
+            </div>
+            <div class="equipment-matrix">
+                <table class="equipment-matrix-table">
+                    <thead>
+                        <tr>
+                            ${allTypes.map(type => `<th class="type-col">${escapeHtml(type)}</th>`).join('')}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${generateTableRows(typesMap, allTypes, maxRows, orderId, '', userDepartments, departmentTypes, canEditApproval, applicationStatus)}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    `;
+};
+
+// Генерация HTML для таблицы обычного заказа (не слоты)
+const generateRegularTableHtml = (orderId, typesMap, userDepartments, departmentTypes, canEditApproval, applicationStatus) => {
+    const allTypes = Array.from(typesMap.keys());
+    const maxRows = getMaxRows(typesMap);
+    
+    return `
+        <div class="regular-table-wrapper">
+            <div class="equipment-matrix">
+                <table class="equipment-matrix-table">
+                    <thead>
+                        <tr>
+                            ${allTypes.map(type => `<th class="type-col">${escapeHtml(type)}</th>`).join('')}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${generateTableRows(typesMap, allTypes, maxRows, orderId, '', userDepartments, departmentTypes, canEditApproval, applicationStatus)}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    `;
 };
 
 // Функция для загрузки сохраненных значений согласования с сервера

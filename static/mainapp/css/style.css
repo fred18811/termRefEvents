@@ -4147,3 +4147,32 @@ nav {
         width: 100%;
     }
 }
+
+/* Бейдж времени слота */
+.slot-time-badge {
+    display: inline-block;
+    background: linear-gradient(135deg, #28a745, #1e7e34);
+    color: white;
+    font-size: 0.65rem;
+    padding: 0.2rem 0.6rem;
+    border-radius: 20px;
+    margin-left: 0.75rem;
+    font-weight: normal;
+    vertical-align: middle;
+}
+
+@media (max-width: 768px) {
+    .slot-time-badge {
+        display: inline-block;
+        margin-left: 0;
+        margin-top: 0.25rem;
+        font-size: 0.6rem;
+    }
+    
+    .location-dates {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        align-items: center;
+    }
+}

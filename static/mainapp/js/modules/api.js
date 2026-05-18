@@ -87,7 +87,7 @@ export const api = {
     getOrders: () => $.get('/api/get-orders/'),
     
     // Получение элементов заказа
-    getOrderItems: (orderId) => $.get('/api/get-order-items/', { order_id: orderId }),
+    getOrderItems: (orderId) =>  $.get('/api/get-order-items/', { order_id: orderId }),
     
     // Экспорт заказов в Excel
     exportOrders: (orderIds) => $.ajax({
