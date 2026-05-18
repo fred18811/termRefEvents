@@ -12,5 +12,12 @@ class XSSProtectionMiddleware(MiddlewareMixin):
             # Добавляем заголовки безопасности
             response['X-XSS-Protection'] = '1; mode=block'
             response['X-Content-Type-Options'] = 'nosniff'
-            response['Content-Security-Policy'] = "default-src 'self'; script-src 'self' 'unsafe-inline' https:; style-src 'self' 'unsafe-inline';"
+            response['Content-Security-Policy'] = (
+                "default-src 'self'; "
+                "script-src 'self' 'unsafe-inline' https:; "
+                "style-src 'self' 'unsafe-inline'; "
+                "font-src 'self' https://fonts.gstatic.com data:; "
+                "img-src 'self' data:; "
+                "connect-src 'self'"
+            )
         return response
