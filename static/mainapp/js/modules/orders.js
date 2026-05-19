@@ -1633,7 +1633,7 @@ const bindApprovalControls = () => {
         
         const $checkbox = $(`.approval-checkbox[data-order-id="${orderId}"][data-location-id="${locationId}"][data-equipment-id="${equipmentId}"]`);
         
-        if (finalQuantity => 0) {
+        if (finalQuantity >= 0) {
             $checkbox.prop('disabled', false);
         } else {
             $checkbox.prop('disabled', true);
