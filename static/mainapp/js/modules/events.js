@@ -955,7 +955,6 @@ export const initEventHandlers = () => {
 
 // ========== ИНИЦИАЛИЗАЦИЯ ПРИЛОЖЕНИЯ ==========
 export const initApp = () => {
-    console.log('Инициализация приложения');
     setMinDateTime();
     loadCart();
     updateCartDisplay();
@@ -967,8 +966,6 @@ export const initApp = () => {
     initEventHandlers();
     initModeToggle();
     initStickyTypes();
-    
-    console.log('Приложение инициализировано');
 };
 
 const bindCartButtons = () => {
