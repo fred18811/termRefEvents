@@ -1542,7 +1542,7 @@ const generateTableRows = (typesMap, allTypes, maxRows, orderId, locationId, use
                                        data-equipment-id="${equipmentId}"
                                        data-order-item-id="${equipment.order_item_id || ''}"
                                        ${savedIsChecked ? 'checked' : ''}
-                                       ${savedQuantity > 0 && !savedIsChecked ? '' : 'disabled'}>
+                                       ${savedQuantity >= 0 && !savedIsChecked ? '' : 'disabled'}>
                                 <span style="font-size: 0.7rem;">Согласовано</span>
                             </label>
                         </div>
@@ -1633,7 +1633,7 @@ const bindApprovalControls = () => {
         
         const $checkbox = $(`.approval-checkbox[data-order-id="${orderId}"][data-location-id="${locationId}"][data-equipment-id="${equipmentId}"]`);
         
-        if (finalQuantity > 0) {
+        if (finalQuantity => 0) {
             $checkbox.prop('disabled', false);
         } else {
             $checkbox.prop('disabled', true);
