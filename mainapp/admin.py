@@ -84,68 +84,25 @@ class OrderItemForm(forms.ModelForm):
     
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Добавляем подсказки
-        self.fields['equipment_location'].help_text = 'Выберите оборудование из конкретной локации'
-        self.fields['common_equipment_location'].help_text = 'Выберите общее оборудование (не привязанное к локации)'
-        self.fields['quantity'].help_text = 'Введите количество от 1 до 999'
-        self.fields['can_provide'].help_text = 'Введите количество, которое может предоставить подразделение (0 - не может)'
-        self.fields['is_agreed'].help_text = 'Отметьте, если позиция согласована'
-        self.fields['is_slot'].help_text = 'Отметьте, если это позиция слота'
-        self.fields['slot_date_start'].help_text = 'Дата и время начала слота'
-        self.fields['slot_date_start'].widget = forms.DateTimeInput(attrs={'type': 'datetime-local'})
-        self.fields['slot_date_end'].help_text = 'Дата и время окончания слота'
-        self.fields['slot_date_end'].widget = forms.DateTimeInput(attrs={'type': 'datetime-local'})
+        self.fields['slot_date_start'].required = False
+        self.fields['slot_date_end'].required = False
     
     def clean(self):
         cleaned_data = super().clean()
-        equipment_location = cleaned_data.get('equipment_location')
-        common_equipment_location = cleaned_data.get('common_equipment_location')
-        quantity = cleaned_data.get('quantity')
-        can_provide = cleaned_data.get('can_provide')
         is_slot = cleaned_data.get('is_slot')
         slot_date_start = cleaned_data.get('slot_date_start')
         slot_date_end = cleaned_data.get('slot_date_end')
         
-        # Проверка: должно быть заполнено одно из полей
-        if not equipment_location and not common_equipment_location:
-            raise forms.ValidationError('Необходимо выбрать либо оборудование из локации, либо общее оборудование')
-        
-        if equipment_location and common_equipment_location:
-            raise forms.ValidationError('Выберите только один тип оборудования')
-        
-        # Проверка количества
-        if equipment_location and quantity:
-            if quantity > equipment_location.quantity:
-                raise forms.ValidationError(
-                    f'Недостаточно оборудования! Доступно только {equipment_location.quantity} шт.'
-                )
-        
-        if common_equipment_location and quantity:
-            if quantity > common_equipment_location.quantity:
-                raise forms.ValidationError(
-                    f'Недостаточно общего оборудования! Доступно только {common_equipment_location.quantity} шт.'
-                )
-        
-        # Проверка can_provide (не может быть больше quantity)
-        if can_provide and quantity and can_provide > quantity:
-            raise forms.ValidationError({
-                'can_provide': f'Количество для предоставления ({can_provide}) не может превышать запрошенное количество ({quantity})'
-            })
-        
-        # Проверка полей слота
         if is_slot:
             if not slot_date_start:
-                raise forms.ValidationError({
-                    'slot_date_start': 'Для слота необходимо указать дату начала'
-                })
+                raise forms.ValidationError({'slot_date_start': 'Для слота необходимо указать дату начала'})
             if not slot_date_end:
-                raise forms.ValidationError({
-                    'slot_date_end': 'Для слота необходимо указать дату окончания'
-                })
+                raise forms.ValidationError({'slot_date_end': 'Для слота необходимо указать дату окончания'})
             if slot_date_start and slot_date_end and slot_date_end <= slot_date_start:
-                raise forms.ValidationError({
-                    'slot_date_end': 'Дата окончания слота должна быть позже даты начала'
-                })
+                raise forms.ValidationError({'slot_date_end': 'Дата окончания слота должна быть позже даты начала'})
+        else:
+            cleaned_data['slot_date_start'] = None
+            cleaned_data['slot_date_end'] = None
         
         return cleaned_data
 
@@ -474,6 +431,7 @@ class OrderAdmin(admin.ModelAdmin):
 @admin.register(OrderItem)
 class OrderItemAdmin(admin.ModelAdmin):
     form = OrderItemForm
+
     list_display = [
         'id', 
         'order', 
@@ -494,9 +452,8 @@ class OrderItemAdmin(admin.ModelAdmin):
         'common_equipment_location__id_equipments__name'
     ]
     list_per_page = 20
-    # Временно убираем list_editable для диагностики
-    # list_editable = ['can_provide', 'is_agreed', 'is_slot']
-    autocomplete_fields = ['order', 'equipment_location', 'common_equipment_location']
+    # Временно убираем autocomplete_fields
+    # autocomplete_fields = ['order', 'equipment_location', 'common_equipment_location']
     
     fieldsets = (
         ('Информация о заказе', {
@@ -517,8 +474,12 @@ class OrderItemAdmin(admin.ModelAdmin):
     
     def get_slot_time_display(self, obj):
         if obj.is_slot and obj.slot_date_start and obj.slot_date_end:
-            start_str = obj.slot_date_start.strftime('%d.%m.%Y %H:%M')
-            end_str = obj.slot_date_end.strftime('%d.%m.%Y %H:%M')
+            # Используем timezone для правильного отображения
+            from django.utils import timezone
+            start = timezone.localtime(obj.slot_date_start)
+            end = timezone.localtime(obj.slot_date_end)
+            start_str = start.strftime('%d.%m.%Y %H:%M')
+            end_str = end.strftime('%d.%m.%Y %H:%M')
             return f"{start_str} - {end_str}"
         return "-"
     get_slot_time_display.short_description = 'Время слота'

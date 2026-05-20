@@ -39,7 +39,7 @@ const updateDepartmentButton = (applicationId, departmentName) => {
     const allAgreed = totalItems > 0 && agreedItems === totalItems;
     
     // Находим блок approval-item для этой заявки (по applicationId)
-    const $approvalItem = $(`.approval-item[data-application-id="${applicationId}"]`);
+    const $approvalItem = $(`.approval-item[data-application-id="${applicationId}"][data-approval-dept="${departmentName}"]`);
     
     if (!$approvalItem.length) {
         console.log('Approval item не найден для заявки:', applicationId);
@@ -1557,14 +1557,17 @@ const generateTableRows = (typesMap, allTypes, maxRows, orderId, locationId, use
         equipmentList.sort((a, b) => a.name.localeCompare(b.name));
         
         const canProvide = departmentTypes.some(dt => dt.name === typeName);
-        
+        const departmentName = departmentTypes.find(dt => dt.name === typeName);
+        const departmentNameStr = departmentName && departmentName.hasOwnProperty("department_name") ? departmentName.department_name : "";
+
         typesData.push({
             name: typeName,
             equipment: equipmentList,
-            can_provide: canProvide
+            can_provide: canProvide,
+            department_name: departmentNameStr
         });
     }
-    
+
     // Для статусов 'in_progress', 'completed', 'cancelled' отключаем редактирование согласования
     const isApprovalEditable = canEditApproval && (applicationStatus === 'new');
     
@@ -1574,7 +1577,7 @@ const generateTableRows = (typesMap, allTypes, maxRows, orderId, locationId, use
         for (let j = 0; j < typesData.length; j++) {
             const typeData = typesData[j];
             const equipment = typeData.equipment[i];
-            
+
             if (equipment) {
                 const equipmentId = equipment.equipment_id || `eq_${i}_${j}`;
                 const savedQuantity = equipment.can_provide || 0;
@@ -1595,6 +1598,7 @@ const generateTableRows = (typesMap, allTypes, maxRows, orderId, locationId, use
                                    data-location-id="${locationId}"
                                    data-equipment-id="${equipmentId}"
                                    data-order-item-id="${equipment.order_item_id || ''}"
+                                   data-approval-dept="${escapeHtml(typeData.department_name)}"
                                    data-type-name="${escapeHtml(typeData.name)}"
                                    data-max="${equipment.quantity}"
                                    value="${savedQuantity}"
@@ -1610,6 +1614,7 @@ const generateTableRows = (typesMap, allTypes, maxRows, orderId, locationId, use
                                        data-location-id="${locationId}"
                                        data-equipment-id="${equipmentId}"
                                        data-order-item-id="${equipment.order_item_id || ''}"
+                                       data-approval-dept="${escapeHtml(typeData.department_name)}"
                                        ${savedIsChecked ? 'checked' : ''}
                                        ${savedQuantity >= 0 && !savedIsChecked ? '' : 'disabled'}>
                                 <span style="font-size: 0.7rem;">Согласовано</span>
@@ -1704,7 +1709,7 @@ const bindApprovalControls = () => {
         
         const $checkbox = $(`.approval-checkbox[data-order-id="${orderId}"][data-location-id="${locationId}"][data-equipment-id="${equipmentId}"]`);
         
-        if (finalQuantity > 0) {
+        if (finalQuantity >= 0) {
             $checkbox.prop('disabled', false);
         } else {
             $checkbox.prop('disabled', true);
@@ -1745,8 +1750,7 @@ const bindApprovalControls = () => {
             const $orderCard = $input.closest('.order-card');
             const $approvalItem = $orderCard.find('.approval-item').first();
             const applicationId = $approvalItem.data('application-id');
-            console.log(applicationId)
-            const deptName = $input.data('type-name');
+            const deptName = $input.data('approval-dept');
 
             if (applicationId && deptName) {
                 updateDepartmentButton(applicationId, deptName);
