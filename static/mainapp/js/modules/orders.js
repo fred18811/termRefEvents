@@ -21,6 +21,75 @@ let currentFilters = {
     user: 'all'
 };
 
+// ========== ФУНКЦИЯ ОБНОВЛЕНИЯ СТАТУСА ПОДРАЗДЕЛЕНИЯ ==========
+const updateDepartmentButton = (applicationId, departmentName) => {
+    console.log('updateDepartmentButton вызван для заявки:', applicationId, 'подразделения:', departmentName);
+
+    //Находим заказ
+    const actualApplicationId = $(`.order-card[data-id="${applicationId}"]`);
+
+    // Находим все чекбоксы в этой заявке (data-order-id у чекбокса = ID заявки)
+    const $allCheckboxes = actualApplicationId.find(`.approval-checkbox`)
+    
+    let totalItems = $allCheckboxes.length;
+    let agreedItems = $allCheckboxes.filter(':checked').length;
+    
+    console.log(`Всего позиций: ${totalItems}, согласовано: ${agreedItems}`);
+    
+    const allAgreed = totalItems > 0 && agreedItems === totalItems;
+    
+    // Находим блок approval-item для этой заявки (по applicationId)
+    const $approvalItem = $(`.approval-item[data-application-id="${applicationId}"]`);
+    
+    if (!$approvalItem.length) {
+        console.log('Approval item не найден для заявки:', applicationId);
+        return;
+    }
+    
+    console.log('Найден approval-item, обновляем...');
+    
+    const $statusArea = $approvalItem.find('.approval-status-area');
+    const $equipmentInfo = $approvalItem.find('.equipment-info');
+    
+    // Обновляем информацию о количестве
+    if ($equipmentInfo.length && totalItems > 0) {
+        $equipmentInfo.html(` (${agreedItems}/${totalItems} позиций согласовано)`);
+    }
+    
+    if (allAgreed) {
+        console.log('Всё оборудование согласовано, показываем кнопку');
+        $statusArea.html(`
+            <button class="btn-approve-application" 
+                    data-application-id="${applicationId}" 
+                    data-department-name="${escapeHtml(departmentName)}" 
+                    data-department-id="${$approvalItem.data('department-id')}">
+                ✅ Согласовать
+            </button>
+        `);
+        
+        $statusArea.find('.btn-approve-application').off('click').on('click', function(e) {
+            e.stopPropagation();
+            const appId = $(this).data('application-id');
+            const deptName = $(this).data('department-name');
+            const deptId = $(this).data('department-id');
+            
+            showConfirm(
+                `Вы уверены, что хотите согласовать заявку №${appId} от подразделения "${deptName}"?`,
+                async () => {
+                    await approveApplication(appId, deptId);
+                }
+            );
+        });
+    } else if (totalItems > 0) {
+        console.log('Не всё оборудование согласовано, показываем заглушку');
+        $statusArea.html(`
+            <span class="approve-disabled-hint" title="Не всё оборудование подразделения согласовано">
+                🔒 Требуется согласование всего оборудования (${agreedItems}/${totalItems})
+            </span>
+        `);
+    }
+};
+
 const getCSRFToken = () => {
     return document.cookie.split('; ').find(row => row.startsWith('csrftoken='))?.split('=')[1];
 };
@@ -958,7 +1027,7 @@ const loadAllApprovalValues = () => {
             $input.val(savedValue.quantity);
             const $checkbox = $(`.approval-checkbox[data-order-id="${orderId}"][data-location-id="${locationId}"][data-equipment-id="${equipmentId}"]`);
             
-            if (savedValue.quantity > 0) {
+            if (savedValue.quantity >= 0) {
                 $checkbox.prop('disabled', false);
             }
             
@@ -1616,6 +1685,7 @@ const saveApprovalToServer = async (orderItemId, canProvide, isAgreed) => {
 
 // Привязка обработчиков для полей ввода и чекбоксов
 const bindApprovalControls = () => {
+    
     // Обработчик изменения количества
     $('.approval-quantity-input').off('input').on('input', function() {
         const $input = $(this);
@@ -1625,6 +1695,7 @@ const bindApprovalControls = () => {
         const locationId = $input.data('location-id');
         const equipmentId = $input.data('equipment-id');
         const orderItemId = $input.data('order-item-id');
+        const typeName = $input.data('type-name');
         
         let finalQuantity = quantity;
         if (quantity > maxQuantity) finalQuantity = maxQuantity;
@@ -1633,21 +1704,17 @@ const bindApprovalControls = () => {
         
         const $checkbox = $(`.approval-checkbox[data-order-id="${orderId}"][data-location-id="${locationId}"][data-equipment-id="${equipmentId}"]`);
         
-        if (finalQuantity >= 0) {
+        if (finalQuantity > 0) {
             $checkbox.prop('disabled', false);
         } else {
             $checkbox.prop('disabled', true);
             $checkbox.prop('checked', false);
             $input.prop('readonly', false);
             $input.css('background-color', 'white');
-            // Сохраняем на сервер
             saveApprovalToServer(orderItemId, finalQuantity, false);
-            saveApprovalValue(orderId, locationId, equipmentId, finalQuantity, false);
         }
         
         const isChecked = $checkbox.is(':checked');
-        saveApprovalValue(orderId, locationId, equipmentId, finalQuantity, isChecked);
-        // Сохраняем на сервер при изменении количества
         if (orderItemId) {
             saveApprovalToServer(orderItemId, finalQuantity, isChecked);
         }
@@ -1664,16 +1731,27 @@ const bindApprovalControls = () => {
         
         const $input = $(`.approval-quantity-input[data-order-id="${orderId}"][data-location-id="${locationId}"][data-equipment-id="${equipmentId}"]`);
         const quantity = parseInt($input.val()) || 0;
+        const inputTypeName = $input.data('type-name');  // переименовали
         
         if (isChecked) {
             $input.prop('readonly', true);
             $input.css('background-color', '#f0f0f0');
-            const typeName = $input.data('type-name');
-            showNotification(`${typeName}: согласовано ${quantity} шт.`, 'success');
-            // Сохраняем на сервер
+            showNotification(`${inputTypeName}: согласовано ${quantity} шт.`, 'success');
             if (orderItemId) {
-                saveApprovalToServer(orderItemId, quantity, true);
+                // saveApprovalToServer(orderItemId, quantity, true);
             }
+
+            // Получаем ID заявки из блока order-card
+            const $orderCard = $input.closest('.order-card');
+            const $approvalItem = $orderCard.find('.approval-item').first();
+            const applicationId = $approvalItem.data('application-id');
+            console.log(applicationId)
+            const deptName = $input.data('type-name');
+
+            if (applicationId && deptName) {
+                updateDepartmentButton(applicationId, deptName);
+            }
+            
         } else {
             $checkbox.prop('checked', true);
             showNotification('Нельзя отменить согласование. Обратитесь к администратору.', 'warning');
