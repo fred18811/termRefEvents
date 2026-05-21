@@ -1003,7 +1003,7 @@ def get_room_details(request):
 @csrf_exempt
 @require_http_methods(["POST"])
 def export_orders_to_excel(request):
-    """Экспорт выбранных заявок в Excel (локация отдельной колонкой с объединением строк)"""
+    """Экспорт выбранных заявок в Excel с поддержкой слотов (локация объединена для всего заказа)"""
     try:
         data = json.loads(request.body)
         order_ids = data.get('order_ids', [])
@@ -1018,7 +1018,6 @@ def export_orders_to_excel(request):
                 'error': 'Не выбраны заявки для экспорта'
             }, status=400)
         
-        # Получаем заявки (Applications) по ID
         applications = Application.objects.filter(id__in=order_ids, id_user=request.user).order_by('-created_at')
         
         if not applications.exists():
@@ -1027,7 +1026,6 @@ def export_orders_to_excel(request):
                 'error': 'Заявки не найдены или не принадлежат вам'
             }, status=400)
         
-        # Создаем Excel файл
         wb = openpyxl.Workbook()
         ws = wb.active
         ws.title = "Заявки"
@@ -1039,6 +1037,8 @@ def export_orders_to_excel(request):
         center_alignment = Alignment(horizontal="center", vertical="center")
         left_alignment = Alignment(horizontal="left", vertical="top", wrap_text=True)
         location_fill = PatternFill(start_color="E6F0FA", end_color="E6F0FA", fill_type="solid")
+        slot_header_fill = PatternFill(start_color="FFA500", end_color="FFA500", fill_type="solid")
+        slot_header_font = Font(bold=True, color="FFFFFF", size=10)
         
         thin_border = Border(
             left=Side(style='thin'),
@@ -1050,7 +1050,6 @@ def export_orders_to_excel(request):
         current_row = 1
         
         for app in applications:
-            # Получаем все заказы в этой заявке
             orders = Order.objects.filter(id_application=app)
             
             # Заголовок заявки
@@ -1061,11 +1060,10 @@ def export_orders_to_excel(request):
             current_row += 1
             
             # Информация о заявке
-            info_row = current_row
-            ws.cell(row=info_row, column=1, value="Дата создания:").font = Font(bold=True)
-            ws.cell(row=info_row, column=2, value=app.created_at.strftime('%d.%m.%Y %H:%M') if app.created_at else "-")
-            ws.cell(row=info_row, column=3, value="Статус:").font = Font(bold=True)
-            ws.cell(row=info_row, column=4, value=dict(Application._meta.get_field('status').choices).get(app.status, app.status))
+            ws.cell(row=current_row, column=1, value="Дата создания:").font = Font(bold=True)
+            ws.cell(row=current_row, column=2, value=app.created_at.strftime('%d.%m.%Y %H:%M') if app.created_at else "-")
+            ws.cell(row=current_row, column=3, value="Статус:").font = Font(bold=True)
+            ws.cell(row=current_row, column=4, value=dict(Application._meta.get_field('status').choices).get(app.status, app.status))
             current_row += 1
             
             if app.comment:
@@ -1074,13 +1072,9 @@ def export_orders_to_excel(request):
                 ws.cell(row=current_row, column=2, value=app.comment)
                 current_row += 1
             
-            current_row += 1  # Пустая строка
+            current_row += 1
             
-            # Для каждого заказа в заявке
             for order in orders:
-                # Собираем данные для матрицы: тип оборудования -> список оборудования
-                types_data = {}
-                
                 items = order.order_items.select_related(
                     'equipment_location__id_equipments',
                     'equipment_location__id_types_equipments',
@@ -1088,63 +1082,77 @@ def export_orders_to_excel(request):
                     'common_equipment_location__id_types_equipments'
                 ).all()
                 
-                for item in items:
-                    if item.equipment_location:
-                        type_name = item.equipment_location.id_types_equipments.name
-                        equipment_name = item.equipment_location.id_equipments.name
-                    else:
-                        type_name = item.common_equipment_location.id_types_equipments.name
-                        equipment_name = f"🌍 {item.common_equipment_location.id_equipments.name}"
-                    
-                    if type_name not in types_data:
-                        types_data[type_name] = []
-                    
-                    types_data[type_name].append({
-                        'name': equipment_name,
-                        'quantity': item.quantity
-                    })
+                # Разделяем на обычные и слоты
+                regular_items = []
+                slot_groups = []
                 
-                if not types_data:
+                for item in items:
+                    if item.is_slot:
+                        existing = None
+                        for sg in slot_groups:
+                            if sg['start'] == item.slot_date_start and sg['end'] == item.slot_date_end:
+                                existing = sg
+                                break
+                        if existing:
+                            existing['items'].append(item)
+                        else:
+                            slot_groups.append({
+                                'start': item.slot_date_start,
+                                'end': item.slot_date_end,
+                                'items': [item]
+                            })
+                    else:
+                        regular_items.append(item)
+                
+                slot_groups.sort(key=lambda x: x['start'])
+                
+                # Собираем все типы оборудования
+                all_types = set()
+                for item in regular_items:
+                    if item.equipment_location:
+                        all_types.add(item.equipment_location.id_types_equipments.name)
+                    else:
+                        all_types.add(item.common_equipment_location.id_types_equipments.name)
+                
+                for slot_group in slot_groups:
+                    for item in slot_group['items']:
+                        if item.equipment_location:
+                            all_types.add(item.equipment_location.id_types_equipments.name)
+                        else:
+                            all_types.add(item.common_equipment_location.id_types_equipments.name)
+                
+                types_list = sorted(all_types)
+                
+                if not types_list:
                     continue
                 
-                # Сортируем типы по алфавиту
-                types_list = sorted(types_data.keys())
+                total_cols = len(types_list) + 1
+                last_col_letter = openpyxl.utils.get_column_letter(total_cols)
                 
-                # Сортируем оборудование в каждом типе по названию
-                for type_name in types_list:
-                    types_data[type_name].sort(key=lambda x: x['name'])
-                
-                # Находим максимальное количество строк в любом типе
-                max_rows = max(len(types_data[t]) for t in types_list)
-                
-                # Дата и время
+                # Дата и время заказа
                 date_start_str = order.date_time_start.strftime('%d.%m.%Y %H:%M') if order.date_time_start else "-"
                 date_end_str = order.date_time_end.strftime('%d.%m.%Y %H:%M') if order.date_time_end else "Не завершен"
                 date_range = f"📅 {date_start_str} - {date_end_str}"
                 
-                # Заголовок с датами
-                ws.merge_cells(f'A{current_row}:F{current_row}')
+                ws.merge_cells(f'A{current_row}:{last_col_letter}{current_row}')
                 date_cell = ws.cell(row=current_row, column=1, value=date_range)
                 date_cell.font = Font(bold=True, size=10, color="666666")
                 date_cell.alignment = Alignment(horizontal="center", vertical="center")
                 current_row += 1
                 
-                # Комментарий к заказу
                 if order.comment:
                     ws.cell(row=current_row, column=1, value="💬 Комментарий к заказу:").font = Font(bold=True)
-                    ws.merge_cells(f'B{current_row}:F{current_row}')
+                    ws.merge_cells(f'B{current_row}:{last_col_letter}{current_row}')
                     ws.cell(row=current_row, column=2, value=order.comment)
                     current_row += 1
                 
-                # ========== ЗАГОЛОВКИ ТАБЛИЦЫ ==========
-                # Первая колонка - Локация
+                # Заголовки таблицы
                 location_cell = ws.cell(row=current_row, column=1, value="ЛОКАЦИЯ")
                 location_cell.font = header_font
                 location_cell.fill = header_fill
                 location_cell.alignment = header_alignment
                 location_cell.border = thin_border
                 
-                # Колонки типов оборудования
                 for col_idx, type_name in enumerate(types_list, start=2):
                     cell = ws.cell(row=current_row, column=col_idx, value=type_name)
                     cell.font = header_font
@@ -1154,63 +1162,131 @@ def export_orders_to_excel(request):
                 
                 current_row += 1
                 
-                # ========== ДАННЫЕ ТАБЛИЦЫ ==========
-                # Запоминаем строку начала данных для этого заказа
-                data_start_row = current_row
                 location_name = order.id_location.name if order.id_location else "Не указана"
+                table_start_row = current_row
                 
-                for row_idx in range(max_rows):
-                    # Колонка "Локация" (заполняем только в первой строке)
-                    if row_idx == 0:
-                        location_cell = ws.cell(row=current_row + row_idx, column=1, value=location_name)
-                        location_cell.alignment = left_alignment
-                        location_cell.border = thin_border
-                        location_cell.fill = location_fill
-                        location_cell.font = Font(bold=True)
-                    else:
-                        # Для остальных строк оставляем пусто (потом объединим)
-                        empty_cell = ws.cell(row=current_row + row_idx, column=1, value="")
+                # ========== ФУНКЦИЯ ДЛЯ ПРЕОБРАЗОВАНИЯ ОБОРУДОВАНИЯ В МАТРИЦУ ==========
+                def equipment_to_matrix(equipment_items):
+                    if not equipment_items:
+                        return []
+                    
+                    types_data = {}
+                    for item in equipment_items:
+                        if item.equipment_location:
+                            type_name = item.equipment_location.id_types_equipments.name
+                            equipment_name = item.equipment_location.id_equipments.name
+                        else:
+                            type_name = item.common_equipment_location.id_types_equipments.name
+                            equipment_name = f"🌍 {item.common_equipment_location.id_equipments.name}"
+                        
+                        if type_name not in types_data:
+                            types_data[type_name] = []
+                        types_data[type_name].append({
+                            'name': equipment_name,
+                            'quantity': item.quantity
+                        })
+                    
+                    for t_name in types_data:
+                        types_data[t_name].sort(key=lambda x: x['name'])
+                    
+                    max_rows = max((len(types_data.get(t, [])) for t in types_list), default=0)
+                    
+                    rows = []
+                    for row_idx in range(max_rows):
+                        row_cells = []
+                        for type_name in types_list:
+                            equipment_list = types_data.get(type_name, [])
+                            if row_idx < len(equipment_list):
+                                eq = equipment_list[row_idx]
+                                row_cells.append(f"{eq['name']} - {eq['quantity']} шт.")
+                            else:
+                                row_cells.append("—")
+                        rows.append(row_cells)
+                    
+                    return rows
+                
+                # ========== СОБИРАЕМ ВСЕ СТРОКИ ТАБЛИЦЫ ==========
+                all_table_rows = []
+                
+                # Обычные позиции
+                regular_matrix = equipment_to_matrix(regular_items)
+                for row_cells in regular_matrix:
+                    all_table_rows.append({'type': 'equipment', 'cells': row_cells})
+                
+                # Слоты
+                for slot_group in slot_groups:
+                    slot_start_str = slot_group['start'].strftime('%H:%M') if slot_group['start'] else "-"
+                    slot_end_str = slot_group['end'].strftime('%H:%M') if slot_group['end'] else "-"
+                    slot_text = f"⏰ СЛОТ: {slot_start_str} - {slot_end_str}"
+                    all_table_rows.append({'type': 'slot_header', 'text': slot_text})
+                    
+                    slot_matrix = equipment_to_matrix(slot_group['items'])
+                    for row_cells in slot_matrix:
+                        all_table_rows.append({'type': 'equipment', 'cells': row_cells})
+                
+                # ========== ВЫВОД ВСЕХ СТРОК ==========
+                # Сначала записываем все строки, заполняя колонку A пустыми значениями
+                for row_data in all_table_rows:
+                    if row_data['type'] == 'slot_header':
+                        # Заголовок слота: колонка A пустая (будет объединена позже)
+                        empty_cell = ws.cell(row=current_row, column=1, value="")
                         empty_cell.border = thin_border
                         empty_cell.fill = location_fill
-                    
-                    # Колонки типов оборудования
-                    for col_idx, type_name in enumerate(types_list, start=2):
-                        equipment_list = types_data[type_name]
-                        if row_idx < len(equipment_list):
-                            equipment = equipment_list[row_idx]
-                            # Формат: "Название - X шт."
-                            cell_value = f"{equipment['name']} - {equipment['quantity']} шт."
-                            cell = ws.cell(row=current_row + row_idx, column=col_idx, value=cell_value)
-                            cell.alignment = left_alignment
-                            cell.border = thin_border
-                        else:
-                            cell = ws.cell(row=current_row + row_idx, column=col_idx, value="—")
-                            cell.alignment = center_alignment
-                            cell.border = thin_border
+                        
+                        # Объединяем колонки со 2 по последнюю
+                        ws.merge_cells(f'B{current_row}:{last_col_letter}{current_row}')
+                        slot_cell = ws.cell(row=current_row, column=2, value=row_data['text'])
+                        slot_cell.font = slot_header_font
+                        slot_cell.fill = slot_header_fill
+                        slot_cell.alignment = Alignment(horizontal="center", vertical="center")
+                        slot_cell.border = thin_border
+                        current_row += 1
+                    else:
+                        # Строка с оборудованием: колонка A пустая (будет объединена позже)
+                        empty_cell = ws.cell(row=current_row, column=1, value="")
+                        empty_cell.border = thin_border
+                        empty_cell.fill = location_fill
+                        
+                        # Колонки типов
+                        for col_idx, cell_value in enumerate(row_data['cells'], start=2):
+                            if cell_value == "—":
+                                cell = ws.cell(row=current_row, column=col_idx, value=cell_value)
+                                cell.alignment = center_alignment
+                                cell.border = thin_border
+                            else:
+                                cell = ws.cell(row=current_row, column=col_idx, value=cell_value)
+                                cell.alignment = left_alignment
+                                cell.border = thin_border
+                        
+                        current_row += 1
                 
-                # ========== ОБЪЕДИНЕНИЕ ЯЧЕЕК ЛОКАЦИИ ==========
-                # Если больше одной строки, объединяем ячейки локации
-                if max_rows > 1:
+                # ========== ЗАПОЛНЯЕМ ПЕРВУЮ СТРОКУ ЛОКАЦИЕЙ ==========
+                # После того как все строки записаны, ставим название локации в первую ячейку
+                first_data_row = table_start_row
+                location_cell = ws.cell(row=first_data_row, column=1, value=location_name)
+                location_cell.alignment = left_alignment
+                location_cell.border = thin_border
+                location_cell.fill = location_fill
+                location_cell.font = Font(bold=True)
+                
+                # ========== ОБЪЕДИНЯЕМ ЯЧЕЙКИ ЛОКАЦИИ ДЛЯ ВСЕГО ЗАКАЗА ==========
+                if current_row > table_start_row + 1:
                     ws.merge_cells(
-                        start_row=data_start_row, 
-                        start_column=1, 
-                        end_row=data_start_row + max_rows - 1, 
+                        start_row=table_start_row,
+                        start_column=1,
+                        end_row=current_row - 1,
                         end_column=1
                     )
-                    # Устанавливаем вертикальное выравнивание для объединенной ячейки
-                    merged_cell = ws.cell(row=data_start_row, column=1)
+                    merged_cell = ws.cell(row=table_start_row, column=1)
                     merged_cell.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
                 
-                current_row += max_rows
-                current_row += 2  # Пустая строка между заказами
+                current_row += 2
             
-            current_row += 1  # Пустая строка между заявками
+            current_row += 1
         
-        # ========== НАСТРОЙКА ШИРИНЫ КОЛОНОК ==========
-        ws.column_dimensions['A'].width = 35  # Колонка Локация
+        # Настройка ширины колонок
+        ws.column_dimensions['A'].width = 35
         
-        # Определяем количество колонок с типами (максимальное из всех заявок)
-        # Проходим все заявки, чтобы определить максимальное количество типов
         max_types_count = 0
         for app in applications:
             for order in Order.objects.filter(id_application=app):
@@ -1223,17 +1299,14 @@ def export_orders_to_excel(request):
                         types_set.add(item.common_equipment_location.id_types_equipments.name)
                 max_types_count = max(max_types_count, len(types_set))
         
-        # Устанавливаем ширину для колонок типов
         for col_idx in range(2, max_types_count + 3):
             col_letter = openpyxl.utils.get_column_letter(col_idx)
             ws.column_dimensions[col_letter].width = 35
         
-        # Сохраняем в буфер
         buffer = BytesIO()
         wb.save(buffer)
         buffer.seek(0)
         
-        # Отправляем файл
         response = HttpResponse(
             buffer.getvalue(),
             content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
