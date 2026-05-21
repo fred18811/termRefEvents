@@ -26,10 +26,10 @@ const updateDepartmentButton = (applicationId, departmentName) => {
     console.log('updateDepartmentButton вызван для заявки:', applicationId, 'подразделения:', departmentName);
 
     //Находим заказ
-    const actualApplicationId = $(`.order-card[data-id="${applicationId}"]`);
+    const $orderCard = $(`.order-card[data-id="${applicationId}"]`);
 
     // Находим все чекбоксы в этой заявке (data-order-id у чекбокса = ID заявки)
-    const $allCheckboxes = actualApplicationId.find(`.approval-checkbox`)
+    const $allCheckboxes = $orderCard.find(`.approval-checkbox`)
     
     let totalItems = $allCheckboxes.length;
     let agreedItems = $allCheckboxes.filter(':checked').length;
@@ -1074,7 +1074,10 @@ export const displayOrderItems = async (applicationId, items, canEdit = false) =
     const applicationStatus = application ? application.status : 'new';
     
     // Редактирование доступно только если статус 'new' (Новая)
-    const canEditOrder = canEdit && (applicationStatus === 'new');
+    const now = new Date();
+    const orderEndDate = application?.date_time_end ? new Date(application.date_time_end) : null;
+    const isExpired = orderEndDate && orderEndDate < now;
+    const canEditOrder = canEdit && (applicationStatus === 'new') && !isExpired;
     
     console.log('Заявка ID:', applicationId);
     console.log('Статус заявки:', applicationStatus);
@@ -1661,14 +1664,29 @@ const saveApprovalToServer = async (orderItemId, canProvide, isAgreed) => {
         const response = await api.updateOrderItemApproval(orderItemId, canProvide, isAgreed);
         if (response.success) {
             console.log(`Сохранено согласование для позиции ${orderItemId}: количество=${canProvide}, согласовано=${isAgreed}`);
-            // Обновляем локальные данные
+            
+            // Получаем элементы DOM
             const $input = $(`.approval-quantity-input[data-order-item-id="${orderItemId}"]`);
             const $checkbox = $(`.approval-checkbox[data-order-item-id="${orderItemId}"]`);
             
             if ($input.length) {
+                // Получаем данные из DOM
+                const orderId = $input.data('order-id');
+                const locationId = $input.data('location-id');
+                const equipmentId = $input.data('equipment-id');
+                
+                // Очищаем localStorage
+                if (orderId && locationId && equipmentId) {
+                    const storageKey = `order_${orderId}_${locationId}`;
+                    const savedValues = JSON.parse(localStorage.getItem(storageKey) || '{}');
+                    delete savedValues[equipmentId];
+                    localStorage.setItem(storageKey, JSON.stringify(savedValues));
+                }
+                
                 $input.data('saved-quantity', canProvide);
                 $input.val(canProvide);
             }
+            
             if ($checkbox.length) {
                 $checkbox.data('saved-checked', isAgreed);
                 if (isAgreed) {
@@ -1733,8 +1751,7 @@ const bindApprovalControls = () => {
         const locationId = $checkbox.data('location-id');
         const equipmentId = $checkbox.data('equipment-id');
         const orderItemId = $checkbox.data('order-item-id');
-        
-        const $input = $(`.approval-quantity-input[data-order-id="${orderId}"][data-location-id="${locationId}"][data-equipment-id="${equipmentId}"]`);
+        const $input = $(`.approval-quantity-input[data-order-item-id="${orderItemId}"]`);
         const quantity = parseInt($input.val()) || 0;
         const inputTypeName = $input.data('type-name');  // переименовали
         
@@ -1743,7 +1760,7 @@ const bindApprovalControls = () => {
             $input.css('background-color', '#f0f0f0');
             showNotification(`${inputTypeName}: согласовано ${quantity} шт.`, 'success');
             if (orderItemId) {
-                // saveApprovalToServer(orderItemId, quantity, true);
+                saveApprovalToServer(orderItemId, quantity, true);
             }
 
             // Получаем ID заявки из блока order-card
@@ -1757,7 +1774,6 @@ const bindApprovalControls = () => {
             }
             
         } else {
-            $checkbox.prop('checked', true);
             showNotification('Нельзя отменить согласование. Обратитесь к администратору.', 'warning');
             return;
         }
@@ -1771,8 +1787,14 @@ const bindApprovalControls = () => {
 const loadUserDepartmentAndTypes = async () => {
     try {
         const [departmentsRes, departmentTypesRes] = await Promise.all([
-            fetch('/api/user/departments/').then(res => res.json()),
-            fetch('/api/user/department-types/').then(res => res.json())
+            fetch('/api/user/departments/').then(res => {
+                if (!res.ok) throw new Error('Failed to load departments');
+                return res.json();
+            }),
+            fetch('/api/user/department-types/').then(res => {
+                if (!res.ok) throw new Error('Failed to load department types');
+                return res.json();
+            })
         ]);
         
         let userDepartments = [];
