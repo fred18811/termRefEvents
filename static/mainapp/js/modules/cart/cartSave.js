@@ -101,13 +101,13 @@ export const saveEditedOrder = () => {
 // Сохранение заказа (создание заявки и заказа)
 export const saveSingleOrder = async () => {
     if (!state.orderCart.length) {
-        showNotification('⚠️ Нет позиций для сохранения', 'warning');
+        showNotification('<i class="fa fa-exclamation" aria-hidden="true"></i> Нет позиций для сохранения', 'warning');
         return;
     }
     
     const applicationName = $('#applicationName').val().trim();
     if (!applicationName) {
-        showNotification('⚠️ Укажите название заявки', 'warning');
+        showNotification('<i class="fa fa-exclamation" aria-hidden="true"></i> Укажите название заявки', 'warning');
         $('#applicationName').addClass('error');
         return;
     }
@@ -119,7 +119,7 @@ export const saveSingleOrder = async () => {
     
     const saveBtn = $('#saveOrderFromCartBtn');
     const originalText = saveBtn.text();
-    saveBtn.prop('disabled', true).text('⏳ Сохранение...');
+    saveBtn.prop('disabled', true).text('<i class="fa fa-hourglass-half" aria-hidden="true"></i> Сохранение...');
     
     try {
         const csrftoken = document.cookie.split('; ').find(row => row.startsWith('csrftoken='))?.split('=')[1];
@@ -150,7 +150,7 @@ export const saveSingleOrder = async () => {
         }
         
         if (hasErrors) {
-            showNotification('⚠️ Некоторые заказы не были созданы.', 'warning');
+            showNotification('<i class="fa fa-exclamation" aria-hidden="true"></i> Некоторые заказы не были созданы.', 'warning');
         }
         
     } catch (error) {
@@ -250,7 +250,7 @@ const showSaveSuccessMessage = (applicationName, createdOrders) => {
             message += `\n📦 ${order.location_name} - Заказ №${order.order_id}`;
         }
         if (order.comment) {
-            message += `\n   💬 ${order.comment.substring(0, 50)}${order.comment.length > 50 ? '...' : ''}`;
+            message += `\n   <i class="fa fa-comment-o" aria-hidden="true"></i> ${order.comment.substring(0, 50)}${order.comment.length > 50 ? '...' : ''}`;
         }
     });
     showNotification(message, 'success');

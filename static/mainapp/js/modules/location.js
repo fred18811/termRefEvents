@@ -25,7 +25,7 @@ export const loadLocationPhoto = async (id) => {
         if (res.success && res.photo_url) {
             $('#locationPhoto').html(`<img src="${res.photo_url}" alt="${res.photo_name}">`);
         } else {
-            $('#locationPhoto').html('<div class="photo-placeholder">📷 Нет фото</div>');
+            $('#locationPhoto').html('<div class="photo-placeholder"><i class="fa fa-camera-retro"></i> Нет фото</div>');
         }
     } catch (error) {
         console.error('Ошибка загрузки фото:', error);
@@ -253,7 +253,7 @@ export const checkAvailability = async () => {
     const dateEnd = $('#dateEnd').val();
     const typeIds = [...state.selectedTypes];
     
-    $('#equipmentContainer').html('<div class="loading">⏳ Проверка доступности оборудования...</div>');
+    $('#equipmentContainer').html('<div class="loading"><i class="fa fa-hourglass-half" aria-hidden="true"></i> Проверка доступности оборудования...</div>');
     
     try {
         const response = await api.checkEquipmentAvailability(
@@ -326,7 +326,7 @@ const checkAvailabilityWithData = async (equipmentData) => {
 export const updateEquipmentList = async () => {
 
     if (!state.currentLocation) {
-        $('#equipmentContainer').html('<div class="info-message">📍 Выберите помещение</div>');
+        $('#equipmentContainer').html('<div class="info-message"><i class="fa fa-map-pin" aria-hidden="true"></i> Выберите помещение</div>');
         return;
     }
     
@@ -353,13 +353,13 @@ export const updateEquipmentList = async () => {
         dateEnd = $('#dateEnd').val();
         
         if (!dateStart || !dateEnd) {
-            $('#equipmentContainer').html('<div class="info-message">📅 Выберите даты</div>');
+            $('#equipmentContainer').html('<div class="info-message"><i class="fa fa-calendar"></i> Выберите даты</div>');
             return;
         }
         
         const dateValid = validateDates(dateStart, dateEnd);
         if (!dateValid.valid) {
-            $('#equipmentContainer').html(`<div class="info-message">⚠️ ${dateValid.error}</div>`);
+            $('#equipmentContainer').html(`<div class="info-message"><i class="fa fa-exclamation"></i> ${dateValid.error}</div>`);
             return;
         }
     }
@@ -397,7 +397,7 @@ export const displayEquipmentList = (equipment) => {
     equipment.forEach(item => {
         const availableQty = item.hasOwnProperty('available') ? item.available : item.quantity;
         const savedQuantity = window.equipmentQuantities[item.equipment_id] || 0;
-        const commonBadge = item.is_common ? '<span class="common-badge-small">🌍 Общее</span>' : '';
+        const commonBadge = item.is_common ? '<span class="common-badge-small"><i class="fa fa-globe"></i></span>' : '';
         const isUnavailable = availableQty <= 0;
         const finalQuantity = Math.min(savedQuantity, availableQty);
         
@@ -413,14 +413,14 @@ export const displayEquipmentList = (equipment) => {
                  data-id="${item.equipment_id}" 
                  data-is-common="${item.is_common || false}"
                  data-name="${escapeHtml(item.name)}">
-                <div>
+                <div class="equipment-item-element">
                     <div class="equipment-name">
                         ${displayName}
                         ${commonBadge}
-                        <span class="equipment-type">📌 ${escapeHtml(item.type_name)}</span>
+                        <span class="equipment-type"> | ${escapeHtml(item.type_name)}</span>
                     </div>
                     <div class="equipment-quantity">
-                        Доступно: <strong class="${isUnavailable ? 'text-danger' : 'text-success'}">${availableQty}</strong> шт.
+                        <strong class="${isUnavailable ? 'text-danger' : 'text-success'}">${availableQty}</strong> шт.
                         ${isUnavailable ? '<span class="unavailable-badge">Нет в наличии</span>' : ''}
                     </div>
                 </div>
@@ -467,7 +467,7 @@ const escapeRegex = (string) => {
 // Новая функция для обработки слотов в корзину
 const processSlotsToCart = (slots) => {
     if (!slots || slots.length === 0) {
-        showNotification('⚠️ Нет добавленных слотов', 'warning');
+        showNotification('<i class="fa fa-exclamation" aria-hidden="true"></i> Нет добавленных слотов', 'warning');
         return;
     }
     
@@ -477,7 +477,7 @@ const processSlotsToCart = (slots) => {
     }
     
     if (state.selectedLocations.has(state.currentLocation.id.toString())) {
-        showNotification('⚠️ Это помещение уже добавлено в заказ', 'warning');
+        showNotification('<i class="fa fa-exclamation" aria-hidden="true"></i> Это помещение уже добавлено в заказ', 'warning');
         return;
     }
     
@@ -525,7 +525,7 @@ const processSlotsToCart = (slots) => {
     });
     
     if (slotOrder.slots.length === 0) {
-        showNotification('⚠️ Нет валидных слотов для добавления', 'warning');
+        showNotification('<i class="fa fa-exclamation" aria-hidden="true"></i> Нет валидных слотов для добавления', 'warning');
         return;
     }
     
@@ -550,7 +550,7 @@ const processSlotsToCart = (slots) => {
     $('#searchEquipment').val('');
     $('.location-item').removeClass('active');
     $('.type-item input').prop('checked', false);
-    $('#equipmentContainer').html('<div class="info-message">📍 Выберите локацию, даты и типы оборудования</div>');
+    $('#equipmentContainer').html('<div class="info-message"><i class="fa fa-map-pin" aria-hidden="true"></i> Выберите локацию, даты и типы оборудования</div>');
     $('#orderComment').val('');
     $('#slotDateStart, #slotDateEnd').val('');
     
@@ -642,7 +642,7 @@ export const addToCart = () => {
     }
     
     if (!selected.length) {
-        showNotification('⚠️ Выберите хотя бы одно оборудование', 'warning');
+        showNotification('<i class="fa fa-exclamation" aria-hidden="true"></i> Выберите хотя бы одно оборудование', 'warning');
         return;
     }
     
@@ -652,7 +652,7 @@ export const addToCart = () => {
     }
     
     if (hasLocationEquipment && state.selectedLocations.has(state.currentLocation.id.toString())) {
-        showNotification('⚠️ Эта локация уже добавлена в заказ', 'warning');
+        showNotification('<i class="fa fa-exclamation" aria-hidden="true"></i> Эта локация уже добавлена в заказ', 'warning');
         return;
     }
     
@@ -687,7 +687,7 @@ export const addToCart = () => {
     $('#searchEquipment').val('');
     $('.location-item').removeClass('active');
     $('.type-item input').prop('checked', false);
-    $('#equipmentContainer').html('<div class="info-message">📍 Выберите локацию, даты и типы оборудования</div>');
+    $('#equipmentContainer').html('<div class="info-message"><i class="fa fa-map-pin" aria-hidden="true"></i> Выберите локацию, даты и типы оборудования</div>');
     $('#orderComment').val('');
     
     window.equipmentQuantities = {};

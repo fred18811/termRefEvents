@@ -134,7 +134,7 @@ export const addSelectedEquipment = () => {
                                data-eq-id="${eq.equipment_id}"
                                data-is-common="${eq.is_common}"
                                data-max="${eq.max_quantity}">
-                        <button class="remove-equipment-btn" data-eq-id="${eq.equipment_id}" title="Удалить">🗑️</button>
+                        <button class="remove-equipment-btn" data-eq-id="${eq.equipment_id}" title="Удалить"><i class="fa fa-trash" aria-hidden="true"></i></button>
                     </div>
                 </div>
             `;

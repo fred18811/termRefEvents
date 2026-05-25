@@ -15,7 +15,7 @@ export const displaySlotsList = () => {
     const container = $('#slotsList');
     
     if (!slotsList.length) {
-        container.html('<div class="empty-slots">📭 Нет добавленных слотов. Нажмите "+ Добавить слот"</div>');
+        container.html('<div class="empty-slots"><i class="fa fa-circle" aria-hidden="true"></i> Нет добавленных слотов. Нажмите "+ Добавить слот"</div>');
         return;
     }
     
@@ -24,7 +24,7 @@ export const displaySlotsList = () => {
     
     for (const [dateKey, slots] of groupedSlots) {
         const dateHeader = formatDateHeader(slots[0].date_start);
-        html += `<div class="slots-date-group"><div class="slots-date-header">📅 ${dateHeader}</div>`;
+        html += `<div class="slots-date-group"><div class="slots-date-header"><i class="fa fa-calendar"></i> ${dateHeader}</div>`;
         
         slots.forEach((slot, idx) => {
             const startTime = formatTime(slot.date_start);
@@ -49,12 +49,12 @@ export const displaySlotsList = () => {
             html += `
                 <div class="slot-item" data-slot-index="${globalIndex}">
                     <div class="slot-info">
-                        <div class="slot-time">⏰ ${startTime} - ${endTime}</div>
+                        <div class="slot-time"><i class="fa fa-clock-o"></i> ${startTime} - ${endTime}</div>
                         <div class="slot-equipment">
                             ${equipmentHtml || 'Нет оборудования'}
                         </div>
                     </div>
-                    <button class="slot-remove-btn" data-slot-index="${globalIndex}" title="Удалить слот">🗑️</button>
+                    <button class="slot-remove-btn" data-slot-index="${globalIndex}" title="Удалить слот"><i class="fa fa-trash" aria-hidden="true"></i></button>
                 </div>
             `;
         });

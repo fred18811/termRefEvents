@@ -70,17 +70,17 @@ export const updateCartDisplay = () => {
                 <div class="cart-item cart-item-slots" data-index="${i}">
                     <div class="cart-item-info">
                         <div class="cart-item-location" data-index="${i}">
-                            📍 ${escapeHtml(item.location_name)}
+                            <i class="fa fa-map-pin" aria-hidden="true"></i> ${escapeHtml(item.location_name)}
                             <span class="slots-badge">🎯 Слоты</span>
                         </div>
                         <div class="cart-item-dates">
-                            📅 ${commonStartDate} - ${commonEndDate}
+                            <i class="fa fa-calendar"></i> ${commonStartDate} - ${commonEndDate}
                         </div>
-                        ${item.comment ? `<div class="cart-item-comment">💬 ${escapeHtml(item.comment)}</div>` : ''}
+                        ${item.comment ? `<div class="cart-item-comment"><i class="fa fa-comment-o" aria-hidden="true"></i> ${escapeHtml(item.comment)}</div>` : ''}
                     </div>
                     <div class="cart-item-actions">
-                        <button class="cart-edit-slots-btn" data-index="${i}" title="Редактировать слоты">✏️</button>
-                        <button class="cart-remove-btn" data-index="${i}" title="Удалить">🗑️</button>
+                        <button class="S" data-index="${i}" title="Редактировать слоты"><i class="fa fa-pencil" aria-hidden="true"></i></button>
+                        <button class="cart-remove-btn" data-index="${i}" title="Удалить"><i class="fa fa-trash" aria-hidden="true"></i></button>
                     </div>
                 </div>
             `;
@@ -95,14 +95,14 @@ export const updateCartDisplay = () => {
                 });
                 
                 html += `<div class="slots-date-group-cart">
-                            <div class="slots-date-header-cart">📅 ${dateHeader}</div>`;
+                            <div class="slots-date-header-cart"><i class="fa fa-calendar"></i> ${dateHeader}</div>`;
                 
                 slots.forEach(slot => {
                     const startTime = new Date(slot.date_start).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
                     const endTime = new Date(slot.date_end).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
                     
                     html += `<div class="slot-item-cart">
-                                <div class="slot-time-cart">⏰ ${startTime} - ${endTime}</div>
+                                <div class="slot-time-cart"><i class="fa fa-clock-o" aria-hidden="true"></i> ${startTime} - ${endTime}</div>
                                 <div class="slot-equipment-cart">`;
                     
                     slot.equipment.forEach(eq => {
@@ -122,7 +122,7 @@ export const updateCartDisplay = () => {
                         </div>
                     </div>
                     <div class="cart-item-actions">
-                        <button class="cart-remove-btn" data-index="${i}" title="Удалить">🗑️</button>
+                        <button class="cart-remove-btn" data-index="${i}" title="Удалить"><i class="fa fa-trash" aria-hidden="true"></i></button>
                     </div>
                 </div>
             `;
@@ -135,19 +135,19 @@ export const updateCartDisplay = () => {
                 <div class="cart-item" data-index="${i}">
                     <div class="cart-item-info">
                         <div class="cart-item-location" data-index="${i}">
-                            📍 ${escapeHtml(item.location_name)}
+                            <i class="fa fa-map-pin" aria-hidden="true"></i> ${escapeHtml(item.location_name)}
                         </div>
                         <div class="cart-item-dates">
-                            📅 ${startDate} - ${endDate}
+                            <i class="fa fa-calendar"></i> ${startDate} - ${endDate}
                         </div>
                         <div class="cart-item-equipment">
                             ${item.equipment.map(e => `• ${escapeHtml(e.equipment_name)}: ${e.quantity} шт.`).join('<br>')}
                         </div>
-                        ${item.comment ? `<div class="cart-item-comment">💬 ${escapeHtml(item.comment)}</div>` : ''}
+                        ${item.comment ? `<div class="cart-item-comment"><i class="fa fa-comment-o" aria-hidden="true"></i> ${escapeHtml(item.comment)}</div>` : ''}
                     </div>
                     <div class="cart-item-actions">
-                        <button class="cart-edit-btn" data-index="${i}" title="Редактировать">✏️</button>
-                        <button class="cart-remove-btn" data-index="${i}" title="Удалить">🗑️</button>
+                        <button class="cart-edit-btn" data-index="${i}" title="Редактировать"><i class="fa fa-pencil" aria-hidden="true"></i></button>
+                        <button class="cart-remove-btn" data-index="${i}" title="Удалить"><i class="fa fa-trash" aria-hidden="true"></i></button>
                     </div>
                 </div>
             `;
@@ -375,7 +375,7 @@ const addNewEmptySlot = () => {
                     -
                     <input type="datetime-local" class="edit-slot-end-input" value="${endFormatted.replace(' ', 'T')}" style="width: 160px;">
                 </div>
-                <button class="remove-slot-btn" data-slot-index="${slotIndex}" title="Удалить слот">🗑️ Удалить слот</button>
+                <button class="remove-slot-btn" data-slot-index="${slotIndex}" title="Удалить слот"><i class="fa fa-trash" aria-hidden="true"></i> Удалить слот</button>
             </div>
             <div class="edit-slot-equipment-list">
                 <div class="text-muted">Нет оборудования</div>
@@ -544,7 +544,7 @@ const addEquipmentToSlot = (slotIndex) => {
                                data-eq-id="${eqId}"
                                data-max="${maxQty}"
                                style="width: 70px;">
-                        <button class="remove-slot-equipment-btn" data-eq-id="${eqId}">🗑️</button>
+                        <button class="remove-slot-equipment-btn" data-eq-id="${eqId}"><i class="fa fa-trash" aria-hidden="true"></i></button>
                     </div>
                 `;
                 $equipmentList.append(equipmentHtml);
@@ -847,7 +847,7 @@ export const openEditModal = async (index) => {
                                data-eq-id="${eq.equipment_id}"
                                data-is-common="${eq.is_common || false}"
                                data-max="${availableQty}">
-                        <button class="remove-equipment-btn" data-eq-id="${eq.equipment_id}" title="Удалить">🗑️</button>
+                        <button class="remove-equipment-btn" data-eq-id="${eq.equipment_id}" title="Удалить"><i class="fa fa-trash" aria-hidden="true"></i></button>
                     </div>
                 </div>
             `;
@@ -862,20 +862,20 @@ export const openEditModal = async (index) => {
     
     const modalContent = `
         <div class="edit-location-info">
-            <p><strong>📍 Локация:</strong> ${escapeHtml(item.location_name)}</p>
+            <p><strong><i class="fa fa-map-pin" aria-hidden="true"></i> Локация:</strong> ${escapeHtml(item.location_name)}</p>
             <div class="date-fields" style="margin-top: 1rem; padding: 0;">
                 <div class="date-field">
-                    <label>📅 Дата начала</label>
+                    <label><i class="fa fa-calendar"></i> Дата начала</label>
                     <input type="datetime-local" id="editDateStart" class="date-input" value="${startDate}">
                 </div>
                 <div class="date-field">
-                    <label>⏰ Дата окончания</label>
+                    <label><i class="fa fa-clock-o" aria-hidden="true"></i> Дата окончания</label>
                     <input type="datetime-local" id="editDateEnd" class="date-input" value="${endDate}">
                 </div>
             </div>
         </div>
         <div class="edit-comment-section">
-            <label>💬 Комментарий к заказу</label>
+            <label><i class="fa fa-comment-o" aria-hidden="true"></i> Комментарий к заказу</label>
             <textarea id="editComment" class="edit-comment-input" rows="3" placeholder="Введите комментарий...">${escapedComment}</textarea>
         </div>
         <div class="edit-equipment-header">
@@ -1007,7 +1007,7 @@ export const openEditSlotsModal = async (index) => {
                            data-eq-id="${eq.equipment_id}"
                            data-max="${eq.max_quantity || eq.quantity}"
                            style="width: 70px;">
-                    <button class="remove-slot-equipment-btn" data-eq-id="${eq.equipment_id}">🗑️</button>
+                    <button class="remove-slot-equipment-btn" data-eq-id="${eq.equipment_id}"><i class="fa fa-trash" aria-hidden="true"></i></button>
                 </div>
             `;
         });
@@ -1016,11 +1016,11 @@ export const openEditSlotsModal = async (index) => {
             <div class="edit-slot-item" data-slot-index="${slotIndex}">
                 <div class="edit-slot-header">
                     <div class="edit-slot-time">
-                        ⏰ ${startTime} - ${endTime}
+                        <i class="fa fa-clock-o" aria-hidden="true"></i> ${startTime} - ${endTime}
                         <input type="hidden" class="edit-slot-start" value="${slot.date_start}">
                         <input type="hidden" class="edit-slot-end" value="${slot.date_end}">
                     </div>
-                    <button class="remove-slot-btn" data-slot-index="${slotIndex}" title="Удалить слот">🗑️ Удалить слот</button>
+                    <button class="remove-slot-btn" data-slot-index="${slotIndex}" title="Удалить слот"><i class="fa fa-trash" aria-hidden="true"></i> Удалить слот</button>
                 </div>
                 <div class="edit-slot-equipment-list">
                     ${equipmentHtml || '<div class="text-muted">Нет оборудования</div>'}
@@ -1033,24 +1033,24 @@ export const openEditSlotsModal = async (index) => {
     const modalContent = `
         <div class="edit-slots-container">
             <div class="edit-location-info">
-                <p><strong>📍 Локация:</strong> ${escapeHtml(item.location_name)}</p>
+                <p><strong><i class="fa fa-map-pin" aria-hidden="true"></i> Локация:</strong> ${escapeHtml(item.location_name)}</p>
                 <div class="date-fields" style="margin-top: 1rem; padding: 0;">
                     <div class="date-field">
-                        <label>📅 Общая дата начала</label>
+                        <label><i class="fa fa-calendar"></i> Общая дата начала</label>
                         <input type="datetime-local" id="editSlotsCommonStart" class="date-input" value="${formatDateTimeForInput(item.common_date_start)}">
                     </div>
                     <div class="date-field">
-                        <label>⏰ Общая дата окончания</label>
+                        <label><i class="fa fa-clock-o" aria-hidden="true"></i> Общая дата окончания</label>
                         <input type="datetime-local" id="editSlotsCommonEnd" class="date-input" value="${formatDateTimeForInput(item.common_date_end)}">
                     </div>
                 </div>
             </div>
             <div class="edit-comment-section">
-                <label>💬 Комментарий к заказу</label>
+                <label><i class="fa fa-comment-o" aria-hidden="true"></i> Комментарий к заказу</label>
                 <textarea id="editSlotsComment" class="edit-comment-input" rows="2">${escapeHtml(item.comment || '')}</textarea>
             </div>
             <div class="edit-slots-list">
-                <h4>📋 Слоты</h4>
+                <h4><i class="fa fa-file-text-o" aria-hidden="true"></i> Слоты</h4>
                 ${slotsHtml}
             </div>
             <button id="addNewSlotToEdit" class="btn-add-slot" style="margin-top: 1rem;">➕ Добавить новый слот</button>
@@ -1207,7 +1207,7 @@ export const addSelectedEquipment = () => {
                                data-eq-id="${eq.equipment_id}"
                                data-is-common="${eq.is_common}"
                                data-max="${eq.max_quantity}">
-                        <button class="remove-equipment-btn" data-eq-id="${eq.equipment_id}" title="Удалить">🗑️</button>
+                        <button class="remove-equipment-btn" data-eq-id="${eq.equipment_id}" title="Удалить"><i class="fa fa-trash" aria-hidden="true"></i></button>
                     </div>
                 </div>
             `;
@@ -1339,13 +1339,13 @@ export const saveEditChanges = () => {
 // Сохранение заказа (создание заявки и заказа)
 export const saveSingleOrder = async () => {
     if (!state.orderCart.length) {
-        showNotification('⚠️ Нет позиций для сохранения', 'warning');
+        showNotification('<i class="fa fa-exclamation" aria-hidden="true"></i> Нет позиций для сохранения', 'warning');
         return;
     }
     
     const applicationName = $('#applicationName').val().trim();
     if (!applicationName) {
-        showNotification('⚠️ Укажите название заявки', 'warning');
+        showNotification('<i class="fa fa-exclamation" aria-hidden="true"></i> Укажите название заявки', 'warning');
         $('#applicationName').addClass('error');
         return;
     }
@@ -1362,7 +1362,7 @@ export const saveSingleOrder = async () => {
     
     const saveBtn = $('#saveOrderFromCartBtn');
     const originalText = saveBtn.text();
-    saveBtn.prop('disabled', true).text('⏳ Сохранение...');
+    saveBtn.prop('disabled', true).text('<i class="fa fa-hourglass-half" aria-hidden="true"></i> Сохранение...');
     
     try {
         const csrftoken = document.cookie.split('; ').find(row => row.startsWith('csrftoken='))?.split('=')[1];
@@ -1516,7 +1516,7 @@ export const saveSingleOrder = async () => {
                     message += `\n📦 ${order.location_name} - Заказ №${order.order_id}`;
                 }
                 if (order.comment) {
-                    message += `\n   💬 ${order.comment.substring(0, 50)}${order.comment.length > 50 ? '...' : ''}`;
+                    message += `\n   <i class="fa fa-comment-o" aria-hidden="true"></i> ${order.comment.substring(0, 50)}${order.comment.length > 50 ? '...' : ''}`;
                 }
             });
             showNotification(message, 'success');
@@ -1540,7 +1540,7 @@ export const saveSingleOrder = async () => {
         }
         
         if (hasErrors) {
-            showNotification('⚠️ Некоторые заказы не были созданы.', 'warning');
+            showNotification('<i class="fa fa-exclamation" aria-hidden="true"></i> Некоторые заказы не были созданы.', 'warning');
         }
         
     } catch (error) {

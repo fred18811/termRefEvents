@@ -17,7 +17,7 @@ export const showConfirm = (message, onConfirm) => {
 
 // Показ модального окна с деталями помещения
 export const showRoomModal = (room) => {
-    let eqHtml = '<h4>📋 Оборудование:</h4><ul class="equipment-list-modal">';
+    let eqHtml = '<h4><i class="fa fa-file-text-o" aria-hidden="true"></i> Оборудование:</h4><ul class="equipment-list-modal">';
     
     if (room.equipment?.length) {
         room.equipment.forEach(e => {

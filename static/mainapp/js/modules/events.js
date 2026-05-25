@@ -503,7 +503,7 @@ export const checkLocationBusy = async (locationId, locationName) => {
         // Формируем информацию о занятых интервалах
         let busyInfo = '';
         if (response.busy_orders && response.busy_orders.length > 0) {
-            busyInfo = '\n📋 Занято на:';
+            busyInfo = '\n<i class="fa fa-file-text-o" aria-hidden="true"></i> Занято на:';
             response.busy_orders.forEach(order => {
                 const orderStart = new Date(order.start).toLocaleString('ru-RU', {
                     day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'
@@ -520,12 +520,12 @@ export const checkLocationBusy = async (locationId, locationName) => {
         
         if (response.busy) {
             showNotification(
-                `⚠️ Помещение "${locationName}" ЗАНЯТО`,
+                `<i class="fa fa-exclamation" aria-hidden="true"></i> Помещение "${locationName}" ЗАНЯТО`,
                 'warning'
             );
         } else if (response.partially_busy) {
             showNotification(
-                `⚠️ Часть оборудования в "${locationName}" ЗАНЯТА`,
+                `<i class="fa fa-exclamation" aria-hidden="true"></i> Часть оборудования в "${locationName}" ЗАНЯТА`,
                 'warning'
             );
         }
@@ -646,12 +646,13 @@ const setMode = (mode) => {
     
     const modeText = toggleBtn.querySelector('.mode-text');
     const modeIcon = toggleBtn.querySelector('.mode-icon');
+    const modeIconFa = toggleBtn.querySelector('.mode-icon-fa');
     
     if (mode === 'event') {
         toggleBtn.classList.remove('slots-mode');
         toggleBtn.classList.add('event-mode');
         modeText.textContent = 'Мероприятие';
-        modeIcon.textContent = '🎯';
+        modeIconFa.className = 'mode-icon-fa fa fa-linode';
         localStorage.setItem('viewMode', 'event');
         
         // Скрываем UI слотов
@@ -666,7 +667,7 @@ const setMode = (mode) => {
         toggleBtn.classList.remove('event-mode');
         toggleBtn.classList.add('slots-mode');
         modeText.textContent = 'Слоты';
-        modeIcon.textContent = '⏰';
+        modeIconFa.className = 'mode-icon-fa fa fa-clock-o';
         localStorage.setItem('viewMode', 'slots');
         
         // Очищаем слоты при переключении на слоты
@@ -801,7 +802,7 @@ export const initEventHandlers = () => {
         console.log('Выбрана локация:', id, name, 'isEvent:', isEvent);
         
         if (state.selectedLocations.has(id.toString())) {
-            showNotification('⚠️ Это помещение уже добавлено в заказ', 'warning');
+            showNotification('<i class="fa fa-exclamation" aria-hidden="true"></i> Это помещение уже добавлено в заказ', 'warning');
             return;
         }
         
@@ -825,10 +826,10 @@ export const initEventHandlers = () => {
                     showNotification('Теперь выберите помещение', 'info');
                 }
             } else {
-                $('#equipmentContainer').html(`<div class="info-message">⚠️ ${dateValid.error}</div>`);
+                $('#equipmentContainer').html(`<div class="info-message"><i class="fa fa-exclamation" aria-hidden="true"></i> ${dateValid.error}</div>`);
             }
         } else {
-            $('#equipmentContainer').html('<div class="info-message">📅 Выберите дату начала и окончания</div>');
+            $('#equipmentContainer').html('<div class="info-message"><i class="fa fa-calendar"></i> Выберите дату начала и окончания</div>');
         }
     });
     

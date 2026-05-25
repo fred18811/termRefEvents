@@ -64,19 +64,19 @@ const renderRegularCartItem = (item, index) => {
         <div class="cart-item" data-index="${index}">
             <div class="cart-item-info">
                 <div class="cart-item-location" data-index="${index}">
-                    📍 ${escapeHtml(item.location_name)}
+                    <i class="fa fa-map-pin" aria-hidden="true"></i> ${escapeHtml(item.location_name)}
                 </div>
                 <div class="cart-item-dates">
-                    📅 ${startDate} - ${endDate}
+                    <i class="fa fa-calendar"></i> ${startDate} - ${endDate}
                 </div>
                 <div class="cart-item-equipment">
                     ${item.equipment.map(e => `• ${escapeHtml(e.equipment_name)}: ${e.quantity} шт.`).join('<br>')}
                 </div>
-                ${item.comment ? `<div class="cart-item-comment">💬 ${escapeHtml(item.comment)}</div>` : ''}
+                ${item.comment ? `<div class="cart-item-comment"><i class="fa fa-comment-o" aria-hidden="true"></i> ${escapeHtml(item.comment)}</div>` : ''}
             </div>
             <div class="cart-item-actions">
-                <button class="cart-edit-btn" data-index="${index}" title="Редактировать">✏️</button>
-                <button class="cart-remove-btn" data-index="${index}" title="Удалить">🗑️</button>
+                <button class="cart-edit-btn" data-index="${index}" title="Редактировать"><i class="fa fa-pencil" aria-hidden="true"></i></button>
+                <button class="cart-remove-btn" data-index="${index}" title="Удалить"><i class="fa fa-trash" aria-hidden="true"></i></button>
             </div>
         </div>
     `;
@@ -96,14 +96,14 @@ const renderSlotsCartItem = (item, index) => {
         });
         
         slotsHtml += `<div class="slots-date-group-cart">
-                        <div class="slots-date-header-cart">📅 ${dateHeader}</div>`;
+                        <div class="slots-date-header-cart"><i class="fa fa-calendar"></i> ${dateHeader}</div>`;
         
         slots.forEach(slot => {
             const startTime = new Date(slot.date_start).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
             const endTime = new Date(slot.date_end).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
             
             slotsHtml += `<div class="slot-item-cart">
-                            <div class="slot-time-cart">⏰ ${startTime} - ${endTime}</div>
+                            <div class="slot-time-cart"><i class="fa fa-clock-o" aria-hidden="true"></i> ${startTime} - ${endTime}</div>
                             <div class="slot-equipment-cart">`;
             
             slot.equipment.forEach(eq => {
@@ -123,18 +123,18 @@ const renderSlotsCartItem = (item, index) => {
         <div class="cart-item cart-item-slots" data-index="${index}">
             <div class="cart-item-info">
                 <div class="cart-item-location" data-index="${index}">
-                    📍 ${escapeHtml(item.location_name)}
-                    <span class="slots-badge">🎯 Слоты</span>
+                    <i class="fa fa-map-pin" aria-hidden="true"></i> ${escapeHtml(item.location_name)}
+                    <span class="slots-badge"><i class="fa fa-clock-o"></i> Слоты</span>
                 </div>
                 <div class="cart-item-dates">
-                    📅 ${commonStartDate} - ${commonEndDate}
+                    <i class="fa fa-calendar"></i> ${commonStartDate} - ${commonEndDate}
                 </div>
-                ${item.comment ? `<div class="cart-item-comment">💬 ${escapeHtml(item.comment)}</div>` : ''}
+                ${item.comment ? `<div class="cart-item-comment"><i class="fa fa-comment-o" aria-hidden="true"></i> ${escapeHtml(item.comment)}</div>` : ''}
                 ${slotsHtml}
             </div>
             <div class="cart-item-actions">
-                <button class="cart-edit-slots-btn" data-index="${index}" title="Редактировать слоты">✏️</button>
-                <button class="cart-remove-btn" data-index="${index}" title="Удалить">🗑️</button>
+                <button class="cart-edit-slots-btn" data-index="${index}" title="Редактировать слоты"><i class="fa fa-pencil" aria-hidden="true"></i></button>
+                <button class="cart-remove-btn" data-index="${index}" title="Удалить"><i class="fa fa-trash" aria-hidden="true"></i></button>
             </div>
         </div>
     `;

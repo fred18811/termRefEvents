@@ -6,6 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="Управление оборудованием и заказами">
     <title>Управление оборудованием</title>
+    <link rel="stylesheet" href="{% static 'mainapp/css/font-awesome.min.css' %}">
     <link rel="stylesheet" href="{% static 'mainapp/css/googleapis_css2.css' %}">
     <link rel="stylesheet" href="{% static 'mainapp/css/flatpickr.min.css' %}">
     <link rel="stylesheet" href="{% static 'mainapp/css/material_blue.css' %}">
@@ -15,8 +16,11 @@
     <header>
         <div class="container header-container">
             <div class="logo">
-                <div class="logo-icon"><a href="/">🏢</a></div>
-                <h1>Управление оборудованием</h1>
+                <div class="logo-icon"><a href="/"><img class="logo-icon" src="static/mainapp/images/logo.png"></a></div>
+                <div>
+                    <h1>ETRS</h1>
+                    <h4>Electronic Techical Requirements System</h4>
+                </div>
             </div>
             <nav>
                 <ul class="nav-menu">
@@ -34,7 +38,7 @@
             </nav>
             
             <!-- Кнопка обратной связи -->
-            <button id="feedbackBtn" class="btn-feedback">📝 Обратная связь</button>
+            <button id="feedbackBtn" class="btn-feedback"><i class="fa fa-envelope-open-o"></i> Обратная связь</button>
             
             <!-- Блок информации о пользователе -->
             <div id="userInfo" class="user-info" style="display: none;">
@@ -57,16 +61,16 @@
                 <h2>Мероприятие</h2>
                 <div class="date-fields">
                     <div class="date-field">
-                        <label>📅 Дата начала</label>
+                        <label><i class="fa fa-calendar"></i> Дата начала</label>
                         <input type="text" id="dateStart" class="date-input" placeholder="Выберите дату и время">
                     </div>
                     <div class="date-field">
-                        <label>⏰ Дата окончания</label>
+                        <label><i class="fa fa-calendar"></i> Дата окончания</label>
                         <input type="text" id="dateEnd" class="date-input" placeholder="Выберите дату и время">
                     </div>
                 </div>
                 <div id="dateError" class="date-error" style="display: none;">
-                    <span>⚠️ Выбранные даты заняты!</span>
+                    <span><i class="fa fa-exclamation" aria-hidden="true"></i> Выбранные даты заняты!</span>
                 </div>
             </div>
 
@@ -86,23 +90,23 @@
                     <!-- Блок дат аренды (скрыт по умолчанию) -->
                     <div id="rentalDatesBlock" class="rental-dates-block" style="display: none;">
                         <div class="rental-dates-header">
-                            <h3>📅 Даты аренды помещения</h3>
+                            <h3><i class="fa fa-calendar"></i> Даты аренды помещения</h3>
                         </div>
                         <div class="date-fields">
                             <div class="date-field">
-                                <label>📅 Дата начала аренды</label>
+                                <label><i class="fa fa-calendar"></i> Дата начала аренды</label>
                                 <input type="text" id="rentalDateStart" class="date-input" placeholder="Выберите дату и время">
                                 <small class="date-hint">Выберите дату начала аренды</small>
                             </div>
                             <div class="date-field">
-                                <label>⏰ Дата окончания аренды</label>
+                                <label><i class="fa fa-calendar"></i> Дата окончания аренды</label>
                                 <input type="text" id="rentalDateEnd" class="date-input" placeholder="Выберите дату и время">
                                 <small class="date-hint">Выберите дату окончания аренды</small>
                             </div>
                         </div>
                     </div>                    
                     <div class="location-photo" id="locationPhoto">
-                        <div class="photo-placeholder">📷 Выберите помещение</div>
+                        <div class="photo-placeholder"><i class="fa fa-camera-retro"></i> Выберите помещение</div>
                     </div>
                 </div>
             </div>
@@ -115,13 +119,13 @@
                     <!-- Кнопка переключения режимов и поля дат для слотов -->
                     <div class="mode-toggle-section">
                         <button id="modeToggleBtn" class="mode-toggle-btn">
-                            <span class="mode-icon">🎯</span>
-                            <span class="mode-text">Мероприятие</span>
+                            <span class="mode-icon"><i class="mode-icon-fa fa fa-linode"></i></span>
+                            <span class="mode-text"></span>
                         </button>
 
                         <!-- Селектор интервала времени (появляется только в режиме "Слоты") -->
                         <div id="intervalSelectorBlock" class="interval-selector-block" style="display: none;">
-                            <label>⏱️ Интервал слота:</label>
+                            <label><i class="fa fa-clock-o"></i> Интервал слота:</label>
                             <select id="slotInterval" class="interval-select">
                                 <option value="5">5 минут</option>
                                 <option value="10">10 минут</option>
@@ -138,11 +142,11 @@
                         <!-- Блок дат для режима "Слоты" (скрыт по умолчанию) -->
                         <div id="slotsDatesBlock" class="slots-dates-block" style="display: none;">
                             <div class="slot-date-field">
-                                <label>📅 Дата начала слота</label>
+                                <label><i class="fa fa-calendar"></i> Дата начала слота</label>
                                 <input type="text" id="slotDateStart" class="date-input" placeholder="Выберите дату и время">
                             </div>
                             <div class="slot-date-field">
-                                <label>⏰ Дата окончания слота</label>
+                                <label><i class="fa fa-calendar"></i> Дата окончания слота</label>
                                 <input type="text" id="slotDateEnd" class="date-input" placeholder="Выберите дату и время">
                             </div>
                         </div>
@@ -161,11 +165,11 @@
                             <input type="text" id="searchEquipment" class="search-equipment-input" placeholder="Поиск оборудования...">
                         </div>
                     </div>
-                    <div id="equipmentContainer" class="info-message">📍 Сначала выберите даты, затем помещение</div>
+                    <div id="equipmentContainer" class="info-message"><i class="fa fa-map-pin"></i> Сначала выберите даты, затем помещение</div>
 
                     <!-- Кнопка добавления слота (появляется в режиме "Слоты") -->
                     <div id="addSlotBtnBlock" class="add-slot-btn-block" style="display: none;">
-                        <button id="addSlotBtn" class="btn-add-slot">➕ Добавить слот</button>
+                        <button id="addSlotBtn" class="btn-add-slot"><i class="fa fa-plus" aria-hidden="true"></i> Добавить слот</button>
                     </div>
 
                     <!-- Список добавленных слотов -->
@@ -187,7 +191,7 @@
 
             <!-- Кнопки действий -->
             <div class="action-buttons">
-                <button id="addButton" class="btn btn-danger">Добавить в заявку</button>
+                <button id="addButton" class="btn btn-success">Добавить в заявку</button>
             </div>
 
             <!-- Блок "Текущий заказ" -->
@@ -209,8 +213,8 @@
                 </div>
                 
                 <div class="cart-footer">
-                    <button id="saveOrderFromCartBtn" class="btn-save-order-cart">Сохранить заявку</button>
-                    <button id="clearCartBtn" class="btn-clear-cart">Очистить список</button>
+                    <button id="saveOrderFromCartBtn" class="btn btn-success">Сохранить заявку</button>
+                    <button id="clearCartBtn" class="btn btn-danger">Очистить список</button>
                 </div>
             </div>
         </div>
@@ -271,7 +275,7 @@
     <div id="editOrderModal" class="modal">
         <div class="modal-content modal-large">
             <span class="modal-close">&times;</span>
-            <h3>✏️ Редактирование заказа</h3>
+            <h3><i class="fa fa-pencil" aria-hidden="true"></i> Редактирование заказа</h3>
             <div id="editOrderContent"></div>
             <div class="modal-buttons">
                 <button id="saveEditBtn" class="btn btn-sm btn-primary">💾 Сохранить изменения</button>

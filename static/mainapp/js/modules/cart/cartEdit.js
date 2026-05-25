@@ -87,7 +87,7 @@ const generateEquipmentEditHtml = (item, availabilityMap) => {
                                data-eq-id="${eq.equipment_id}"
                                data-is-common="${eq.is_common || false}"
                                data-max="${availableQty}">
-                        <button class="remove-equipment-btn" data-eq-id="${eq.equipment_id}" title="Удалить">🗑️</button>
+                        <button class="remove-equipment-btn" data-eq-id="${eq.equipment_id}" title="Удалить"><i class="fa fa-trash" aria-hidden="true"></i></button>
                     </div>
                 </div>
             `;
@@ -107,20 +107,20 @@ const generateEditModalHtml = (item, startDate, endDate, equipmentHtml) => {
     
     return `
         <div class="edit-location-info">
-            <p><strong>📍 Локация:</strong> ${escapeHtml(item.location_name)}</p>
+            <p><strong><i class="fa fa-map-pin" aria-hidden="true"></i> Локация:</strong> ${escapeHtml(item.location_name)}</p>
             <div class="date-fields" style="margin-top: 1rem; padding: 0;">
                 <div class="date-field">
-                    <label>📅 Дата начала</label>
+                    <label><i class="fa fa-calendar"></i> Дата начала</label>
                     <input type="datetime-local" id="editDateStart" class="date-input" value="${startDate}">
                 </div>
                 <div class="date-field">
-                    <label>⏰ Дата окончания</label>
+                    <label><i class="fa fa-clock-o" aria-hidden="true"></i> Дата окончания</label>
                     <input type="datetime-local" id="editDateEnd" class="date-input" value="${endDate}">
                 </div>
             </div>
         </div>
         <div class="edit-comment-section">
-            <label>💬 Комментарий к заказу</label>
+            <label><i class="fa fa-comment-o" aria-hidden="true"></i> Комментарий к заказу</label>
             <textarea id="editComment" class="edit-comment-input" rows="3" placeholder="Введите комментарий...">${escapedComment}</textarea>
         </div>
         <div class="edit-equipment-header">

@@ -58,7 +58,7 @@ const generateSlotsEditHtml = (item) => {
                            data-eq-id="${eq.equipment_id}"
                            data-max="${eq.max_quantity || eq.quantity}"
                            style="width: 70px;">
-                    <button class="remove-slot-equipment-btn" data-eq-id="${eq.equipment_id}">🗑️</button>
+                    <button class="remove-slot-equipment-btn" data-eq-id="${eq.equipment_id}"><i class="fa fa-trash" aria-hidden="true"></i></button>
                 </div>
             `;
         });
@@ -67,11 +67,11 @@ const generateSlotsEditHtml = (item) => {
             <div class="edit-slot-item" data-slot-index="${slotIndex}">
                 <div class="edit-slot-header">
                     <div class="edit-slot-time">
-                        ⏰ ${startTime} - ${endTime}
+                        <i class="fa fa-clock-o" aria-hidden="true"></i> ${startTime} - ${endTime}
                         <input type="hidden" class="edit-slot-start" value="${slot.date_start}">
                         <input type="hidden" class="edit-slot-end" value="${slot.date_end}">
                     </div>
-                    <button class="remove-slot-btn" data-slot-index="${slotIndex}" title="Удалить слот">🗑️ Удалить слот</button>
+                    <button class="remove-slot-btn" data-slot-index="${slotIndex}" title="Удалить слот"><i class="fa fa-trash" aria-hidden="true"></i> Удалить слот</button>
                 </div>
                 <div class="edit-slot-equipment-list">
                     ${equipmentHtml || '<div class="text-muted">Нет оборудования</div>'}
@@ -89,24 +89,24 @@ const generateSlotsEditModalHtml = (item, slotsHtml) => {
     return `
         <div class="edit-slots-container">
             <div class="edit-location-info">
-                <p><strong>📍 Локация:</strong> ${escapeHtml(item.location_name)}</p>
+                <p><strong><i class="fa fa-map-pin" aria-hidden="true"></i> Локация:</strong> ${escapeHtml(item.location_name)}</p>
                 <div class="date-fields" style="margin-top: 1rem; padding: 0;">
                     <div class="date-field">
-                        <label>📅 Общая дата начала</label>
+                        <label><i class="fa fa-calendar"></i> Общая дата начала</label>
                         <input type="datetime-local" id="editSlotsCommonStart" class="date-input" value="${formatDateTimeForInput(item.common_date_start)}">
                     </div>
                     <div class="date-field">
-                        <label>⏰ Общая дата окончания</label>
+                        <label><i class="fa fa-clock-o" aria-hidden="true"></i> Общая дата окончания</label>
                         <input type="datetime-local" id="editSlotsCommonEnd" class="date-input" value="${formatDateTimeForInput(item.common_date_end)}">
                     </div>
                 </div>
             </div>
             <div class="edit-comment-section">
-                <label>💬 Комментарий к заказу</label>
+                <label><i class="fa fa-comment-o" aria-hidden="true"></i> Комментарий к заказу</label>
                 <textarea id="editSlotsComment" class="edit-comment-input" rows="2">${escapeHtml(item.comment || '')}</textarea>
             </div>
             <div class="edit-slots-list">
-                <h4>📋 Слоты</h4>
+                <h4><i class="fa fa-file-text-o" aria-hidden="true"></i> Слоты</h4>
                 ${slotsHtml}
             </div>
             <button id="addNewSlotToEdit" class="btn-add-slot" style="margin-top: 1rem;">➕ Добавить новый слот</button>
@@ -289,7 +289,7 @@ const addNewEmptySlotToEdit = () => {
                     -
                     <input type="datetime-local" class="edit-slot-end-input" value="${endFormatted.replace(' ', 'T')}" style="width: 160px;">
                 </div>
-                <button class="remove-slot-btn" data-slot-index="${slotIndex}" title="Удалить слот">🗑️ Удалить слот</button>
+                <button class="remove-slot-btn" data-slot-index="${slotIndex}" title="Удалить слот"><i class="fa fa-trash" aria-hidden="true"></i> Удалить слот</button>
             </div>
             <div class="edit-slot-equipment-list">
                 <div class="text-muted">Нет оборудования</div>

@@ -253,13 +253,13 @@ export const initOrderFilters = () => {
             <div id="orderFiltersPanel" class="order-filters-panel">
                 <div class="filter-row">
                     <div class="filter-group-search">
-                        <input type="text" id="orderSearchInput" class="search-input" placeholder="🔍 Поиск по названию заявки...">
+                        <input type="text" id="orderSearchInput" class="search-input" placeholder="Поиск по названию заявки...">
                         <button id="clearFiltersBtn" class="btn-clear-filters" title="Очистить все фильтры">✖ Очистить</button>
                     </div>
                 </div>
                 <div class="filter-row">
                     <div class="filter-item">
-                        <label>📊 Статус:</label>
+                        <label><i class="fa fa-rocket" aria-hidden="true"></i> Статус:</label>
                         <select id="orderStatusFilter" class="sort-select">
                             <option value="all">Все статусы</option>
                             <option value="new">🟢 Новые</option>
@@ -269,7 +269,7 @@ export const initOrderFilters = () => {
                         </select>
                     </div>
                     <div id="userFilterContainer" class="filter-item" style="${(userPermissions.can_view_all || userPermissions.is_superuser) ? '' : 'display: none;'}">
-                        <label>👤 Пользователь:</label>
+                        <label><i class="fa fa-user" aria-hidden="true"></i> Пользователь:</label>
                         <select id="orderUserFilter" class="sort-select">
                             <option value="all">Все пользователи</option>
                         </select>
@@ -321,7 +321,7 @@ const populateUserFilter = () => {
     userSelect.append('<option value="all">👥 Все пользователи</option>');
     
     Array.from(users).sort().forEach(user => {
-        userSelect.append(`<option value="${escapeHtml(user)}">👤 ${escapeHtml(user)}</option>`);
+        userSelect.append(`<option value="${escapeHtml(user)}"><i class="fa fa-user" aria-hidden="true"></i> ${escapeHtml(user)}</option>`);
     });
     
     if (currentValue && currentValue !== 'all') {
@@ -373,7 +373,7 @@ const approveApplication = async (applicationId, departmentId) => {
 // Обновленная функция displayOrders (с учетом фильтров)
 export const displayOrders = (orders) => {
     if (!orders?.length) {
-        $('#ordersContainer').html('<div class="no-orders">🔍 Нет заявок, соответствующих фильтрам</div>');
+        $('#ordersContainer').html('<div class="no-orders"><i class="fa fa-search" aria-hidden="true"></i> Нет заявок, соответствующих фильтрам</div>');
         return;
     }
     
@@ -388,11 +388,11 @@ export const displayOrders = (orders) => {
         
         let statusIcon = '';
         switch(order.status) {
-            case 'new': statusIcon = '🟢'; break;
-            case 'in_progress': statusIcon = '🟡'; break;
-            case 'completed': statusIcon = '⚪'; break;
-            case 'cancelled': statusIcon = '🔴'; break;
-            default: statusIcon = '📋';
+            case 'new': statusIcon = ''; break;
+            case 'in_progress': statusIcon = ''; break;
+            case 'completed': statusIcon = ''; break;
+            case 'cancelled': statusIcon = ''; break;
+            default: statusIcon = '<i class="fa fa-file-text-o" aria-hidden="true"></i>';
         }
         
         // Проверка, истекла ли заявка по времени (используем orderEndDate вместо endDate)
@@ -407,11 +407,11 @@ export const displayOrders = (orders) => {
         const endDateStr = order.date_time_end ? new Date(order.date_time_end).toLocaleString('ru-RU') : 'Не завершен';
         
         const isChecked = state.selectedOrders.has(order.id) ? 'checked' : '';
-        const commentHtml = order.comment ? `<div class="order-comment">💬 ${escapeHtml(order.comment)}</div>` : '';
+        const commentHtml = order.comment ? `<div class="order-comment"><i class="fa fa-comment-o" aria-hidden="true"></i> ${escapeHtml(order.comment)}</div>` : '';
         
         const canEdit = order.can_edit === true;
         const ownerInfo = (userPermissions.can_view_all || userPermissions.is_superuser) && order.user_name ? 
-            `<span class="order-owner">👤 ${escapeHtml(order.user_name)}</span>` : '';
+            `<span class="order-owner"><i class="fa fa-user" aria-hidden="true"></i> ${escapeHtml(order.user_name)}</span>` : '';
         
         let displayName = escapeHtml(order.application_name || 'Без названия');
         if (currentFilters.search) {
@@ -427,13 +427,13 @@ export const displayOrders = (orders) => {
         let approvalsHtml = '';
         if (order.approvals && order.approvals.length > 0) {
             approvalsHtml = '<div class="order-approvals">';
-            approvalsHtml += '<div class="approvals-title">📋 Согласование подразделений:</div>';
+            approvalsHtml += '<div class="approvals-title"><i class="fa fa-file-text-o" aria-hidden="true"></i> Согласование подразделений:</div>';
             approvalsHtml += '<div class="approvals-list">';
             
             order.approvals.forEach(approval => {
                 const statusColor = approval.is_agreed ? '#28a745' : '#ffc107';
                 const statusBgColor = approval.is_agreed ? '#d4edda' : '#fff3cd';
-                const statusIconApproval = approval.is_agreed ? '✅' : '⏳';
+                const statusIconApproval = approval.is_agreed ? '✅' : '<i class="fa fa-hourglass-half" aria-hidden="true"></i>';
                 
                 // Проверяем, может ли пользователь согласовать
                 const userInDepartment = userDepartments.some(d => d.name === approval.department_name);
@@ -450,7 +450,7 @@ export const displayOrders = (orders) => {
                 approvalsHtml += `
                     <div class="approval-item ${approval.status_class}" data-approval-dept="${approval.department_name}" data-application-id="${order.id}" data-department-id="${approval.department_id}" style="border-left-color: ${statusColor}; background-color: ${statusBgColor};">
                         <div class="approval-department-info">
-                            <span class="approval-department">🏢 ${escapeHtml(approval.department_name)}</span>
+                            <span class="approval-department"><i class="fa fa-building-o" aria-hidden="true"></i> ${escapeHtml(approval.department_name)}</span>
                             ${equipmentInfo}
                         </div>
                         <div class="approval-status-area">
@@ -477,8 +477,8 @@ export const displayOrders = (orders) => {
                     <div class="order-header-content">
                         <input type="checkbox" class="order-checkbox" data-id="${order.id}" ${isChecked} onclick="event.stopPropagation()">
                         <div class="order-info" onclick="toggleOrderBody(${order.id})">
-                            <h3>📋 Заявка №${order.id} - ${displayName}</h3>
-                            <div class="order-date">📅 ${startDate} - ${endDateStr}</div>
+                            <h3><i class="fa fa-file-text-o" aria-hidden="true"></i> Заявка №${order.id} - ${displayName}</h3>
+                            <div class="order-date"><i class="fa fa-calendar"></i> ${startDate} - ${endDateStr}</div>
                             <span class="order-status ${statusClass}">${statusIcon} ${statusText}</span>
                             ${ownerInfo}
                         </div>
@@ -618,7 +618,7 @@ const displayEditOrderModal = (order) => {
                                data-eq-id="${eq.equipment_id}"
                                data-is-common="${eq.is_common}"
                                data-max="${eq.max_quantity || eq.quantity}">
-                        <button class="remove-equipment-btn" data-eq-id="${eq.equipment_id}" title="Удалить">🗑️</button>
+                        <button class="remove-equipment-btn" data-eq-id="${eq.equipment_id}" title="Удалить"><i class="fa fa-trash" aria-hidden="true"></i></button>
                     </div>
                 </div>
             `;
@@ -634,17 +634,17 @@ const displayEditOrderModal = (order) => {
             <p><strong>📍 Локация:</strong> ${escapeHtml(order.location_name)}</p>
             <div class="date-fields" style="margin-top: 1rem; padding: 0;">
                 <div class="date-field">
-                    <label>📅 Дата начала</label>
+                    <label><i class="fa fa-calendar"></i> Дата начала</label>
                     <input type="datetime-local" id="editDateStart" class="date-input" value="${startDate}">
                 </div>
                 <div class="date-field">
-                    <label>⏰ Дата окончания</label>
+                    <label><i class="fa fa-clock-o" aria-hidden="true"></i> Дата окончания</label>
                     <input type="datetime-local" id="editDateEnd" class="date-input" value="${endDate}">
                 </div>
             </div>
         </div>
         <div class="edit-comment-section">
-            <label>💬 Комментарий к заказу</label>
+            <label><i class="fa fa-comment-o" aria-hidden="true"></i> Комментарий к заказу</label>
             <textarea id="editComment" class="edit-comment-input" rows="3" placeholder="Введите комментарий...">${escapeHtml(order.comment || '')}</textarea>
         </div>
         <div class="edit-equipment-header">
@@ -942,7 +942,7 @@ const addSelectedEquipmentToOrder = () => {
                                class="edit-qty-input" 
                                data-eq-id="${eq.equipment_id}"
                                data-max="${eq.max_quantity}">
-                        <button class="remove-equipment-btn" data-eq-id="${eq.equipment_id}" title="Удалить">🗑️</button>
+                        <button class="remove-equipment-btn" data-eq-id="${eq.equipment_id}" title="Удалить"><i class="fa fa-trash" aria-hidden="true"></i></button>
                     </div>
                 </div>
             `;
@@ -1164,12 +1164,12 @@ export const displayOrderItems = async (applicationId, items, canEdit = false) =
         
         if (!overlappingApps.length) return '';
         
-        let tooltipText = `⚠️ Обнаружены пересечения по датам для помещения "${locationName}":\n`;
+        let tooltipText = `<i class="fa fa-exclamation" aria-hidden="true"></i> Обнаружены пересечения по датам для помещения "${locationName}":\n`;
         overlappingApps.forEach((overlap, idx) => {
             tooltipText += `\n${idx + 1}. ${overlap.app2_name}: ${overlap.date2} - ${overlap.end2}`;
         });
         
-        return `<span class="overlap-warning-icon" title="${escapeHtml(tooltipText)}">⚠️</span>`;
+        return `<span class="overlap-warning-icon" title="${escapeHtml(tooltipText)}"><i class="fa fa-exclamation" aria-hidden="true"></i></span>`;
     };
     
     // ========== ГЕНЕРАЦИЯ HTML ==========
@@ -1196,9 +1196,9 @@ export const displayOrderItems = async (applicationId, items, canEdit = false) =
         const showActionButtons = canEditOrder && (applicationStatus === 'new');
         const actionButtons = showActionButtons ? `
             <div class="order-card-actions">
-                <button class="order-edit-btn-small" data-order-id="${orderData.order_id}" title="Редактировать заказ">✏️ Редактировать</button>
+                <button class="order-edit-btn-small" data-order-id="${orderData.order_id}" title="Редактировать заказ"><i class="fa fa-pencil" aria-hidden="true"></i> Редактировать</button>
                 <button class="order-cancel-btn-small" data-order-id="${orderData.order_id}" title="Отменить заказ">🚫 Отменить</button>
-                <button class="order-duplicate-btn-small" data-order-id="${orderData.order_id}" title="Создать копию">📋 Копировать</button>
+                <button class="order-duplicate-btn-small" data-order-id="${orderData.order_id}" title="Создать копию"><i class="fa fa-file-text-o" aria-hidden="true"></i> Копировать</button>
             </div>
         ` : '';
         
@@ -1211,7 +1211,7 @@ export const displayOrderItems = async (applicationId, items, canEdit = false) =
                             📍 ${escapeHtml(orderData.location_name)}
                             ${locationOverlapIcon}
                         </span>
-                        <span class="location-common-dates">📅 ${commonStartDate} - ${commonEndDate}</span>
+                        <span class="location-common-dates"><i class="fa fa-calendar"></i> ${commonStartDate} - ${commonEndDate}</span>
                     </div>
                     ${actionButtons}
                 </div>
@@ -1232,7 +1232,7 @@ export const displayOrderItems = async (applicationId, items, canEdit = false) =
                 
                 const startTime = firstSlot.slot_date_start ? new Date(firstSlot.slot_date_start).toLocaleTimeString('ru-RU', {hour:'2-digit', minute:'2-digit'}) : '';
                 const endTime = firstSlot.slot_date_end ? new Date(firstSlot.slot_date_end).toLocaleTimeString('ru-RU', {hour:'2-digit', minute:'2-digit'}) : '';
-                const slotTimeBadge = `<span class="slot-time-badge">⏰ ${startTime} - ${endTime}</span>`;
+                const slotTimeBadge = `<span class="slot-time-badge"><i class="fa fa-clock-o" aria-hidden="true"></i> ${startTime} - ${endTime}</span>`;
                 
                 const typesMap = new Map();
                 slotItems.forEach(item => {
@@ -1416,13 +1416,13 @@ const generateLocationCardWithButtons = (orderId, locationName, startDate, endDa
     const actionButtons = showActionButtons ? `
         <div class="order-card-actions">
             <button class="order-edit-btn-small" data-order-id="${orderId}" title="Редактировать заказ">
-                ✏️ Редактировать
+                <i class="fa fa-pencil" aria-hidden="true"></i> Редактировать
             </button>
             <button class="order-cancel-btn-small" data-order-id="${orderId}" title="Отменить заказ">
                 🚫 Отменить
             </button>
             <button class="order-duplicate-btn-small" data-order-id="${orderId}" title="Создать копию">
-                📋 Копировать
+                <i class="fa fa-file-text-o" aria-hidden="true"></i> Копировать
             </button>
         </div>
     ` : '';
@@ -1432,7 +1432,7 @@ const generateLocationCardWithButtons = (orderId, locationName, startDate, endDa
             <div class="location-order-header">
                 <div class="location-order-info">
                     <span class="location-name">📍 ${escapeHtml(locationName)}</span>
-                    <span class="location-dates">📅 ${startDate} - ${endDate}</span>
+                    <span class="location-dates"><i class="fa fa-calendar"></i> ${startDate} - ${endDate}</span>
                 </div>
                 ${actionButtons}
             </div>
@@ -1522,7 +1522,7 @@ const generateCommonEquipmentCard = (typesMap) => {
         <div class="location-order-card common-equipment-card">
             <div class="location-order-header">
                 <span class="location-name">🌍 Общее оборудование</span>
-                <span class="location-dates">📅 Не привязано к датам</span>
+                <span class="location-dates"><i class="fa fa-calendar"></i> Не привязано к датам</span>
             </div>
             <div class="equipment-matrix">
                 <table class="equipment-matrix-table">
@@ -1626,7 +1626,7 @@ const generateTableRows = (typesMap, allTypes, maxRows, orderId, locationId, use
                         ` : `
                         <div class="equipment-status" style="margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px dashed #e2e8f0; text-align: right;">
                             <span style="font-size: 0.7rem; padding: 0.2rem 0.5rem; border-radius: 12px; background-color: ${savedIsChecked ? '#28a745' : '#ffc107'}; color: ${savedIsChecked ? 'white' : '#333'};">
-                                ${savedIsChecked ? '✅ Согласовано' : '⏳На согласовании'}
+                                ${savedIsChecked ? '✅ Согласовано' : '<i class="fa fa-hourglass-half" aria-hidden="true"></i>На согласовании'}
                                 ${savedQuantity ? ` (${savedQuantity} шт.)` : ''}
                             </span>
                         </div>
@@ -1906,7 +1906,7 @@ export const exportOrdersToExcel = async () => {
     const orderIds = Array.from(state.selectedOrders);
     console.log('Экспорт заявок:', orderIds);
     
-    $('#exportOrdersBtn').prop('disabled', true).text('⏳ Экспорт...');
+    $('#exportOrdersBtn').prop('disabled', true).text('<i class="fa fa-hourglass-half" aria-hidden="true"></i> Экспорт...');
     
     try {
         // Получаем CSRF токен

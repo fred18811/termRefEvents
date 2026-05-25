@@ -130,7 +130,7 @@ const addEquipmentToSlot = (slotIndex) => {
                                data-eq-id="${eqId}"
                                data-max="${maxQty}"
                                style="width: 70px;">
-                        <button class="remove-slot-equipment-btn" data-eq-id="${eqId}">🗑️</button>
+                        <button class="remove-slot-equipment-btn" data-eq-id="${eqId}"><i class="fa fa-trash" aria-hidden="true"></i></button>
                     </div>
                 `;
                 $equipmentList.append(equipmentHtml);

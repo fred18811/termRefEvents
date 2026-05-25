@@ -58,7 +58,7 @@ export const showNotification = (message, type = 'info') => {
     const types = {
         success: '✅',
         error: '❌',
-        warning: '⚠️',
+        warning: '<i class="fa fa-exclamation" aria-hidden="true"></i>',
         info: 'ℹ️'
     };
     
