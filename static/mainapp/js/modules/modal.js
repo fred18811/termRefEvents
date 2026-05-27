@@ -3,7 +3,7 @@ import { escapeHtml } from './utils.js';
 // Показ модального окна подтверждения
 export const showConfirm = (message, onConfirm) => {
     $('#confirmMessage').text(message);
-    $('#confirmModal').show();
+    $('#confirmModal').css('display', 'flex');
     
     $('#confirmYes').off('click').one('click', () => {
         $('#confirmModal').hide();

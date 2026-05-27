@@ -84,7 +84,7 @@ const updateDepartmentButton = (applicationId, departmentName) => {
         console.log('Не всё оборудование согласовано, показываем заглушку');
         $statusArea.html(`
             <span class="approve-disabled-hint" title="Не всё оборудование подразделения согласовано">
-                🔒 Требуется согласование всего оборудования (${agreedItems}/${totalItems})
+                <i class="fa fa-lock" aria-hidden="true"></i> Требуется согласование всего оборудования (${agreedItems}/${totalItems})
             </span>
         `);
     }
@@ -380,11 +380,17 @@ export const displayOrders = (orders) => {
     let html = '<div class="orders-container">';
     
     orders.forEach(order => {
+        console.log(order.status)
         const statusClass = order.status === 'completed' ? 'completed' : 
-                           (order.status === 'cancelled' ? 'cancelled' : 'active');
+                           (order.status === 'cancelled' ? 'cancelled' : 
+                            (order.status === 'in_progress' ? 'in_progress':'active'));
         const statusText = order.status_display || 
                           (order.status === 'cancelled' ? 'Отменена' : 
                            (order.status === 'completed' ? 'Завершена' : 'Активна'));
+
+        const colorStatus = order.status === 'completed' ? '#cbd5e152' : 
+                           (order.status === 'cancelled' ? '#cbd5e152' : 
+                            (order.status === 'in_progress' ? '#e1d7cb45':'#d5e1cb4a'));
         
         let statusIcon = '';
         switch(order.status) {
@@ -403,8 +409,8 @@ export const displayOrders = (orders) => {
         // Проверка, можно ли оставить отзыв (заявка истекла и не завершена/не отменена)
         const canLeaveFeedback = isExpired && order.status !== 'completed' && order.status !== 'cancelled';
         
-        const startDate = order.date_time_start ? new Date(order.date_time_start).toLocaleString('ru-RU') : 'Не указана';
-        const endDateStr = order.date_time_end ? new Date(order.date_time_end).toLocaleString('ru-RU') : 'Не завершен';
+        const startDate = order.date_time_start ? new Date(order.date_time_start).toLocaleDateString('ru-RU') : 'Не указана';
+        const endDateStr = order.date_time_end ? new Date(order.date_time_end).toLocaleDateString('ru-RU') : 'Не завершен';
         
         const isChecked = state.selectedOrders.has(order.id) ? 'checked' : '';
         const commentHtml = order.comment ? `<div class="order-comment"><i class="fa fa-comment-o" aria-hidden="true"></i> ${escapeHtml(order.comment)}</div>` : '';
@@ -421,7 +427,7 @@ export const displayOrders = (orders) => {
         
         // Кнопка обратной связи
         const feedbackButton = canLeaveFeedback ? 
-            `<button class="order-feedback-btn" data-application-id="${order.id}" data-application-name="${escapeHtml(order.application_name)}">📝 Оставить отзыв</button>` : '';
+            `<button class="order-feedback-btn" data-application-id="${order.id}" data-application-name="${escapeHtml(order.application_name)}"><i class="fa fa-file-text-o" aria-hidden="true"></i> Оставить отзыв</button>` : '';
         
         // Генерируем блок согласований
         let approvalsHtml = '';
@@ -432,8 +438,8 @@ export const displayOrders = (orders) => {
             
             order.approvals.forEach(approval => {
                 const statusColor = approval.is_agreed ? '#28a745' : '#ffc107';
-                const statusBgColor = approval.is_agreed ? '#d4edda' : '#fff3cd';
-                const statusIconApproval = approval.is_agreed ? '✅' : '<i class="fa fa-hourglass-half" aria-hidden="true"></i>';
+                const statusBgColor = approval.is_agreed ? '#d4edda' : '#fffbee';
+                const statusIconApproval = approval.is_agreed ? '<i class="fa fa-check" aria-hidden="true"></i>' : '<i class="fa fa-hourglass-half" aria-hidden="true"></i>';
                 
                 // Проверяем, может ли пользователь согласовать
                 const userInDepartment = userDepartments.some(d => d.name === approval.department_name);
@@ -458,9 +464,9 @@ export const displayOrders = (orders) => {
                                 ${statusIconApproval} ${escapeHtml(approval.status_text)}
                             </span>
                             ${canApprove ? 
-                                `<button class="btn-approve-application" data-application-id="${order.id}" data-department-name="${escapeHtml(approval.department_name)}" data-department-id="${approval.department_id}">✅ Согласовать</button>` : 
+                                `<button class="btn-approve-application" data-application-id="${order.id}" data-department-name="${escapeHtml(approval.department_name)}" data-department-id="${approval.department_id}"><i class="fa fa-check" aria-hidden="true"></i> Согласовать</button>` : 
                                 (!approval.all_equipment_agreed && !approval.is_agreed ? 
-                                    `<span class="approve-disabled-hint" title="Не всё оборудование подразделения согласовано">🔒 Требуется согласование всего оборудования</span>` : 
+                                    `<span class="approve-disabled-hint" title="Не всё оборудование подразделения согласовано"></span>` : 
                                     '')
                             }
                         </div>
@@ -473,16 +479,16 @@ export const displayOrders = (orders) => {
         
         html += `
             <div class="order-card" data-id="${order.id}" id="order-${order.id}">
-                <div class="order-header">
+                <div class="order-header" style="background:${colorStatus}">
                     <div class="order-header-content">
-                        <input type="checkbox" class="order-checkbox" data-id="${order.id}" ${isChecked} onclick="event.stopPropagation()">
                         <div class="order-info" onclick="toggleOrderBody(${order.id})">
-                            <h3><i class="fa fa-file-text-o" aria-hidden="true"></i> Заявка №${order.id} - ${displayName}</h3>
+                            <input type="checkbox" class="order-checkbox" data-id="${order.id}" ${isChecked} onclick="event.stopPropagation()">
+                            <h3><i class="fa fa-file-text-o" aria-hidden="true"></i> <span>№${order.id}</span> ${displayName}</h3>
                             <div class="order-date"><i class="fa fa-calendar"></i> ${startDate} - ${endDateStr}</div>
-                            <span class="order-status ${statusClass}">${statusIcon} ${statusText}</span>
                             ${ownerInfo}
+                            ${feedbackButton}
                         </div>
-                        ${feedbackButton}
+                        <span class="order-status ${statusClass}">${statusIcon} ${statusText}</span>
                     </div>
                     <button class="order-toggle">▼</button>
                 </div>
@@ -595,7 +601,7 @@ const displayEditOrderModal = (order) => {
     
     if (order.equipment && order.equipment.length > 0) {
         order.equipment.forEach((eq, index) => {
-            const commonBadge = eq.is_common ? '<span class="common-badge-small">🌍 Общее</span>' : '';
+            const commonBadge = eq.is_common ? '<span class="common-badge-small"><i class="fa fa-globe"></i> Общее</span>' : '';
             
             equipmentHtml += `
                 <div class="edit-equipment-item" data-eq-id="${eq.equipment_id}" data-eq-index="${index}" data-is-common="${eq.is_common}">
@@ -606,7 +612,7 @@ const displayEditOrderModal = (order) => {
                         </div>
                         <div class="edit-equipment-type">${escapeHtml(eq.type_name)}</div>
                         <div class="edit-equipment-available">
-                            📦 Всего: ${eq.max_quantity || eq.quantity} шт.
+                            <i class="fa fa-archive" aria-hidden="true"></i> Всего: ${eq.max_quantity || eq.quantity} шт.
                         </div>
                     </div>
                     <div class="edit-equipment-control">
@@ -630,8 +636,8 @@ const displayEditOrderModal = (order) => {
     equipmentHtml += '</div>';
     
     const modalContent = `
-        <div class="edit-location-info">
-            <p><strong>📍 Локация:</strong> ${escapeHtml(order.location_name)}</p>
+        <div class="edit-location-info" hidden>
+            <p><strong><i class="fa fa-map-pin"></i> Локация:</strong> ${escapeHtml(order.location_name)}</p>
             <div class="date-fields" style="margin-top: 1rem; padding: 0;">
                 <div class="date-field">
                     <label><i class="fa fa-calendar"></i> Дата начала</label>
@@ -648,14 +654,15 @@ const displayEditOrderModal = (order) => {
             <textarea id="editComment" class="edit-comment-input" rows="3" placeholder="Введите комментарий...">${escapeHtml(order.comment || '')}</textarea>
         </div>
         <div class="edit-equipment-header">
-            <h4>🔧 Оборудование</h4>
-            <button id="addMoreEquipmentBtn" class="add-equipment-btn">➕ Добавить оборудование</button>
+            <h4>Оборудование</h4>
+            <button id="addMoreEquipmentBtn" class="add-equipment-btn">Добавить оборудование</button>
         </div>
         ${equipmentHtml}
     `;
     
     $('#editOrderContent').html(modalContent);
-    $('#editOrderModal').show();
+    // $('#editOrderModal').show();
+    $('#editOrderModal').css('display', 'flex');
     
     bindEditModalHandlers();
 };
@@ -859,14 +866,14 @@ const displayAvailableEquipmentModal = (equipment) => {
                     <div class="available-equipment-info">
                         <div class="available-equipment-name">${escapeHtml(eq.name)}</div>
                         <div class="available-equipment-type">${escapeHtml(eq.type_name)}</div>
-                        <div class="available-equipment-stock">📦 Доступно: ${eq.quantity} шт.</div>
+                        <div class="available-equipment-stock"><i class="fa fa-archive" aria-hidden="true"></i> Доступно: ${eq.quantity} шт.</div>
                     </div>
                     <div class="available-equipment-actions">
                         <label>Кол-во:</label>
                         <input type="number" 
                                min="0" 
                                max="${eq.quantity}" 
-                               value="1" 
+                               value="0" 
                                class="equipment-select-qty"
                                data-max="${eq.quantity}"
                                data-name="${escapeHtml(eq.name)}"
@@ -884,7 +891,7 @@ const displayAvailableEquipmentModal = (equipment) => {
     html += '</div>';
     
     $('#addEquipmentContent').html(html);
-    $('#addEquipmentModal').show();
+    $('#addEquipmentModal').css('display', 'flex');
     
     $('#confirmAddEquipmentBtn').off('click').one('click', () => {
         addSelectedEquipmentToOrder();
@@ -932,7 +939,7 @@ const addSelectedEquipmentToOrder = () => {
                             ${escapeHtml(eq.equipment_name)}
                         </div>
                         <div class="edit-equipment-type">${escapeHtml(eq.type_name)}</div>
-                        <div class="edit-equipment-available">📦 Всего: ${eq.max_quantity} шт.</div>
+                        <div class="edit-equipment-available"><i class="fa fa-archive" aria-hidden="true"></i> Всего: ${eq.max_quantity} шт.</div>
                     </div>
                     <div class="edit-equipment-control">
                         <input type="number" 
@@ -1164,12 +1171,12 @@ export const displayOrderItems = async (applicationId, items, canEdit = false) =
         
         if (!overlappingApps.length) return '';
         
-        let tooltipText = `<i class="fa fa-exclamation" aria-hidden="true"></i> Обнаружены пересечения по датам для помещения "${locationName}":\n`;
+        let tooltipText = `Обнаружены пересечения по датам для помещения "${locationName}":\n`;
         overlappingApps.forEach((overlap, idx) => {
             tooltipText += `\n${idx + 1}. ${overlap.app2_name}: ${overlap.date2} - ${overlap.end2}`;
         });
         
-        return `<span class="overlap-warning-icon" title="${escapeHtml(tooltipText)}"><i class="fa fa-exclamation" aria-hidden="true"></i></span>`;
+        return `<span class="overlap-warning-icon" title="${escapeHtml(tooltipText)}"><i class="fa fa-exclamation fa-lg" aria-hidden="true" style="color:orange;"></i>  </span>`;
     };
     
     // ========== ГЕНЕРАЦИЯ HTML ==========
@@ -1197,8 +1204,8 @@ export const displayOrderItems = async (applicationId, items, canEdit = false) =
         const actionButtons = showActionButtons ? `
             <div class="order-card-actions">
                 <button class="order-edit-btn-small" data-order-id="${orderData.order_id}" title="Редактировать заказ"><i class="fa fa-pencil" aria-hidden="true"></i> Редактировать</button>
-                <button class="order-cancel-btn-small" data-order-id="${orderData.order_id}" title="Отменить заказ">🚫 Отменить</button>
-                <button class="order-duplicate-btn-small" data-order-id="${orderData.order_id}" title="Создать копию"><i class="fa fa-file-text-o" aria-hidden="true"></i> Копировать</button>
+                <button class="order-cancel-btn-small" data-order-id="${orderData.order_id}" title="Отменить заказ"><i class="fa fa-times-circle-o" aria-hidden="true"></i> Отменить</button>
+                <!-- <button class="order-duplicate-btn-small" data-order-id="${orderData.order_id}" title="Создать копию"><i class="fa fa-file-text-o" aria-hidden="true"></i> Копировать</button> -->
             </div>
         ` : '';
         
@@ -1208,10 +1215,10 @@ export const displayOrderItems = async (applicationId, items, canEdit = false) =
                 <div class="location-order-header">
                     <div class="location-order-info">
                         <span class="location-name">
-                            📍 ${escapeHtml(orderData.location_name)}
-                            ${locationOverlapIcon}
+                            <i class="fa fa-map-pin"></i> ${escapeHtml(orderData.location_name)} 
                         </span>
                         <span class="location-common-dates"><i class="fa fa-calendar"></i> ${commonStartDate} - ${commonEndDate}</span>
+                        ${locationOverlapIcon}
                     </div>
                     ${actionButtons}
                 </div>
@@ -1240,7 +1247,7 @@ export const displayOrderItems = async (applicationId, items, canEdit = false) =
                     if (!typesMap.has(typeName)) {
                         typesMap.set(typeName, []);
                     }
-                    const equipmentName = item.is_common ? `🌍 ${item.equipment_name}` : item.equipment_name;
+                    const equipmentName = item.is_common ? `<i class="fa fa-globe"></i> ${item.equipment_name}` : item.equipment_name;
                     typesMap.get(typeName).push({
                         name: equipmentName,
                         quantity: item.quantity,
@@ -1277,7 +1284,7 @@ export const displayOrderItems = async (applicationId, items, canEdit = false) =
                 if (!typesMap.has(typeName)) {
                     typesMap.set(typeName, []);
                 }
-                const equipmentName = item.is_common ? `🌍 ${item.equipment_name}` : item.equipment_name;
+                const equipmentName = item.is_common ? `<i class="fa fa-globe"></i> ${item.equipment_name}` : item.equipment_name;
                 typesMap.get(typeName).push({
                     name: equipmentName,
                     quantity: item.quantity,
@@ -1419,11 +1426,13 @@ const generateLocationCardWithButtons = (orderId, locationName, startDate, endDa
                 <i class="fa fa-pencil" aria-hidden="true"></i> Редактировать
             </button>
             <button class="order-cancel-btn-small" data-order-id="${orderId}" title="Отменить заказ">
-                🚫 Отменить
+                <i class="fa fa-times-circle-o" aria-hidden="true"></i> Отменить
             </button>
+            <!--
             <button class="order-duplicate-btn-small" data-order-id="${orderId}" title="Создать копию">
                 <i class="fa fa-file-text-o" aria-hidden="true"></i> Копировать
             </button>
+            -->
         </div>
     ` : '';
     
@@ -1431,7 +1440,7 @@ const generateLocationCardWithButtons = (orderId, locationName, startDate, endDa
         <div class="location-order-card" data-order-id="${orderId}">
             <div class="location-order-header">
                 <div class="location-order-info">
-                    <span class="location-name">📍 ${escapeHtml(locationName)}</span>
+                    <span class="location-name"><i class="fa fa-map-pin"></i> ${escapeHtml(locationName)}</span>
                     <span class="location-dates"><i class="fa fa-calendar"></i> ${startDate} - ${endDate}</span>
                 </div>
                 ${actionButtons}
@@ -1471,11 +1480,11 @@ const bindOrderCardButtons = () => {
     });
     
     // Кнопка "Копировать"
-    $('.order-duplicate-btn-small').off('click').on('click', function(e) {
-        e.stopPropagation();
-        const orderId = $(this).data('order-id');
-        duplicateOrder(orderId);
-    });
+    // $('.order-duplicate-btn-small').off('click').on('click', function(e) {
+    //     e.stopPropagation();
+    //     const orderId = $(this).data('order-id');
+    //     duplicateOrder(orderId);
+    // });
 };
 
 // Генерация карточки локации
@@ -1521,7 +1530,7 @@ const generateCommonEquipmentCard = (typesMap) => {
     return `
         <div class="location-order-card common-equipment-card">
             <div class="location-order-header">
-                <span class="location-name">🌍 Общее оборудование</span>
+                <span class="location-name"><i class="fa fa-globe"></i> Общее оборудование</span>
                 <span class="location-dates"><i class="fa fa-calendar"></i> Не привязано к датам</span>
             </div>
             <div class="equipment-matrix">
@@ -1869,7 +1878,7 @@ const getEquipmentRows = (typesMap) => {
 export const updateSelectionInfo = () => {
     $('.selection-info').remove();
     if (state.selectedOrders.size) {
-        $('.button-group').prepend(`<span class="selection-info">✅ Выбрано: ${state.selectedOrders.size}</span>`);
+        $('.button-group').prepend(`<span class="selection-info"><i class="fa fa-check" aria-hidden="true"></i> Выбрано: ${state.selectedOrders.size}</span>`);
     }
 };
 

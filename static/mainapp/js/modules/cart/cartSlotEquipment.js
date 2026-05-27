@@ -33,7 +33,7 @@ export const openAddEquipmentForSlot = (slotIndex) => {
     equipment.forEach(eq => {
         if (!addedIds.includes(eq.equipment_id)) {
             hasAvailable = true;
-            const commonBadge = eq.is_common ? '<span class="common-badge-small">🌍 Общее</span>' : '';
+            const commonBadge = eq.is_common ? '<span class="common-badge-small"><i class="fa fa-globe" aria-hidden="true"></i> Общее</span>' : '';
             const displayTypeName = eq.type_name || 'Оборудование';
             
             html += `
@@ -44,7 +44,7 @@ export const openAddEquipmentForSlot = (slotIndex) => {
                             ${commonBadge}
                         </div>
                         <div class="available-equipment-type">${escapeHtml(displayTypeName)}</div>
-                        <div class="available-equipment-quantity">📦 Доступно: <strong>${eq.quantity}</strong> шт.</div>
+                        <div class="available-equipment-quantity"><i class="fa fa-archive" aria-hidden="true"></i> Доступно: <strong>${eq.quantity}</strong> шт.</div>
                     </div>
                     <div>
                         <label>Количество:</label>
@@ -66,7 +66,7 @@ export const openAddEquipmentForSlot = (slotIndex) => {
     html += '</div>';
     
     $('#addEquipmentContent').html(html);
-    $('#addEquipmentModal').show();
+    $('#addEquipmentModal').css('display', 'flex');
     
     $('#addEquipmentModal').data('current-slot-index', index);
     

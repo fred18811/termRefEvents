@@ -56,10 +56,10 @@ export const formatDateOnly = (dateStr) => {
 // Показ уведомлений
 export const showNotification = (message, type = 'info') => {
     const types = {
-        success: '✅',
-        error: '❌',
-        warning: '<i class="fa fa-exclamation" aria-hidden="true"></i>',
-        info: 'ℹ️'
+        success: '',
+        error: '',
+        warning: '',
+        info: ''
     };
     
     const icon = types[type] || types.info;

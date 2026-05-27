@@ -233,7 +233,8 @@ nav {
 
 .nav-link:hover {
     color: var(--color-blue);
-    background: var(--gray-100);
+    background: none;
+    border: solid 1px;
 }
 
 .nav-link.active {
@@ -246,10 +247,7 @@ nav {
     display: flex;
     align-items: center;
     gap: 1rem;
-    background: var(--gray-50);
     padding: 0.4rem 0.8rem 0.4rem 1rem;
-    border-radius: var(--radius-md);
-    border: 1px solid var(--gray-200);
     flex-shrink: 0;
 }
 
@@ -265,6 +263,7 @@ nav {
     display: flex;
     flex-direction: column;
     align-items: center;
+    color: var(--color-blue);
 }
 
 .user-name {
@@ -291,6 +290,7 @@ nav {
 /* Dropdown */
 .dropdown {
     position: relative;
+    white-space: nowrap;
 }
 
 .dropdown-menu {
@@ -381,6 +381,59 @@ nav {
     background: var(--color-green-dark);
 }
 
+.btn-main {
+    background: none;
+    border: solid 1px;
+    color: var(--color-blue);
+}
+
+.btn-main:hover {
+    background: var(--color-blue);
+    color: white;
+}
+
+.btn-main-green{
+    color:#28a745;
+}
+
+.btn-main-green:hover{
+    background:#28a745;
+    color: white;
+}
+
+.btn-main-grey{
+    color:#6c757d;
+}
+
+.btn-main-grey:hover{
+    background:#6c757d;
+    color: white;
+}
+
+.btn-main-red{
+    color:#b52015;
+}
+
+.btn-main-red:hover{
+    background:#b52015;
+    color: white;
+}
+
+.btn-main-yellow{
+    color:#e0a800;
+}
+
+.btn-main-yellow:hover{
+    background:#e0a800;
+    color: white;
+}
+
+.btn-main-lg{
+    padding: 0.6rem 1.2rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+
 .btn-secondary {
     background: var(--color-gray);
     color: white;
@@ -417,9 +470,9 @@ nav {
 
 /* Кнопка обратной связи */
 .btn-feedback {
-    background: var(--color-blue);
-    color: white;
-    border: none;
+    color: var(--color-blue);
+    border: solid 1px var(--color-blue);
+    background: none;
     padding: 0.4rem 1rem;
     border-radius: var(--radius-md);
     cursor: pointer;
@@ -429,12 +482,11 @@ nav {
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    margin-left: auto;
-    margin-right: 1rem;
 }
 
 .btn-feedback:hover {
-    background: var(--color-blue-dark);
+    background: var(--color-blue);
+    color: white;
 }
 
 /* ========== 9. LOCATION SECTION ========== */
@@ -980,7 +1032,7 @@ nav {
     border-radius: var(--radius-lg);
     overflow: hidden;
     box-shadow: var(--shadow-md);
-    border: 1px solid var(--gray-200);
+    border: 1px solid var(--gray-300);
     transition: all var(--transition-base);
 }
 
@@ -1018,8 +1070,8 @@ nav {
 }
 
 .order-header {
-    background: var(--color-blue);
-    color: white;
+    /* background: var(--color-blue);
+    color: white; */
     padding: 1rem 1.25rem;
     display: flex;
     align-items: center;
@@ -1035,6 +1087,7 @@ nav {
     gap: 1rem;
     flex: 1;
     flex-wrap: wrap;
+    justify-content: space-between;
 }
 
 .order-checkbox {
@@ -1070,22 +1123,31 @@ nav {
     text-transform: uppercase;
 }
 
+.order-status.in_progress {
+    background: var(--color-yellow-dark);
+    color: white;
+}
+
 .order-status.active {
     background: var(--color-green);
+    color: white;
 }
 
 .order-status.completed {
     background: var(--color-gray);
+    color: white;
 }
 
 .order-status.cancelled {
     background: #6c757d;
+    color: white;
 }
 
 .order-toggle {
-    background: rgba(255, 255, 255, 0.15);
+    /* background: rgba(255, 255, 255, 0.15); */
+    background: none;
     border: none;
-    color: white;
+    /* color: white; */
     font-size: 1rem;
     cursor: pointer;
     width: 30px;
@@ -1095,7 +1157,8 @@ nav {
 }
 
 .order-toggle:hover {
-    background: rgba(255, 255, 255, 0.25);
+    /* background: rgba(255, 255, 255, 0.25); */
+    background: var(--gray-200);
 }
 
 .order-body {
@@ -1253,8 +1316,8 @@ nav {
     display: inline-flex;
     align-items: center;
     gap: 0.5rem;
-    background: var(--gray-50);
-    border: 1px solid var(--gray-200);
+    background: none;
+    border: 1px solid;
     border-radius: var(--radius-sm);
     padding: 0.5rem 1rem;
     text-decoration: none;
@@ -1435,6 +1498,8 @@ nav {
 /* ========== 19. MODAL ========== */
 .modal {
     display: none;
+    justify-content: center;
+    align-items: center;
     position: fixed;
     z-index: var(--z-modal);
     left: 0;
@@ -1445,12 +1510,12 @@ nav {
 }
 
 .modal-content {
+    overflow-y: auto;
     background: white;
-    margin: 10% auto;
     padding: 1.5rem;
     border-radius: var(--radius-lg);
-    width: 90%;
-    max-width: 550px;
+    max-width: 90%;
+    max-height: 90vh;
     box-shadow: var(--shadow-2xl);
 }
 
@@ -1691,7 +1756,7 @@ nav {
     gap: 0.35rem;
 }
 
-.cart-edit-btn, .cart-remove-btn {
+.cart-edit-btn, .cart-remove-btn, .cart-edit-slots-btn {
     background: none;
     border: none;
     cursor: pointer;
@@ -1700,7 +1765,7 @@ nav {
     border-radius: var(--radius-sm);
 }
 
-.cart-edit-btn {
+.cart-edit-btn, .cart-edit-slots-btn {
     color: var(--color-blue);
 }
 
@@ -1708,11 +1773,11 @@ nav {
     background: rgba(0, 57, 166, 0.1);
 }
 
-.cart-edit-slots-btn{
+/* .cart-edit-slots-btn{
     border: none;
     background: none;
     cursor: pointer;
-}
+} */
 
 .cart-remove-btn {
     color: var(--color-red);
@@ -1813,9 +1878,9 @@ nav {
 }
 
 .add-equipment-btn {
-    background: var(--color-green);
-    color: white;
-    border: none;
+    color: var(--color-green);
+    background: none;
+    border: solid 1px;
     padding: 0.25rem 0.7rem;
     border-radius: var(--radius-sm);
     cursor: pointer;
@@ -1825,10 +1890,10 @@ nav {
 
 .add-equipment-btn:hover {
     background: var(--color-green-dark);
+    color: white;
 }
 
 .edit-equipment-list {
-    max-height: 300px;
     overflow-y: auto;
 }
 
@@ -1873,7 +1938,7 @@ nav {
     font-size: 0.75rem;
 }
 
-.remove-equipment-btn {
+.remove-equipment-btn, .remove-slot-equipment-btn {
     background: none;
     border: none;
     color: var(--color-red);
@@ -1884,7 +1949,6 @@ nav {
 
 /* Available Equipment List */
 .available-equipment-list {
-    max-height: 350px;
     overflow-y: auto;
 }
 
@@ -2042,7 +2106,7 @@ nav {
 /* ========== 21. NOTIFICATIONS ========== */
 .notification {
     position: fixed;
-    top: 80px;
+    top: 20px;
     right: 20px;
     padding: 0.75rem 1.25rem;
     border-radius: var(--radius-md);
@@ -2105,7 +2169,7 @@ nav {
     padding: 1rem 1.25rem;
     margin-bottom: 1.25rem;
     box-shadow: var(--shadow-md);
-    border: 1px solid var(--gray-200);
+    border: 1px solid var(--gray-300);
 }
 
 .filter-row {
@@ -2272,9 +2336,9 @@ nav {
 }
 
 .order-feedback-btn {
-    background: var(--color-info);
-    color: white;
-    border: none;
+    color: var(--color-info);
+    background: none;
+    border: solid 1px;
     padding: 0.25rem 0.75rem;
     border-radius: var(--radius-sm);
     cursor: pointer;
@@ -2285,6 +2349,7 @@ nav {
 
 .order-feedback-btn:hover {
     background: #138496;
+    color: white;
 }
 
 /* ========== 26. РЕЖИМ СЛОТОВ ========== */
@@ -2484,6 +2549,7 @@ nav {
 
 .edit-slot-equipment-item span {
     font-size: 0.75rem;
+    flex-grow: 1;
 }
 
 .edit-slot-qty {
@@ -2495,13 +2561,18 @@ nav {
 }
 
 .add-equipment-to-slot-btn {
-    background: var(--color-green);
-    color: white;
-    border: none;
+    color: var(--color-green);
+    border: solid 1px;
     padding: 0.3rem 0.7rem;
     border-radius: var(--radius-sm);
     cursor: pointer;
     font-size: 0.7rem;
+    background: none;
+}
+
+.add-equipment-to-slot-btn:hover {
+    background: var(--color-green);
+    color: white;
 }
 
 .slots-date-group {
@@ -2528,6 +2599,13 @@ nav {
 }
 
 /* ========== 27. RESPONSIVE ========== */
+@media (max-width: 1190px) {
+    .header-container{
+        gap:inherit;
+        justify-content: end;        
+    }
+}
+
 @media (max-width: 1024px) {
     .container {
         padding: 0 1rem;
@@ -2536,10 +2614,31 @@ nav {
     .location-section {
         grid-template-columns: 1fr;
     }
+    .type-items.sticky{
+        top: 130px;
+    }
+}
+
+@media (max-width: 880px) {
+    .header-container {
+        gap: 0.5rem;      
+    }
+    .type-items.sticky {
+        top: 165px;
+    }
+    .logo-text h4{
+        display: none;
+    }
 }
 
 @media (max-width: 768px) {
+
     .header-container {
+        flex-direction: column;  
+    }
+
+    .available-equipment-item div:nth-child(2){
+        display: flex;
         flex-direction: column;
     }
     
@@ -2556,14 +2655,6 @@ nav {
         flex-direction: column;
     }
     
-    .action-buttons {
-        flex-direction: column;
-    }
-    
-    .btn {
-        width: 100%;
-    }
-    
     .page-header {
         flex-direction: column;
         align-items: flex-start;
@@ -2578,9 +2669,12 @@ nav {
     }
     
     .modal-content {
-        margin: 20% auto;
-        width: 95%;
+        max-width: 90vh;
         padding: 1rem;
+    }
+    .edit-equipment-header {
+        flex-direction: column;
+        gap: 0.7rem;
     }
     
     .location-photo {
@@ -2657,4 +2751,14 @@ nav {
     .btn-clear-filters {
         width: 100%;
     }
+}
+
+.edit-slot-start-input, .edit-slot-end-input {
+    padding: 0.6rem 0.75rem;
+    border: 1px solid var(--gray-300);
+    border-radius: var(--radius-sm);
+    font-family: inherit;
+    font-size: 0.875rem;
+    transition: all var(--transition-base);
+    background: white;
 }

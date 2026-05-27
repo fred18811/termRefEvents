@@ -5,6 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ room.name }} - Управление оборудованием</title>
+    <link rel="stylesheet" href="{% static 'mainapp/css/font-awesome.min.css' %}">
     <link rel="stylesheet" href="{% static 'mainapp/css/googleapis_css2.css' %}">
     <link rel="stylesheet" href="{% static 'mainapp/css/swiper-bundle.min.css' %}">
     <link rel="stylesheet" href="{% static 'mainapp/css/style.css' %}">
@@ -18,7 +19,7 @@
         <div class="room-header">
             <h1>{{ room.name }}</h1>
             <div class="room-meta">
-                <span>📐 Размер: {{ room.size }}</span>
+                <span><i class="fa fa-map-o" aria-hidden="true"></i> Размер: {{ room.size }}</span>
             </div>
         </div>
         
@@ -59,7 +60,7 @@
         
         <!-- Описание помещения -->
         <div class="room-description-block">
-            <h2>📝 Описание помещения</h2>
+            <h2><i class="fa fa-file-text-o" aria-hidden="true"></i> Описание помещения</h2>
             <div class="description-content">
                 {% if room.description %}
                     {{ room.description|safe|linebreaks }}
@@ -71,7 +72,7 @@
         
         <!-- Оборудование в помещении -->
         <div class="equipment-section-detail">
-            <h2>🔧 Оборудование в помещении</h2>
+            <h2><i class="fa fa-wrench" aria-hidden="true"></i> Оборудование в помещении</h2>
             
             <div class="equipment-stats">
                 <div class="stat-card">

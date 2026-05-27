@@ -49,7 +49,8 @@ export const openEditModal = async (index) => {
     const modalContent = generateEditModalHtml(item, startDate, endDate, equipmentHtml);
     
     $('#editOrderContent').html(modalContent);
-    $('#editOrderModal').show();
+    // $('#editOrderModal').show();
+    $('#editOrderModal').css('display', 'flex');
     
     bindEditModalHandlers();
 };
@@ -74,8 +75,8 @@ const generateEquipmentEditHtml = (item, availabilityMap) => {
                         </div>
                         <div class="edit-equipment-type">${escapeHtml(eq.type_name)}</div>
                         <div class="edit-equipment-available">
-                            📦 Всего: <span class="total-qty">${eq.max_quantity || eq.quantity}</span> шт. | 
-                            📦 Доступно: <strong class="available-qty ${availableQty <= 0 ? 'text-danger' : 'text-success'}">${availableQty}</strong> шт.
+                            <i class="fa fa-archive" aria-hidden="true"></i> Всего: <span class="total-qty">${eq.max_quantity || eq.quantity}</span> шт. | 
+                            <i class="fa fa-archive" aria-hidden="true"></i> Доступно: <strong class="available-qty ${availableQty <= 0 ? 'text-danger' : 'text-success'}">${availableQty}</strong> шт.
                         </div>
                     </div>
                     <div class="edit-equipment-control">
@@ -124,8 +125,8 @@ const generateEditModalHtml = (item, startDate, endDate, equipmentHtml) => {
             <textarea id="editComment" class="edit-comment-input" rows="3" placeholder="Введите комментарий...">${escapedComment}</textarea>
         </div>
         <div class="edit-equipment-header">
-            <h4>🔧 Оборудование</h4>
-            <button id="addMoreEquipmentBtn" class="add-equipment-btn">➕ Добавить оборудование</button>
+            <h4>Оборудование</h4>
+            <button id="addMoreEquipmentBtn" class="btn btn-sm btn-main btn-main-green">Добавить оборудование</button>
         </div>
         ${equipmentHtml}
     `;

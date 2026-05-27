@@ -2160,7 +2160,7 @@ def get_orders(request):
                     'department_id': approval.id_department.id,
                     'department_name': approval.id_department.name,
                     'is_agreed': approval.is_agreed,
-                    'status_text': '✅ Согласовано' if approval.is_agreed else '⏳ На согласовании',
+                    'status_text': '✅ Согласовано' if approval.is_agreed else ' На согласовании ',
                     'status_class': 'approved' if approval.is_agreed else 'pending',
                     'user_name': approval.id_user.username if approval.id_user else None,
                     'date_agreed': approval.date_agreed.isoformat() if approval.date_agreed else None,

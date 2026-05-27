@@ -787,9 +787,9 @@ export const initEventHandlers = () => {
             $('[data-page]').removeClass('active');
             loadRooms();
         } else if (galleryType === 'furniture') {
-            showNotification('🪑 Галерея "Мебель" в разработке', 'info');
+            showNotification('Галерея "Мебель" в разработке', 'info');
         } else if (galleryType === 'equipment') {
-            showNotification('🔧 Галерея "Оборудование" в разработке', 'info');
+            showNotification('Галерея "Оборудование" в разработке', 'info');
         }
     });
     
@@ -874,7 +874,7 @@ export const initEventHandlers = () => {
     $('#sortRooms').on('change', filterRooms);
     
     // Закрытие модальных окон
-    $('.modal-close, .modal .btn-secondary').click(closeModals);
+    $('.modal-close, .modal .btn-modal-close').click(closeModals);
     $(window).click(e => {
         if ($(e.target).is('.modal')) closeModals();
     });
@@ -887,7 +887,7 @@ export const initEventHandlers = () => {
         if (typeof window.addSelectedEquipment === 'function') {
             window.addSelectedEquipment();
         } else {
-            import('./cart.js').then(module => {
+            import('./cart.js_').then(module => {
                 module.addSelectedEquipment();
             });
         }
@@ -983,7 +983,7 @@ const bindCartButtons = () => {
                 if (typeof window.saveSingleOrder === 'function') {
                     await window.saveSingleOrder();
                 } else {
-                    const module = await import('./cart.js');
+                    const module = await import('./cart.js_');
                     await module.saveSingleOrder();
                 }
             });

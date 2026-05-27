@@ -879,14 +879,14 @@ export const openEditModal = async (index) => {
             <textarea id="editComment" class="edit-comment-input" rows="3" placeholder="Введите комментарий...">${escapedComment}</textarea>
         </div>
         <div class="edit-equipment-header">
-            <h4>🔧 Оборудование</h4>
-            <button id="addMoreEquipmentBtn" class="add-equipment-btn">➕ Добавить оборудование</button>
+            <h4>Оборудование</h4>
+            <button id="addMoreEquipmentBtn" class="add-equipment-btn">Добавить оборудование</button>
         </div>
         ${equipmentHtml}
     `;
     
     $('#editOrderContent').html(modalContent);
-    $('#editOrderModal').show();
+    $('#editOrderModal').css('display', 'flex');
     
     // Обновляем availableEquipment для добавления новых позиций
     if (availabilityResponse.success && availabilityResponse.equipment) {
@@ -1058,7 +1058,7 @@ export const openEditSlotsModal = async (index) => {
     `;
     
     $('#editOrderContent').html(modalContent);
-    $('#editOrderModal').show();
+    $('#editOrderModal').css('display', 'flex');
     
     // Привязываем обработчики
     bindEditSlotsHandlers();

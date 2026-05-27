@@ -17,9 +17,9 @@
         <div class="container header-container">
             <div class="logo">
                 <div class="logo-icon"><a href="/"><img class="logo-icon" src="static/mainapp/images/logo.png"></a></div>
-                <div>
+                <div class="logo-text">
                     <h1>ETRS</h1>
-                    <h4>Electronic Techical Requirements System</h4>
+                    <h4>Electronic Technical Requirements System</h4>
                 </div>
             </div>
             <nav>
@@ -37,18 +37,20 @@
                 </ul>
             </nav>
             
-            <!-- Кнопка обратной связи -->
-            <button id="feedbackBtn" class="btn-feedback"><i class="fa fa-envelope-open-o"></i> Обратная связь</button>
-            
             <!-- Блок информации о пользователе -->
             <div id="userInfo" class="user-info" style="display: none;">
                 <div class="user-details">
-                    <span id="userName" class="user-name"></span>
+                    <div>
+                        <i class="fa fa-user-circle-o" aria-hidden="true"></i>
+                        <span id="userName" class="user-name"></span>
+                    </div>
                     <div id="userDepartmentContainer" style="display: none;">
                         <span id="userDepartment" class="user-department"></span>
                     </div>
                 </div>
-                <button id="logoutBtn" class="btn-logout">Выйти</button>
+                <!-- Кнопка обратной связи -->
+            <button id="feedbackBtn" class="btn-feedback"><i class="fa fa-envelope-open-o"></i></button>
+                <button id="logoutBtn" class="btn btn-sm btn-main btn-main-red">Выйти</button>
             </div>
         </div>
     </header>
@@ -191,7 +193,7 @@
 
             <!-- Кнопки действий -->
             <div class="action-buttons">
-                <button id="addButton" class="btn btn-success">Добавить в заявку</button>
+                <button id="addButton" class="btn btn-sm btn-main btn-main-green">Добавить в заявку</button>
             </div>
 
             <!-- Блок "Текущий заказ" -->
@@ -213,8 +215,8 @@
                 </div>
                 
                 <div class="cart-footer">
-                    <button id="saveOrderFromCartBtn" class="btn btn-success">Сохранить заявку</button>
-                    <button id="clearCartBtn" class="btn btn-danger">Очистить список</button>
+                    <button id="saveOrderFromCartBtn" class="btn btn-sm btn-main btn-main-green">Сохранить заявку</button>
+                    <button id="clearCartBtn" class="btn btn-sm btn-main btn-main-red">Очистить список</button>
                 </div>
             </div>
         </div>
@@ -224,10 +226,10 @@
             <div class="page-header">
                 <h2>Текущие заявки</h2>
                 <div class="button-group">
-                    <button id="selectAllBtn" class="btn btn-sm btn-success">✅ Выделить все</button>
-                    <button id="deselectAllBtn" class="btn btn-sm btn-secondary">❌ Снять</button>
-                    <button id="exportOrdersBtn" class="btn btn-sm btn-primary">Выгрузить в Excel</button>
-                    <button id="refreshOrdersBtn" class="btn btn-sm btn-info">Обновить</button>
+                    <button id="selectAllBtn" class="btn btn-sm btn-main btn-main-green"><i class="fa fa-check" aria-hidden="true"></i> Выделить все</button>
+                    <button id="deselectAllBtn" class="btn btn-sm btn-main btn-main-red"><i class="fa fa-times" aria-hidden="true"></i> Снять</button>
+                    <button id="refreshOrdersBtn" class="btn btn-sm btn-main btn-main-yellow">Обновить</button>
+                    <button id="exportOrdersBtn" class="btn btn-sm btn-main">Выгрузить в Excel</button>
                 </div>
             </div>
             <div id="ordersContainer" class="orders-container">Загрузка...</div>
@@ -278,8 +280,8 @@
             <h3><i class="fa fa-pencil" aria-hidden="true"></i> Редактирование заказа</h3>
             <div id="editOrderContent"></div>
             <div class="modal-buttons">
-                <button id="saveEditBtn" class="btn btn-sm btn-primary">💾 Сохранить изменения</button>
-                <button id="cancelEditBtn" class="btn btn-sm btn-secondary">Отмена</button>
+                <button id="saveEditBtn" class="btn btn-sm btn-main">Сохранить изменения</button>
+                <button id="cancelEditBtn" class="btn btn-sm btn-main btn-main-grey btn-modal-close">Отмена</button>
             </div>
         </div>
     </div>
@@ -288,11 +290,11 @@
     <div id="addEquipmentModal" class="modal">
         <div class="modal-content modal-large">
             <span class="modal-close">&times;</span>
-            <h3>➕ Добавить оборудование</h3>
+            <h3>Добавить оборудование</h3>
             <div id="addEquipmentContent"></div>
             <div class="modal-buttons">
-                <button id="confirmAddEquipmentBtn" class="btn btn-sm btn-primary">➕ Добавить</button>
-                <button id="cancelAddEquipmentBtn" class="btn btn-sm btn-secondary">Отмена</button>
+                <button id="confirmAddEquipmentBtn" class="btn btn-sm btn-main">Добавить</button>
+                <button id="cancelAddEquipmentBtn" class="btn btn-sm btn-main btn-main-grey">Отмена</button>
             </div>
         </div>
     </div>
@@ -301,7 +303,7 @@
     <div id="feedbackModal" class="modal">
         <div class="modal-content">
             <span class="modal-close">&times;</span>
-            <h3>📝 Обратная связь</h3>
+            <h3><i class="fa fa-file-text-o" aria-hidden="true"></i> Обратная связь</h3>
             <form id="feedbackForm" class="feedback-form">
                 <div class="form-group">
                     <label for="feedbackName">Тема</label>
@@ -316,7 +318,7 @@
                 <div id="feedbackError" class="auth-error" style="display: none;"></div>
                 <div class="modal-buttons">
                     <button type="button" id="cancelFeedbackBtn" class="btn btn-secondary">Отмена</button>
-                    <button type="submit" id="submitFeedbackBtn" class="btn btn-primary">📤 Отправить</button>
+                    <button type="submit" id="submitFeedbackBtn" class="btn btn-primary"><i class="fa fa-envelope-open-o"></i> Отправить</button>
                 </div>
             </form>
         </div>

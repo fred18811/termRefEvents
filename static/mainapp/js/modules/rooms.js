@@ -52,10 +52,10 @@ export const displayRooms = (rooms) => {
                      onerror="this.src='/static/mainapp/images/default-room.jpg'">
                 <div class="room-overlay">
                     <div class="room-title">${escapeHtml(room.name)}</div>
-                    <div class="room-size">📐 ${escapeHtml(room.size)}</div>
+                    <div class="room-size"><i class="fa fa-map-o" aria-hidden="true"></i> ${escapeHtml(room.size)}</div>
                     <div>
-                        <span class="room-badge">📦 ${equipmentCount}</span>
-                        <span class="room-badge">🔧 ${totalQuantity} шт.</span>
+                        <span class="room-badge"><i class="fa fa-archive" aria-hidden="true"></i> ${equipmentCount}</span>
+                        <span class="room-badge"><i class="fa fa-wrench" aria-hidden="true"></i> ${totalQuantity} шт.</span>
                     </div>
                 </div>
             </div>`;

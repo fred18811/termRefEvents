@@ -472,7 +472,7 @@ const processSlotsToCart = (slots) => {
     }
     
     if (!state.currentLocation) {
-        showNotification('❌ Выберите помещение', 'error');
+        showNotification('Выберите помещение', 'error');
         return;
     }
     
@@ -556,7 +556,7 @@ const processSlotsToCart = (slots) => {
     
     window.equipmentQuantities = {};
     
-    showNotification(`✅ Добавлено ${slotOrder.slots.length} слотов в заявку!`, 'success');
+    showNotification(`Добавлено ${slotOrder.slots.length} слотов в заявку!`, 'success');
 };
 
 // Добавление в корзину
@@ -581,7 +581,7 @@ export const addToCart = () => {
     
     // ========== РЕЖИМ "МЕРОПРИЯТИЕ" (ОБЫЧНЫЙ РЕЖИМ) ==========
     if (!state.currentLocation) {
-        showNotification('❌ Выберите помещение', 'error');
+        showNotification('Выберите помещение', 'error');
         return;
     }
     
@@ -595,7 +595,7 @@ export const addToCart = () => {
         dateEnd = $('#dateEnd').val();
         
         if (!dateStart || !dateEnd) {
-            showNotification('❌ Выберите даты мероприятия', 'error');
+            showNotification('Выберите даты мероприятия', 'error');
             return;
         }
     } else {
@@ -604,7 +604,7 @@ export const addToCart = () => {
         dateEnd = $('#rentalDateEnd').val();
         
         if (!dateStart || !dateEnd) {
-            showNotification('❌ Выберите даты аренды', 'error');
+            showNotification('Выберите даты аренды', 'error');
             return;
         }
     }
@@ -642,17 +642,17 @@ export const addToCart = () => {
     }
     
     if (!selected.length) {
-        showNotification('<i class="fa fa-exclamation" aria-hidden="true"></i> Выберите хотя бы одно оборудование', 'warning');
+        showNotification('Выберите хотя бы одно оборудование', 'warning');
         return;
     }
     
     if (hasLocationEquipment && !state.currentLocation) {
-        showNotification('❌ Выберите локацию для выбранного оборудования', 'error');
+        showNotification('Выберите локацию для выбранного оборудования', 'error');
         return;
     }
     
     if (hasLocationEquipment && state.selectedLocations.has(state.currentLocation.id.toString())) {
-        showNotification('<i class="fa fa-exclamation" aria-hidden="true"></i> Эта локация уже добавлена в заказ', 'warning');
+        showNotification('Эта локация уже добавлена в заказ', 'warning');
         return;
     }
     
@@ -693,5 +693,5 @@ export const addToCart = () => {
     window.equipmentQuantities = {};
     allEquipmentData = [];
     
-    showNotification(`✅ Добавлено в заказ!`, 'success');
+    showNotification(`Добавлено в заказ!`, 'success');
 };

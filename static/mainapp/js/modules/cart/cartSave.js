@@ -119,7 +119,7 @@ export const saveSingleOrder = async () => {
     
     const saveBtn = $('#saveOrderFromCartBtn');
     const originalText = saveBtn.text();
-    saveBtn.prop('disabled', true).text('<i class="fa fa-hourglass-half" aria-hidden="true"></i> Сохранение...');
+    saveBtn.prop('disabled', true).text('Сохранение...');
     
     try {
         const csrftoken = document.cookie.split('; ').find(row => row.startsWith('csrftoken='))?.split('=')[1];
@@ -146,16 +146,16 @@ export const saveSingleOrder = async () => {
             showSaveSuccessMessage(applicationName, createdOrders);
             clearCartAndReset();
         } else {
-            showNotification('❌ Не удалось создать ни одного заказа', 'error');
+            showNotification('Не удалось создать ни одного заказа', 'error');
         }
         
         if (hasErrors) {
-            showNotification('<i class="fa fa-exclamation" aria-hidden="true"></i> Некоторые заказы не были созданы.', 'warning');
+            showNotification('Некоторые заказы не были созданы.', 'warning');
         }
         
     } catch (error) {
         console.error('Ошибка сохранения:', error);
-        showNotification(`❌ ${error.message || 'Ошибка при сохранении'}`, 'error');
+        showNotification(`${error.message || 'Ошибка при сохранении'}`, 'error');
     } finally {
         saveBtn.prop('disabled', false).text(originalText);
     }
@@ -234,7 +234,7 @@ const saveOrderItem = async (cartItem, index, applicationName, applicationCommen
             }
         };
     } else {
-        showNotification(`❌ Ошибка при создании заказа для "${cartItem.location_name}": ${data.error}`, 'error');
+        showNotification(`Ошибка при создании заказа для "${cartItem.location_name}": ${data.error}`, 'error');
         return { success: false };
     }
 };
@@ -245,9 +245,9 @@ const showSaveSuccessMessage = (applicationName, createdOrders) => {
     message += `Создано заказов: ${createdOrders.length}\n`;
     createdOrders.forEach(order => {
         if (order.slots_count) {
-            message += `\n📦 ${order.location_name} - Заказ №${order.order_id} (${order.slots_count} слотов)`;
+            message += `\n${order.location_name} - Заказ №${order.order_id} (${order.slots_count} слотов)`;
         } else {
-            message += `\n📦 ${order.location_name} - Заказ №${order.order_id}`;
+            message += `\n${order.location_name} - Заказ №${order.order_id}`;
         }
         if (order.comment) {
             message += `\n   <i class="fa fa-comment-o" aria-hidden="true"></i> ${order.comment.substring(0, 50)}${order.comment.length > 50 ? '...' : ''}`;

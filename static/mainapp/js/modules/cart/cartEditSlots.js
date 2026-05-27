@@ -26,7 +26,7 @@ export const openEditSlotsModal = async (index) => {
     const modalContent = generateSlotsEditModalHtml(item, slotsHtml);
     
     $('#editOrderContent').html(modalContent);
-    $('#editOrderModal').show();
+    $('#editOrderModal').css('display', 'flex');
     
     bindEditSlotsHandlers();
 };
@@ -49,7 +49,7 @@ const generateSlotsEditHtml = (item) => {
             
             equipmentHtml += `
                 <div class="edit-slot-equipment-item" data-eq-id="${eq.equipment_id}" data-type-name="${escapeHtml(displayTypeName)}">
-                    <span>${escapeHtml(eq.equipment_name)} (${escapeHtml(displayTypeName)})</span>
+                    <span>${escapeHtml(eq.equipment_name)} ${escapeHtml(displayTypeName)}</span>
                     <input type="number" 
                            min="0" 
                            max="${eq.max_quantity || eq.quantity}" 
@@ -76,7 +76,7 @@ const generateSlotsEditHtml = (item) => {
                 <div class="edit-slot-equipment-list">
                     ${equipmentHtml || '<div class="text-muted">Нет оборудования</div>'}
                 </div>
-                <button class="add-equipment-to-slot-btn" data-slot-index="${slotIndex}">➕ Добавить оборудование</button>
+                <button class="add-equipment-to-slot-btn" data-slot-index="${slotIndex}">Добавить оборудование</button>
             </div>
         `;
     });
@@ -109,7 +109,7 @@ const generateSlotsEditModalHtml = (item, slotsHtml) => {
                 <h4><i class="fa fa-file-text-o" aria-hidden="true"></i> Слоты</h4>
                 ${slotsHtml}
             </div>
-            <button id="addNewSlotToEdit" class="btn-add-slot" style="margin-top: 1rem;">➕ Добавить новый слот</button>
+            <button id="addNewSlotToEdit" class="btn btn-sm btn-main btn-main-green" style="margin-top: 1rem;">Добавить новый слот</button>
         </div>
     `;
 };
@@ -294,7 +294,7 @@ const addNewEmptySlotToEdit = () => {
             <div class="edit-slot-equipment-list">
                 <div class="text-muted">Нет оборудования</div>
             </div>
-            <button class="add-equipment-to-slot-btn" data-slot-index="${slotIndex}">➕ Добавить оборудование</button>
+            <button class="add-equipment-to-slot-btn" data-slot-index="${slotIndex}">Добавить оборудование</button>
         </div>
     `;
     

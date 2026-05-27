@@ -39,7 +39,7 @@ const openFeedbackModal = () => {
     $('#feedbackComment').val('');
     $('#feedbackError').hide();
     // Показываем модальное окно
-    $('#feedbackModal').show();
+    $('#feedbackModal').css('display', 'flex');
 };
 
 // Закрытие модального окна

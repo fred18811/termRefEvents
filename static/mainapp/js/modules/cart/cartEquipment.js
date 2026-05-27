@@ -27,7 +27,7 @@ export const openAddEquipmentModal = () => {
         const isAlreadyAdded = addedIds.includes(eq.equipment_id);
         if (!isAlreadyAdded) {
             hasAvailable = true;
-            const commonBadge = eq.is_common ? '<span class="common-badge-small">🌍 Общее</span>' : '';
+            const commonBadge = eq.is_common ? '<span class="common-badge-small"><i class="fa fa-globe"></i> Общее</span>' : '';
             
             html += `
                 <div class="available-equipment-item" data-eq-id="${eq.equipment_id}" data-is-common="${eq.is_common || false}">
@@ -37,7 +37,7 @@ export const openAddEquipmentModal = () => {
                             ${commonBadge}
                         </div>
                         <div class="available-equipment-type">${escapeHtml(eq.type_name)}</div>
-                        <div class="available-equipment-quantity">📦 Доступно: <strong>${eq.quantity}</strong> шт.</div>
+                        <div class="available-equipment-quantity"><i class="fa fa-archive" aria-hidden="true"></i> Доступно: <strong>${eq.quantity}</strong> шт.</div>
                     </div>
                     <div>
                         <label style="font-size: 0.7rem;">Количество:</label>
@@ -62,7 +62,7 @@ export const openAddEquipmentModal = () => {
     html += '</div>';
     
     $('#addEquipmentContent').html(html);
-    $('#addEquipmentModal').show();
+    $('#addEquipmentModal').css('display', 'flex');
     
     $('.equipment-select-qty').off('change').on('change', function() {
         let val = parseInt($(this).val());
@@ -113,7 +113,7 @@ export const addSelectedEquipment = () => {
     
     selectedItems.forEach(eq => {
         if ($(`.edit-equipment-item[data-eq-id="${eq.equipment_id}"]`).length === 0) {
-            const commonBadge = eq.is_common ? '<span class="common-badge-small">🌍 Общее</span>' : '';
+            const commonBadge = eq.is_common ? '<span class="common-badge-small"><i class="fa fa-globe"></i> Общее</span>' : '';
             
             const newItemHtml = `
                 <div class="edit-equipment-item" data-eq-id="${eq.equipment_id}" data-is-common="${eq.is_common}">
@@ -123,7 +123,7 @@ export const addSelectedEquipment = () => {
                             ${commonBadge}
                         </div>
                         <div class="edit-equipment-type">${escapeHtml(eq.type_name)}</div>
-                        <div class="edit-equipment-available">📦 Доступно: <span class="available-qty">${eq.max_quantity}</span> шт.</div>
+                        <div class="edit-equipment-available"><i class="fa fa-archive" aria-hidden="true"></i> Доступно: <span class="available-qty">${eq.max_quantity}</span> шт.</div>
                     </div>
                     <div class="edit-equipment-control">
                         <input type="number" 

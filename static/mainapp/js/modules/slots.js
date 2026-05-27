@@ -48,7 +48,7 @@ export const displaySlotsList = () => {
             
             html += `
                 <div class="slot-item" data-slot-index="${globalIndex}">
-                    <div class="slot-info">
+                    <div class="slot-info" style="flex-grow:1;">
                         <div class="slot-time"><i class="fa fa-clock-o"></i> ${startTime} - ${endTime}</div>
                         <div class="slot-equipment">
                             ${equipmentHtml || 'Нет оборудования'}
