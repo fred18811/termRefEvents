@@ -1,7 +1,7 @@
 'use strict';
 
 import { state } from './state.js';
-import { escapeHtml, formatDate, showNotification, debounce  } from './utils.js';
+import { escapeHtml, formatDate, showNotification, debounce, formatDateTimeForDisplay, convertToServerDateFormat   } from './utils.js';
 import { api } from './api.js';
 import { showConfirm } from './modal.js';
 
@@ -569,6 +569,15 @@ const openEditOrderModal = async (orderId) => {
     
     try {
         const response = await api.getOrderDetails(orderId);
+
+        console.log('===== ДАННЫЕ ЗАКАЗА =====');
+        console.log('Полный ответ:', response);
+        console.log('Order object:', response.order);
+        console.log('Ключи в order:', Object.keys(response.order || {}));
+        console.log('Наличие slots:', response.order?.slots);
+        console.log('Наличие items:', response.order?.items);
+        console.log('Наличие equipment:', response.order?.equipment);
+        console.log('=========================');
         
         if (response.success) {
             currentEditingOrderData = response.order;
@@ -595,82 +604,112 @@ const openEditOrderModal = async (orderId) => {
 // Отображение модального окна редактирования заказа со слотами
 const displayEditSlotsOrderModal = (order) => {
     console.log('Отображение редактора слотов для заказа:', order);
+    console.log('Слоты (должны быть сгруппированы):', order.slots);
     
-    // Правильное преобразование дат из UTC в локальное время
+    // Правильное преобразование дат
     const startDate = formatDateTimeForInput(order.date_time_start);
     const endDate = formatDateTimeForInput(order.date_time_end);
     
+    // Получаем слоты (уже сгруппированные на бэкэнде)
+    let slots = order.slots || [];
+    
+    if (slots.length === 0) {
+        $('#editOrderContent').html('<div class="text-center" style="padding: 2rem;">Нет слотов для редактирования</div>');
+        $('#editOrderModal').css('display', 'flex');
+        return;
+    }
+    
+    // Сортируем слоты по дате начала
+    slots.sort((a, b) => new Date(a.date_start) - new Date(b.date_start));
+    
     let slotsHtml = '';
     
-    // Генерируем HTML для каждого слота
-    if (order.slots && order.slots.length > 0) {
-        order.slots.forEach((slot, slotIndex) => {
-            const slotStartFormatted = formatDateTimeForDisplay(slot.date_start);
-            const slotEndFormatted = formatDateTimeForDisplay(slot.date_end);
-            
-            let equipmentHtml = '';
-            
-            if (slot.equipment && slot.equipment.length > 0) {
-                slot.equipment.forEach(eq => {
-                    const commonBadge = eq.is_common ? '<span class="common-badge-small"><i class="fa fa-globe"></i> Общее</span>' : '';
-                    
-                    equipmentHtml += `
-                        <div class="edit-slot-equipment-item" 
-                             data-eq-id="${eq.equipment_id}" 
-                             data-is-common="${eq.is_common || false}"
-                             data-type-name="${escapeHtml(eq.type_name)}">
-                            <span>${escapeHtml(eq.equipment_name)}</span>
-                            <span class="equipment-type-badge">${escapeHtml(eq.type_name)}</span>
+    slots.forEach((slot, slotIndex) => {
+        // Форматируем дату и время слота
+        const slotStart = new Date(slot.date_start);
+        const slotEnd = new Date(slot.date_end);
+        
+        const slotDateFormatted = slotStart.toLocaleDateString('ru-RU', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric'
+        });
+        
+        const startTimeFormatted = slotStart.toLocaleTimeString('ru-RU', {
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+        
+        const endTimeFormatted = slotEnd.toLocaleTimeString('ru-RU', {
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+        
+        // Генерируем HTML для списка оборудования (ВСЕ оборудование этого слота)
+        let equipmentHtml = '';
+        
+        if (slot.equipment && slot.equipment.length > 0) {
+            slot.equipment.forEach(eq => {
+                const commonBadge = eq.is_common ? 
+                    '<span class="common-badge-mini"><i class="fa fa-globe"></i></span>' : '';
+                
+                equipmentHtml += `
+                    <div class="edit-slot-equipment-row" data-eq-id="${eq.equipment_id}" data-is-common="${eq.is_common || false}">
+                        <div class="edit-slot-equipment-name">
                             ${commonBadge}
-                            <input type="number" 
-                                   min="0" 
-                                   max="${eq.max_quantity || eq.quantity}" 
-                                   value="${eq.quantity}" 
-                                   class="edit-slot-qty" 
-                                   data-eq-id="${eq.equipment_id}"
-                                   data-max="${eq.max_quantity || eq.quantity}"
-                                   style="width: 70px; margin-left: 10px;">
-                            <button class="remove-slot-equipment-btn" data-eq-id="${eq.equipment_id}" title="Удалить">
+                            <span>${escapeHtml(eq.equipment_name)}</span>
+                            <span class="edit-slot-equipment-type-badge">${escapeHtml(eq.type_name || 'Оборудование')}</span>
+                        </div>
+                        <div class="edit-slot-equipment-controls">
+                            <div class="edit-slot-equipment-quantity">
+                                <input type="number" 
+                                       class="edit-slot-qty" 
+                                       data-eq-id="${eq.equipment_id}"
+                                       data-is-common="${eq.is_common || false}"
+                                       data-type-name="${escapeHtml(eq.type_name || 'Оборудование')}"
+                                       data-equipment-name="${escapeHtml(eq.equipment_name)}"
+                                       data-max="${eq.max_quantity || eq.quantity}"
+                                       value="${eq.quantity}"
+                                       min="0"
+                                       max="${eq.max_quantity || eq.quantity}"
+                                       step="1">
+                                <span class="qty-unit">шт.</span>
+                            </div>
+                            <button type="button" class="edit-slot-remove-equipment-btn" data-eq-id="${eq.equipment_id}" title="Удалить оборудование">
                                 <i class="fa fa-trash" aria-hidden="true"></i>
                             </button>
                         </div>
-                    `;
-                });
-            } else {
-                equipmentHtml = '<div class="text-muted">Нет оборудования</div>';
-            }
-            
-            slotsHtml += `
-                <div class="edit-slot-item" data-slot-index="${slotIndex}">
-                    <div class="edit-slot-header">
-                        <div class="edit-slot-time">
-                            <i class="fa fa-clock-o" aria-hidden="true"></i>
-                            <input type="datetime-local" 
-                                   class="edit-slot-start-input" 
-                                   value="${formatDateTimeForInput(slot.date_start)}"
-                                   style="width: 160px;">
-                            -
-                            <input type="datetime-local" 
-                                   class="edit-slot-end-input" 
-                                   value="${formatDateTimeForInput(slot.date_end)}"
-                                   style="width: 160px;">
-                        </div>
-                        <button class="remove-slot-btn" data-slot-index="${slotIndex}" title="Удалить слот">
-                            <i class="fa fa-trash" aria-hidden="true"></i> Удалить слот
-                        </button>
                     </div>
-                    <div class="edit-slot-equipment-list">
-                        ${equipmentHtml}
+                `;
+            });
+        } else {
+            equipmentHtml = '<div class="edit-slot-no-equipment">Нет оборудования</div>';
+        }
+        
+        slotsHtml += `
+            <div class="edit-slot-group" data-slot-index="${slotIndex}" data-slot-start="${slot.date_start}" data-slot-end="${slot.date_end}">
+                <div class="edit-slot-group-header">
+                    <div class="edit-slot-group-title">
+                        <i class="fa fa-calendar" aria-hidden="true"></i>
+                        <span class="slot-date-display">${slotDateFormatted}</span>
+                        <i class="fa fa-clock-o" aria-hidden="true"></i>
+                        <span class="slot-time-display">${startTimeFormatted} - ${endTimeFormatted}</span>
                     </div>
-                    <button class="add-equipment-to-slot-btn" data-slot-index="${slotIndex}">
+                    <button type="button" class="edit-slot-group-remove-btn" data-slot-index="${slotIndex}" title="Удалить слот">
+                        <i class="fa fa-trash" aria-hidden="true"></i> Удалить слот
+                    </button>
+                </div>
+                <div class="edit-slot-equipment-list">
+                    ${equipmentHtml}
+                </div>
+                <div class="edit-slot-group-footer">
+                    <button type="button" class="edit-slot-add-equipment-btn" data-slot-index="${slotIndex}">
                         <i class="fa fa-plus" aria-hidden="true"></i> Добавить оборудование
                     </button>
                 </div>
-            `;
-        });
-    } else {
-        slotsHtml = '<div class="text-center" style="padding: 1rem; color: #94a3b8;">Нет слотов</div>';
-    }
+            </div>
+        `;
+    });
     
     const modalContent = `
         <div class="edit-slots-container">
@@ -692,10 +731,9 @@ const displayEditSlotsOrderModal = (order) => {
                 <textarea id="editOrderComment" class="edit-comment-input" rows="2">${escapeHtml(order.comment || '')}</textarea>
             </div>
             <div class="edit-slots-list">
-                <h4><i class="fa fa-clock-o"></i> Слоты</h4>
                 ${slotsHtml}
             </div>
-            <button id="addNewSlotToEditOrder" class="btn btn-sm btn-main" style="margin-top: 1rem;">
+            <button id="addNewSlotToEditOrder" class="btn-add-slot">
                 <i class="fa fa-plus" aria-hidden="true"></i> Добавить новый слот
             </button>
         </div>
@@ -707,7 +745,83 @@ const displayEditSlotsOrderModal = (order) => {
     bindEditSlotsOrderHandlers();
 };
 
-// Привязка обработчиков для редактора слотов в заявках
+// Получение максимального количества строк в любом типе оборудования
+const getMaxEquipmentRows = (typesMap) => {
+    let maxRows = 0;
+    for (const [_, equipmentList] of typesMap) {
+        maxRows = Math.max(maxRows, equipmentList.length);
+    }
+    return maxRows;
+};
+
+// Генерация строк таблицы оборудования для слота
+const generateSlotEquipmentRows = (typesMap, allTypes, maxRows, orderId, slotIndex) => {
+    let rows = '';
+    
+    // Создаем массив данных по типам
+    const typesData = [];
+    for (const typeName of allTypes) {
+        const equipmentList = typesMap.get(typeName) || [];
+        typesData.push({
+            name: typeName,
+            equipment: equipmentList
+        });
+    }
+    
+    for (let i = 0; i < maxRows; i++) {
+        let row = '<tr>';
+        
+        for (let j = 0; j < typesData.length; j++) {
+            const typeData = typesData[j];
+            const equipment = typeData.equipment[i];
+            
+            if (equipment) {
+                const commonBadge = equipment.is_common ? 
+                    '<span class="common-badge-small"><i class="fa fa-globe"></i></span>' : '';
+                
+                row += `
+                    <td class="equipment-cell">
+                        <div class="equipment-name-with-quantity">
+                            <span class="equipment-name">${escapeHtml(equipment.name)}</span>
+                            ${commonBadge}
+                            <span class="equipment-quantity-badge">${equipment.max_quantity} шт.</span>
+                        </div>
+                        <div class="equipment-control-cell">
+                            <input type="number" 
+                                   class="slot-equipment-qty" 
+                                   data-slot-index="${slotIndex}"
+                                   data-eq-id="${equipment.equipment_id}"
+                                   data-equipment-name="${escapeHtml(equipment.name)}"
+                                   data-type-name="${escapeHtml(typeData.name)}"
+                                   data-is-common="${equipment.is_common}"
+                                   data-max="${equipment.max_quantity}"
+                                   value="${equipment.quantity}"
+                                   min="0"
+                                   max="${equipment.max_quantity}"
+                                   step="1"
+                                   style="width: 80px;">
+                            <button type="button" class="remove-slot-equipment-btn" 
+                                    data-slot-index="${slotIndex}"
+                                    data-eq-id="${equipment.equipment_id}"
+                                    title="Удалить оборудование">
+                                <i class="fa fa-trash" aria-hidden="true"></i>
+                            </button>
+                        </div>
+                    </td>
+                `;
+            } else {
+                row += `<td class="equipment-cell empty">—</td>`;
+            }
+        }
+        
+        row += '</tr>';
+        rows += row;
+    }
+    
+    return rows;
+};
+
+// Привязка обработчиков для редактора слотов
 const bindEditSlotsOrderHandlers = () => {
     // Сохранение
     $('#saveEditBtn').off('click').on('click', () => {
@@ -715,23 +829,31 @@ const bindEditSlotsOrderHandlers = () => {
     });
     
     // Удаление слота
-    $('.remove-slot-btn').off('click').on('click', function() {
-        $(this).closest('.edit-slot-item').remove();
-        reindexEditSlots();
+    $('.edit-slot-group-remove-btn').off('click').on('click', function() {
+        const slotIndex = $(this).data('slot-index');
+        $(`.edit-slot-group[data-slot-index="${slotIndex}"]`).remove();
+        reindexEditSlotGroups();
         showNotification('Слот удален', 'info');
     });
     
     // Удаление оборудования из слота
-    $('.remove-slot-equipment-btn').off('click').on('click', function() {
-        $(this).closest('.edit-slot-equipment-item').remove();
-        const $parentList = $(this).closest('.edit-slot-equipment-list');
-        if ($parentList.children('.edit-slot-equipment-item').length === 0) {
-            $parentList.html('<div class="text-muted">Нет оборудования</div>');
+    $('.edit-slot-remove-equipment-btn').off('click').on('click', function() {
+        const $btn = $(this);
+        const eqId = $btn.data('eq-id');
+        const $slotGroup = $btn.closest('.edit-slot-group');
+        
+        $(`.edit-slot-equipment-row[data-eq-id="${eqId}"]`, $slotGroup).remove();
+        
+        // Если в слоте не осталось оборудования, показываем сообщение
+        const $equipmentList = $slotGroup.find('.edit-slot-equipment-list');
+        if ($equipmentList.find('.edit-slot-equipment-row').length === 0) {
+            $equipmentList.html('<div class="edit-slot-no-equipment">Нет оборудования</div>');
         }
+        
         showNotification('Оборудование удалено из слота', 'info');
     });
     
-    // Изменение количества
+    // Изменение количества оборудования
     $('.edit-slot-qty').off('change').on('change', function() {
         let val = parseInt($(this).val());
         const max = parseInt($(this).data('max'));
@@ -742,15 +864,944 @@ const bindEditSlotsOrderHandlers = () => {
     });
     
     // Добавление оборудования в слот
-    $('.add-equipment-to-slot-btn').off('click').on('click', function() {
+    $('.edit-slot-add-equipment-btn').off('click').on('click', function() {
         const slotIndex = $(this).data('slot-index');
-        openAddEquipmentForEditSlot(parseInt(slotIndex));
+        openAddEquipmentForSlot(slotIndex);
     });
     
     // Добавление нового слота
     $('#addNewSlotToEditOrder').off('click').on('click', () => {
-        addNewEmptySlotToEditOrder();
+        addNewEmptySlot();
     });
+};
+
+// Открытие модального окна добавления оборудования для слота
+const openAddEquipmentForSlot = async (slotIndex) => {
+    if (!currentEditingOrderData) return;
+    
+    const locationId = currentEditingOrderData.location_id;
+    
+    try {
+        const response = await api.getEquipment(locationId, []);
+        
+        if (response.success && response.equipment) {
+            displayAvailableEquipmentForSlot(slotIndex, response.equipment);
+        } else {
+            showNotification('Ошибка загрузки оборудования', 'error');
+        }
+    } catch (error) {
+        console.error('Ошибка:', error);
+        showNotification('Ошибка загрузки оборудования', 'error');
+    }
+};
+
+// Отображение доступного оборудования для слота
+const displayAvailableEquipmentForSlot = (slotIndex, equipment) => {
+    const $slotGroup = $(`.edit-slot-group[data-slot-index="${slotIndex}"]`);
+    
+    // Получаем уже добавленные ID оборудования
+    const addedIds = [];
+    $slotGroup.find('.edit-slot-equipment-row').each(function() {
+        const eqId = $(this).data('eq-id');
+        if (eqId) addedIds.push(parseInt(eqId));
+    });
+    
+    // Группируем оборудование по типам
+    const typesMap = new Map();
+    
+    equipment.forEach(eq => {
+        if (!addedIds.includes(eq.equipment_id)) {
+            const typeName = eq.type_name;
+            if (!typesMap.has(typeName)) {
+                typesMap.set(typeName, []);
+            }
+            typesMap.get(typeName).push(eq);
+        }
+    });
+    
+    if (typesMap.size === 0) {
+        $('#addEquipmentContent').html('<div class="text-center" style="padding: 2rem;">Все оборудование уже добавлено</div>');
+        $('#addEquipmentModal').css('display', 'flex');
+        $('#addEquipmentModal').data('current-slot-index', slotIndex);
+        
+        $('#confirmAddEquipmentBtn').off('click').one('click', () => {
+            const currentSlotIndex = $('#addEquipmentModal').data('current-slot-index');
+            addEquipmentToSlot(currentSlotIndex);
+        });
+        return;
+    }
+    
+    let html = '<div class="available-equipment-list">';
+    
+    for (const [typeName, eqList] of typesMap) {
+        html += `
+            <div class="equipment-type-group">
+                <div class="equipment-type-header">${escapeHtml(typeName)}</div>
+        `;
+        
+        eqList.forEach(eq => {
+            const commonBadge = eq.is_common ? 
+                '<span class="common-badge-small"><i class="fa fa-globe"></i> Общее</span>' : '';
+            
+            html += `
+                <div class="available-equipment-item" data-eq-id="${eq.equipment_id}" data-is-common="${eq.is_common || false}" data-type-name="${escapeHtml(typeName)}" data-eq-name="${escapeHtml(eq.name)}" data-max-qty="${eq.quantity}">
+                    <div class="available-equipment-info">
+                        <div class="available-equipment-name">
+                            ${escapeHtml(eq.name)}
+                            ${commonBadge}
+                        </div>
+                        <div class="available-equipment-stock">
+                            <i class="fa fa-archive" aria-hidden="true"></i> Доступно: <strong>${eq.quantity}</strong> шт.
+                        </div>
+                    </div>
+                    <div class="available-equipment-actions">
+                        <label>Кол-во:</label>
+                        <input type="number" 
+                               min="0" 
+                               max="${eq.quantity}" 
+                               value="0" 
+                               class="equipment-select-qty"
+                               data-max="${eq.quantity}"
+                               data-name="${escapeHtml(eq.name)}"
+                               data-type="${escapeHtml(typeName)}"
+                               data-is-common="${eq.is_common || false}"
+                               data-eq-id="${eq.equipment_id}">
+                    </div>
+                </div>
+            `;
+        });
+        
+        html += `</div>`;
+    }
+    
+    html += '</div>';
+    
+    $('#addEquipmentContent').html(html);
+    $('#addEquipmentModal').css('display', 'flex');
+    $('#addEquipmentModal').data('current-slot-index', slotIndex);
+    
+    $('#confirmAddEquipmentBtn').off('click').one('click', () => {
+        const currentSlotIndex = $('#addEquipmentModal').data('current-slot-index');
+        addEquipmentToSlot(currentSlotIndex);
+    });
+};
+
+// Добавление выбранного оборудования в слот
+const addEquipmentToSlot = (slotIndex) => {
+    const $slotGroup = $(`.edit-slot-group[data-slot-index="${slotIndex}"]`);
+    let $equipmentList = $slotGroup.find('.edit-slot-equipment-list');
+    
+    // Удаляем заглушку "Нет оборудования"
+    if ($equipmentList.find('.edit-slot-no-equipment').length) {
+        $equipmentList.html('');
+    }
+    
+    let addedCount = 0;
+    
+    $('.available-equipment-item').each(function() {
+        const $item = $(this);
+        const eqId = $item.data('eq-id');
+        const eqName = $item.data('eq-name');
+        const typeName = $item.data('type-name');
+        const qty = parseInt($item.find('.equipment-select-qty').val());
+        const maxQty = $item.data('max-qty');
+        const isCommon = $item.data('is-common') === true;
+        
+        if (qty > 0 && !isNaN(qty)) {
+            // Проверяем, есть ли уже такое оборудование
+            const $existing = $equipmentList.find(`.edit-slot-equipment-row[data-eq-id="${eqId}"]`);
+            
+            if ($existing.length) {
+                // Обновляем количество
+                const $qtyInput = $existing.find('.edit-slot-qty');
+                const newQty = Math.min(parseInt($qtyInput.val()) + qty, maxQty);
+                $qtyInput.val(newQty);
+            } else {
+                // Добавляем новое оборудование
+                const commonBadge = isCommon ? 
+                    '<span class="common-badge-mini"><i class="fa fa-globe"></i></span>' : '';
+                
+                const equipmentHtml = `
+                    <div class="edit-slot-equipment-row" data-eq-id="${eqId}" data-is-common="${isCommon}">
+                        <div class="edit-slot-equipment-name">
+                            ${commonBadge}
+                            <span>${escapeHtml(eqName)}</span>
+                            <span class="edit-slot-equipment-type-badge">${escapeHtml(typeName)}</span>
+                        </div>
+                        <div class="edit-slot-equipment-controls">
+                            <div class="edit-slot-equipment-quantity">
+                                <input type="number" 
+                                       class="edit-slot-qty" 
+                                       data-eq-id="${eqId}"
+                                       data-is-common="${isCommon}"
+                                       data-type-name="${escapeHtml(typeName)}"
+                                       data-equipment-name="${escapeHtml(eqName)}"
+                                       data-max="${maxQty}"
+                                       value="${qty}"
+                                       min="0"
+                                       max="${maxQty}"
+                                       step="1">
+                                <span class="qty-unit">шт.</span>
+                            </div>
+                            <button type="button" class="edit-slot-remove-equipment-btn" data-eq-id="${eqId}" title="Удалить оборудование">
+                                <i class="fa fa-trash" aria-hidden="true"></i>
+                            </button>
+                        </div>
+                    </div>
+                `;
+                $equipmentList.append(equipmentHtml);
+            }
+            addedCount++;
+        }
+    });
+    
+    if (addedCount > 0) {
+        // Привязываем обработчики к новым элементам
+        $equipmentList.find('.edit-slot-qty').off('change').on('change', function() {
+            let val = parseInt($(this).val());
+            const max = parseInt($(this).data('max'));
+            if (isNaN(val)) val = 0;
+            if (val < 0) val = 0;
+            if (val > max) val = max;
+            $(this).val(val);
+        });
+        
+        $equipmentList.find('.edit-slot-remove-equipment-btn').off('click').on('click', function() {
+            const $btn = $(this);
+            const eqIdToRemove = $btn.data('eq-id');
+            $btn.closest('.edit-slot-equipment-row').remove();
+            
+            if ($equipmentList.find('.edit-slot-equipment-row').length === 0) {
+                $equipmentList.html('<div class="edit-slot-no-equipment">Нет оборудования</div>');
+            }
+            showNotification('Оборудование удалено из слота', 'info');
+        });
+        
+        showNotification(`Добавлено ${addedCount} позиций`, 'success');
+    } else {
+        if ($equipmentList.children().length === 0) {
+            $equipmentList.html('<div class="edit-slot-no-equipment">Нет оборудования</div>');
+        }
+        showNotification('Выберите оборудование для добавления (укажите количество больше 0)', 'warning');
+    }
+    
+    $('#addEquipmentModal').hide();
+};
+
+// Добавление нового пустого слота
+const addNewEmptySlot = () => {
+    const now = new Date();
+    const nextHour = new Date(now.getTime() + 60 * 60000);
+    
+    const slotDateFormatted = now.toLocaleDateString('ru-RU', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
+    });
+    const startTimeFormatted = now.toLocaleTimeString('ru-RU', {
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+    const endTimeFormatted = nextHour.toLocaleTimeString('ru-RU', {
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+    
+    const slotIndex = $('.edit-slot-group').length;
+    
+    const slotHtml = `
+        <div class="edit-slot-group" data-slot-index="${slotIndex}">
+            <div class="edit-slot-group-header">
+                <div class="edit-slot-group-title">
+                    <i class="fa fa-calendar" aria-hidden="true"></i>
+                    <input type="date" class="slot-date-input" value="${now.toISOString().split('T')[0]}" style="width: 120px;">
+                    <i class="fa fa-clock-o" aria-hidden="true"></i>
+                    <input type="time" class="slot-time-start-input" value="${now.toTimeString().slice(0, 5)}" style="width: 80px;">
+                    -
+                    <input type="time" class="slot-time-end-input" value="${nextHour.toTimeString().slice(0, 5)}" style="width: 80px;">
+                </div>
+                <button type="button" class="edit-slot-group-remove-btn" data-slot-index="${slotIndex}" title="Удалить слот">
+                    <i class="fa fa-trash" aria-hidden="true"></i> Удалить слот
+                </button>
+            </div>
+            <div class="edit-slot-equipment-list">
+                <div class="edit-slot-no-equipment">Нет оборудования</div>
+            </div>
+            <div class="edit-slot-group-footer">
+                <button type="button" class="edit-slot-add-equipment-btn" data-slot-index="${slotIndex}">
+                    <i class="fa fa-plus" aria-hidden="true"></i> Добавить оборудование
+                </button>
+            </div>
+        </div>
+    `;
+    
+    $('.edit-slots-list').append(slotHtml);
+    bindEditSlotsOrderHandlers();
+    showNotification('Новый слот добавлен', 'success');
+};
+
+// Переиндексация групп слотов после удаления
+const reindexEditSlotGroups = () => {
+    $('.edit-slot-group').each(function(newIndex) {
+        $(this).attr('data-slot-index', newIndex);
+        $(this).find('.edit-slot-group-remove-btn').attr('data-slot-index', newIndex);
+        $(this).find('.edit-slot-add-equipment-btn').attr('data-slot-index', newIndex);
+        $(this).find('.edit-slot-qty').attr('data-slot-index', newIndex);
+    });
+};
+
+// Открытие модального окна добавления оборудования для слота
+const openAddEquipmentForEditSlotSimple = async (slotIndex) => {
+    if (!currentEditingOrderData) return;
+    
+    const locationId = currentEditingOrderData.location_id;
+    
+    try {
+        // Загружаем доступное оборудование для локации
+        const response = await api.getEquipment(locationId, []);
+        
+        if (response.success && response.equipment) {
+            displayAvailableEquipmentForSlotSimple(slotIndex, response.equipment);
+        } else {
+            showNotification('Ошибка загрузки оборудования', 'error');
+        }
+    } catch (error) {
+        console.error('Ошибка:', error);
+        showNotification('Ошибка загрузки оборудования', 'error');
+    }
+};
+
+// Отображение доступного оборудования для слота
+const displayAvailableEquipmentForSlotSimple = (slotIndex, equipment) => {
+    const $slotCard = $(`.edit-slot-card[data-slot-index="${slotIndex}"]`);
+    
+    // Получаем уже добавленные ID оборудования в этом слоте
+    const addedIds = [];
+    $slotCard.find('.edit-slot-equipment-item').each(function() {
+        const eqId = $(this).data('eq-id');
+        if (eqId) addedIds.push(parseInt(eqId));
+    });
+    
+    // Группируем оборудование по типам для удобства
+    const typesMap = new Map();
+    
+    equipment.forEach(eq => {
+        if (!addedIds.includes(eq.equipment_id)) {
+            const typeName = eq.type_name;
+            if (!typesMap.has(typeName)) {
+                typesMap.set(typeName, []);
+            }
+            typesMap.get(typeName).push(eq);
+        }
+    });
+    
+    if (typesMap.size === 0) {
+        $('#addEquipmentContent').html('<div class="text-center" style="padding: 2rem; color: #94a3b8;">Все оборудование уже добавлено</div>');
+        $('#addEquipmentModal').css('display', 'flex');
+        $('#addEquipmentModal').data('current-slot-index', slotIndex);
+        
+        $('#confirmAddEquipmentBtn').off('click').one('click', () => {
+            const currentSlotIndex = $('#addEquipmentModal').data('current-slot-index');
+            addEquipmentToSlotSimple(currentSlotIndex);
+        });
+        return;
+    }
+    
+    let html = '<div class="available-equipment-list-simple">';
+    
+    for (const [typeName, eqList] of typesMap) {
+        html += `
+            <div class="equipment-type-group-simple">
+                <div class="equipment-type-header-simple">
+                    <i class="fa fa-tag" aria-hidden="true"></i> ${escapeHtml(typeName)}
+                </div>
+                <div class="equipment-type-items-simple">
+        `;
+        
+        eqList.forEach(eq => {
+            const commonBadge = eq.is_common ? 
+                '<span class="common-badge-small"><i class="fa fa-globe"></i> Общее</span>' : '';
+            
+            html += `
+                <div class="available-equipment-item-simple" data-eq-id="${eq.equipment_id}" data-is-common="${eq.is_common || false}" data-type-name="${escapeHtml(typeName)}" data-eq-name="${escapeHtml(eq.name)}" data-max-qty="${eq.quantity}">
+                    <div class="available-equipment-info-simple">
+                        <div class="available-equipment-name-simple">
+                            ${escapeHtml(eq.name)}
+                            ${commonBadge}
+                        </div>
+                        <div class="available-equipment-stock-simple">
+                            <i class="fa fa-archive" aria-hidden="true"></i> Доступно: <strong>${eq.quantity}</strong> шт.
+                        </div>
+                    </div>
+                    <div class="available-equipment-actions-simple">
+                        <label>Количество:</label>
+                        <input type="number" 
+                               min="0" 
+                               max="${eq.quantity}" 
+                               value="0" 
+                               class="equipment-select-qty-simple"
+                               data-max="${eq.quantity}"
+                               data-name="${escapeHtml(eq.name)}"
+                               data-type="${escapeHtml(typeName)}"
+                               data-is-common="${eq.is_common || false}"
+                               data-eq-id="${eq.equipment_id}"
+                               style="width: 80px;">
+                    </div>
+                </div>
+            `;
+        });
+        
+        html += `
+                </div>
+            </div>
+        `;
+    }
+    
+    html += '</div>';
+    
+    $('#addEquipmentContent').html(html);
+    $('#addEquipmentModal').css('display', 'flex');
+    $('#addEquipmentModal').data('current-slot-index', slotIndex);
+    
+    $('#confirmAddEquipmentBtn').off('click').one('click', () => {
+        const currentSlotIndex = $('#addEquipmentModal').data('current-slot-index');
+        addEquipmentToSlotSimple(currentSlotIndex);
+    });
+};
+
+// Добавление выбранного оборудования в слот
+const addEquipmentToSlotSimple = (slotIndex) => {
+    const $slotCard = $(`.edit-slot-card[data-slot-index="${slotIndex}"]`);
+    let $equipmentList = $slotCard.find('.edit-slot-equipment-list');
+    
+    // Удаляем заглушку "Нет оборудования", если она есть
+    if ($equipmentList.find('.edit-slot-no-equipment').length) {
+        $equipmentList.html('');
+    }
+    
+    let addedCount = 0;
+    
+    $('.available-equipment-item-simple').each(function() {
+        const $item = $(this);
+        const eqId = $item.data('eq-id');
+        const eqName = $item.data('eq-name');
+        const typeName = $item.data('type-name');
+        const qty = parseInt($item.find('.equipment-select-qty-simple').val());
+        const maxQty = $item.data('max-qty');
+        const isCommon = $item.data('is-common') === true;
+        
+        if (qty > 0 && !isNaN(qty)) {
+            // Проверяем, есть ли уже такое оборудование в слоте
+            const $existing = $equipmentList.find(`.edit-slot-equipment-item[data-eq-id="${eqId}"]`);
+            
+            if ($existing.length) {
+                // Обновляем количество
+                const $qtyInput = $existing.find('.edit-slot-qty');
+                const newQty = Math.min(parseInt($qtyInput.val()) + qty, maxQty);
+                $qtyInput.val(newQty);
+            } else {
+                // Добавляем новое оборудование
+                const commonBadge = isCommon ? 
+                    '<span class="common-badge-small"><i class="fa fa-globe"></i> Общее</span>' : '';
+                
+                const equipmentHtml = `
+                    <div class="edit-slot-equipment-item" data-eq-id="${eqId}" data-is-common="${isCommon}" data-type-name="${escapeHtml(typeName)}">
+                        <div class="edit-slot-equipment-info">
+                            <div class="edit-slot-equipment-name">
+                                ${escapeHtml(eqName)}
+                                ${commonBadge}
+                                <span class="edit-slot-equipment-type">${escapeHtml(typeName)}</span>
+                            </div>
+                            <div class="edit-slot-equipment-quantity">
+                                <label>Количество:</label>
+                                <input type="number" 
+                                       class="edit-slot-qty" 
+                                       data-eq-id="${eqId}"
+                                       data-is-common="${isCommon}"
+                                       data-type-name="${escapeHtml(typeName)}"
+                                       data-equipment-name="${escapeHtml(eqName)}"
+                                       data-max="${maxQty}"
+                                       value="${qty}"
+                                       min="0"
+                                       max="${maxQty}"
+                                       step="1"
+                                       style="width: 80px;">
+                                <span class="available-stock">(доступно: ${maxQty} шт.)</span>
+                            </div>
+                        </div>
+                        <button type="button" class="remove-slot-equipment-btn" data-eq-id="${eqId}" title="Удалить">
+                            <i class="fa fa-trash" aria-hidden="true"></i>
+                        </button>
+                    </div>
+                `;
+                $equipmentList.append(equipmentHtml);
+            }
+            addedCount++;
+        }
+    });
+    
+    if (addedCount > 0) {
+        // Привязываем обработчики к новым элементам
+        $equipmentList.find('.edit-slot-qty').off('change').on('change', function() {
+            let val = parseInt($(this).val());
+            const max = parseInt($(this).data('max'));
+            if (isNaN(val)) val = 0;
+            if (val < 0) val = 0;
+            if (val > max) val = max;
+            $(this).val(val);
+        });
+        
+        $equipmentList.find('.remove-slot-equipment-btn').off('click').on('click', function() {
+            const $btn = $(this);
+            const eqIdToRemove = $btn.data('eq-id');
+            $btn.closest('.edit-slot-equipment-item').remove();
+            
+            if ($equipmentList.find('.edit-slot-equipment-item').length === 0) {
+                $equipmentList.html('<div class="edit-slot-no-equipment">Нет оборудования</div>');
+            }
+            showNotification('Оборудование удалено из слота', 'info');
+        });
+        
+        showNotification(`Добавлено ${addedCount} позиций`, 'success');
+    } else {
+        if ($equipmentList.children().length === 0) {
+            $equipmentList.html('<div class="edit-slot-no-equipment">Нет оборудования</div>');
+        }
+        showNotification('Выберите оборудование для добавления (укажите количество больше 0)', 'warning');
+    }
+    
+    $('#addEquipmentModal').hide();
+};
+
+// Добавление нового пустого слота
+const addNewEmptySlotToEditOrderSimple = () => {
+    const now = new Date();
+    const nextHour = new Date(now.getTime() + 60 * 60000);
+    
+    const slotDateFormatted = now.toLocaleDateString('ru-RU', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
+    });
+    const startTimeFormatted = now.toLocaleTimeString('ru-RU', {
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+    const endTimeFormatted = nextHour.toLocaleTimeString('ru-RU', {
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+    
+    const slotIndex = $('.edit-slot-card').length;
+    
+    const slotHtml = `
+        <div class="edit-slot-card" data-slot-index="${slotIndex}">
+            <div class="edit-slot-card-header">
+                <div class="edit-slot-card-title">
+                    <i class="fa fa-calendar" aria-hidden="true"></i>
+                    <input type="date" class="slot-date-input" value="${now.toISOString().split('T')[0]}" style="width: 130px;">
+                    <i class="fa fa-clock-o" aria-hidden="true"></i>
+                    <input type="time" class="slot-time-start-input" value="${now.toTimeString().slice(0, 5)}" style="width: 80px;">
+                    -
+                    <input type="time" class="slot-time-end-input" value="${nextHour.toTimeString().slice(0, 5)}" style="width: 80px;">
+                </div>
+                <div class="edit-slot-card-actions">
+                    <button type="button" class="edit-slot-remove-btn" data-slot-index="${slotIndex}" title="Удалить слот">
+                        <i class="fa fa-trash" aria-hidden="true"></i> Удалить слот
+                    </button>
+                </div>
+            </div>
+            <div class="edit-slot-equipment-list">
+                <div class="edit-slot-no-equipment">Нет оборудования</div>
+            </div>
+            <div class="edit-slot-footer">
+                <button type="button" class="edit-slot-add-equipment-btn" data-slot-index="${slotIndex}">
+                    <i class="fa fa-plus" aria-hidden="true"></i> Добавить оборудование
+                </button>
+            </div>
+        </div>
+    `;
+    
+    $('.edit-slots-list').append(slotHtml);
+    bindEditSlotsOrderHandlers();
+    showNotification('Новый слот добавлен', 'success');
+};
+
+// Открытие модального окна добавления оборудования для слота (матричный формат)
+const openAddEquipmentForEditSlotMatrix = async (slotIndex) => {
+    if (!currentEditingOrderData) return;
+    
+    const locationId = currentEditingOrderData.location_id;
+    
+    try {
+        // Загружаем доступное оборудование для локации
+        const response = await api.getEquipment(locationId, []);
+        
+        if (response.success && response.equipment) {
+            displayAvailableEquipmentForSlotMatrix(slotIndex, response.equipment);
+        } else {
+            showNotification('Ошибка загрузки оборудования', 'error');
+        }
+    } catch (error) {
+        console.error('Ошибка:', error);
+        showNotification('Ошибка загрузки оборудования', 'error');
+    }
+};
+
+// Отображение доступного оборудования для слота (матричный формат)
+const displayAvailableEquipmentForSlotMatrix = (slotIndex, equipment) => {
+    const $slotCard = $(`.edit-slot-card[data-slot-index="${slotIndex}"]`);
+    
+    // Получаем уже добавленные ID оборудования в этом слоте
+    const addedIds = [];
+    $slotCard.find('.slot-equipment-qty').each(function() {
+        const eqId = $(this).data('eq-id');
+        if (eqId) addedIds.push(parseInt(eqId));
+    });
+    
+    // Группируем оборудование по типам для отображения в модальном окне
+    const typesMap = new Map();
+    
+    equipment.forEach(eq => {
+        if (!addedIds.includes(eq.equipment_id)) {
+            const typeName = eq.type_name;
+            if (!typesMap.has(typeName)) {
+                typesMap.set(typeName, []);
+            }
+            typesMap.get(typeName).push(eq);
+        }
+    });
+    
+    if (typesMap.size === 0) {
+        $('#addEquipmentContent').html('<div class="text-center" style="padding: 2rem; color: #94a3b8;">Все оборудование уже добавлено</div>');
+        $('#addEquipmentModal').css('display', 'flex');
+        $('#addEquipmentModal').data('current-slot-index', slotIndex);
+        $('#confirmAddEquipmentBtn').off('click').one('click', () => {
+            const currentSlotIndex = $('#addEquipmentModal').data('current-slot-index');
+            addEquipmentToSlotMatrix(currentSlotIndex);
+        });
+        return;
+    }
+    
+    let html = '<div class="available-equipment-by-type">';
+    
+    for (const [typeName, eqList] of typesMap) {
+        html += `
+            <div class="equipment-type-group">
+                <div class="equipment-type-header"><i class="fa fa-tag" aria-hidden="true"></i> ${escapeHtml(typeName)}</div>
+                <div class="equipment-type-items">
+        `;
+        
+        eqList.forEach(eq => {
+            const commonBadge = eq.is_common ? '<span class="common-badge-small"><i class="fa fa-globe"></i> Общее</span>' : '';
+            
+            html += `
+                <div class="available-equipment-item" data-eq-id="${eq.equipment_id}" data-is-common="${eq.is_common || false}" data-type-name="${escapeHtml(typeName)}">
+                    <div class="available-equipment-info">
+                        <div class="available-equipment-name">
+                            ${escapeHtml(eq.name)}
+                            ${commonBadge}
+                        </div>
+                        <div class="available-equipment-stock">
+                            <i class="fa fa-archive" aria-hidden="true"></i> Доступно: <strong>${eq.quantity}</strong> шт.
+                        </div>
+                    </div>
+                    <div class="available-equipment-actions">
+                        <label>Количество:</label>
+                        <input type="number" 
+                               min="0" 
+                               max="${eq.quantity}" 
+                               value="0" 
+                               class="equipment-select-qty"
+                               data-max="${eq.quantity}"
+                               data-name="${escapeHtml(eq.name)}"
+                               data-type="${escapeHtml(typeName)}"
+                               data-is-common="${eq.is_common || false}"
+                               data-eq-id="${eq.equipment_id}"
+                               style="width: 80px;">
+                    </div>
+                </div>
+            `;
+        });
+        
+        html += `
+                </div>
+            </div>
+        `;
+    }
+    
+    html += '</div>';
+    
+    $('#addEquipmentContent').html(html);
+    $('#addEquipmentModal').css('display', 'flex');
+    $('#addEquipmentModal').data('current-slot-index', slotIndex);
+    
+    $('#confirmAddEquipmentBtn').off('click').one('click', () => {
+        const currentSlotIndex = $('#addEquipmentModal').data('current-slot-index');
+        addEquipmentToSlotMatrix(currentSlotIndex);
+    });
+};
+
+// Добавление оборудования в слот (матричный формат)
+const addEquipmentToSlotMatrix = (slotIndex) => {
+    const $slotCard = $(`.edit-slot-card[data-slot-index="${slotIndex}"]`);
+    let $tbody = $slotCard.find('tbody');
+    
+    // Если сейчас отображается заглушка "Нет оборудования", очищаем таблицу
+    if ($tbody.find('.text-center').length) {
+        $tbody.html('');
+    }
+    
+    // Собираем текущую структуру типов и оборудования
+    const currentTypesMap = new Map();
+    
+    $tbody.find('tr').each(function() {
+        const $row = $(this);
+        const $cells = $row.find('.equipment-cell');
+        
+        $cells.each(function(index) {
+            const $cell = $(this);
+            const typeName = $cell.closest('table').find('thead th').eq(index).text();
+            const $qtyInput = $cell.find('.slot-equipment-qty');
+            
+            if ($qtyInput.length) {
+                if (!currentTypesMap.has(typeName)) {
+                    currentTypesMap.set(typeName, []);
+                }
+                currentTypesMap.get(typeName).push({
+                    equipment_id: $qtyInput.data('eq-id'),
+                    equipment_name: $qtyInput.data('equipment-name'),
+                    quantity: parseInt($qtyInput.val()),
+                    max_quantity: $qtyInput.data('max'),
+                    is_common: $qtyInput.data('is-common') === true,
+                    type_name: typeName
+                });
+            }
+        });
+    });
+    
+    // Добавляем выбранное оборудование
+    let addedCount = 0;
+    
+    $('.available-equipment-item').each(function() {
+        const $item = $(this);
+        const eqId = $item.data('eq-id');
+        const eqName = $item.find('.available-equipment-name').clone().children().remove().end().text().trim();
+        const typeName = $item.data('type-name');
+        const qty = parseInt($item.find('.equipment-select-qty').val());
+        const maxQty = parseInt($item.find('.equipment-select-qty').data('max'));
+        const isCommon = $item.data('is-common') === true;
+        
+        if (qty > 0 && !isNaN(qty)) {
+            if (!currentTypesMap.has(typeName)) {
+                currentTypesMap.set(typeName, []);
+            }
+            
+            // Проверяем, есть ли уже такое оборудование в этом типе
+            const existingIndex = currentTypesMap.get(typeName).findIndex(e => e.equipment_id === eqId);
+            if (existingIndex !== -1) {
+                // Обновляем количество
+                const existing = currentTypesMap.get(typeName)[existingIndex];
+                const newQty = Math.min(existing.quantity + qty, maxQty);
+                existing.quantity = newQty;
+            } else {
+                // Добавляем новое
+                currentTypesMap.get(typeName).push({
+                    equipment_id: eqId,
+                    equipment_name: eqName,
+                    quantity: qty,
+                    max_quantity: maxQty,
+                    is_common: isCommon,
+                    type_name: typeName
+                });
+            }
+            addedCount++;
+        }
+    });
+    
+    if (addedCount === 0) {
+        showNotification('Выберите оборудование для добавления (укажите количество больше 0)', 'warning');
+        return;
+    }
+    
+    // Сортируем оборудование внутри каждого типа
+    for (const [typeName, equipmentList] of currentTypesMap) {
+        equipmentList.sort((a, b) => a.equipment_name.localeCompare(b.equipment_name));
+    }
+    
+    // Перестраиваем таблицу
+    rebuildSlotEquipmentTable($slotCard, currentTypesMap);
+    
+    $('#addEquipmentModal').hide();
+    showNotification(`Добавлено ${addedCount} позиций`, 'success');
+};
+
+// Перестроение таблицы оборудования слота
+const rebuildSlotEquipmentTable = ($slotCard, typesMap) => {
+    const allTypes = Array.from(typesMap.keys());
+    const maxRows = getMaxEquipmentRows(typesMap);
+    
+    let theadHtml = '<tr>';
+    for (const typeName of allTypes) {
+        theadHtml += `<th class="type-col">${escapeHtml(typeName)}</th>`;
+    }
+    theadHtml += '</tr>';
+    
+    let tbodyHtml = '';
+    for (let i = 0; i < maxRows; i++) {
+        let row = '<tr>';
+        for (let j = 0; j < allTypes.length; j++) {
+            const typeName = allTypes[j];
+            const equipmentList = typesMap.get(typeName) || [];
+            const equipment = equipmentList[i];
+            
+            if (equipment) {
+                const commonBadge = equipment.is_common ? 
+                    '<span class="common-badge-small"><i class="fa fa-globe"></i></span>' : '';
+                
+                row += `
+                    <td class="equipment-cell">
+                        <div class="equipment-name-with-quantity">
+                            <span class="equipment-name">${escapeHtml(equipment.equipment_name)}</span>
+                            ${commonBadge}
+                            <span class="equipment-quantity-badge">${equipment.max_quantity} шт.</span>
+                        </div>
+                        <div class="equipment-control-cell">
+                            <input type="number" 
+                                   class="slot-equipment-qty" 
+                                   data-slot-index="${$slotCard.data('slot-index')}"
+                                   data-eq-id="${equipment.equipment_id}"
+                                   data-equipment-name="${escapeHtml(equipment.equipment_name)}"
+                                   data-type-name="${escapeHtml(typeName)}"
+                                   data-is-common="${equipment.is_common}"
+                                   data-max="${equipment.max_quantity}"
+                                   value="${equipment.quantity}"
+                                   min="0"
+                                   max="${equipment.max_quantity}"
+                                   step="1"
+                                   style="width: 80px;">
+                            <button type="button" class="remove-slot-equipment-btn" 
+                                    data-slot-index="${$slotCard.data('slot-index')}"
+                                    data-eq-id="${equipment.equipment_id}"
+                                    title="Удалить оборудование">
+                                <i class="fa fa-trash" aria-hidden="true"></i>
+                            </button>
+                        </div>
+                    </td>
+                `;
+            } else {
+                row += `<td class="equipment-cell empty">—</td>`;
+            }
+        }
+        row += '</tr>';
+        tbodyHtml += row;
+    }
+    
+    // Обновляем таблицу
+    $slotCard.find('.edit-slot-equipment-matrix').html(`
+        <table class="equipment-matrix-table">
+            <thead>${theadHtml}</thead>
+            <tbody>${tbodyHtml}</tbody>
+        </table>
+    `);
+    
+    // Перепривязываем обработчики
+    $slotCard.find('.slot-equipment-qty').off('change').on('change', function() {
+        let val = parseInt($(this).val());
+        const max = parseInt($(this).data('max'));
+        if (isNaN(val)) val = 0;
+        if (val < 0) val = 0;
+        if (val > max) val = max;
+        $(this).val(val);
+    });
+    
+    $slotCard.find('.remove-slot-equipment-btn').off('click').on('click', function() {
+        const $btn = $(this);
+        const slotIdx = $btn.data('slot-index');
+        const eqId = $btn.data('eq-id');
+        
+        const $targetSlotCard = $(`.edit-slot-card[data-slot-index="${slotIdx}"]`);
+        const $row = $btn.closest('tr');
+        
+        $row.find(`.equipment-cell`).each(function() {
+            const $cell = $(this);
+            if ($cell.find(`.remove-slot-equipment-btn[data-eq-id="${eqId}"]`).length) {
+                $cell.html('<span class="empty-placeholder">—</span>');
+            }
+        });
+        
+        showNotification('Оборудование удалено из слота', 'info');
+    });
+};
+
+// Переиндексация карточек слотов после удаления
+const reindexEditSlotsCards = () => {
+    $('.edit-slot-card').each(function(newIndex) {
+        $(this).attr('data-slot-index', newIndex);
+        $(this).find('.edit-slot-remove-btn').attr('data-slot-index', newIndex);
+        $(this).find('.edit-slot-add-equipment-btn').attr('data-slot-index', newIndex);
+        $(this).find('.edit-slot-qty').attr('data-slot-index', newIndex);
+        $(this).find('.remove-slot-equipment-btn').attr('data-slot-index', newIndex);
+    });
+};
+
+// Добавление нового пустого слота
+const addNewEmptySlotToEditOrderMatrix = () => {
+    const now = new Date();
+    const nextHour = new Date(now.getTime() + 60 * 60000);
+    
+    const formatForInputDateTime = (date) => {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        const hours = String(date.getHours()).padStart(2, '0');
+        const minutes = String(date.getMinutes()).padStart(2, '0');
+        return `${year}-${month}-${day}T${hours}:${minutes}`;
+    };
+    
+    const slotIndex = $('.edit-slot-card').length;
+    const slotDate = now.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
+    const startTime = now.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+    const endTime = nextHour.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+    
+    const slotHtml = `
+        <div class="edit-slot-card" data-slot-index="${slotIndex}">
+            <div class="edit-slot-card-header">
+                <div class="edit-slot-card-title">
+                    <i class="fa fa-clock-o" aria-hidden="true"></i>
+                    <input type="date" class="slot-date-input" value="${now.toISOString().split('T')[0]}" style="width: 140px;">
+                    <input type="time" class="slot-time-start-input" value="${now.toTimeString().slice(0, 5)}" style="width: 90px;">
+                    -
+                    <input type="time" class="slot-time-end-input" value="${nextHour.toTimeString().slice(0, 5)}" style="width: 90px;">
+                </div>
+                <div class="edit-slot-card-actions">
+                    <button type="button" class="edit-slot-remove-btn" data-slot-index="${slotIndex}" title="Удалить слот">
+                        <i class="fa fa-trash" aria-hidden="true"></i> Удалить слот
+                    </button>
+                </div>
+            </div>
+            <div class="edit-slot-equipment-matrix">
+                <table class="equipment-matrix-table">
+                    <tbody>
+                        <tr>
+                            <td colspan="100%" class="text-center" style="padding: 2rem; color: #94a3b8;">
+                                <i class="fa fa-info-circle" aria-hidden="true"></i> Нет оборудования. Нажмите "Добавить оборудование"
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="edit-slot-footer">
+                <button type="button" class="edit-slot-add-equipment-btn" data-slot-index="${slotIndex}">
+                    <i class="fa fa-plus" aria-hidden="true"></i> Добавить оборудование
+                </button>
+            </div>
+        </div>
+    `;
+    
+    $('.edit-slots-list').append(slotHtml);
+    bindEditSlotsOrderHandlers();
+    showNotification('Новый слот добавлен', 'success');
 };
 
 // Открытие модального окна добавления оборудования для слота при редактировании заявки
@@ -942,11 +1993,59 @@ const saveEditedSlotsOrder = async () => {
     const newSlots = [];
     let hasError = false;
     
-    $('.edit-slot-item').each(function(index) {
-        const $slot = $(this);
+    $('.edit-slot-group').each(function(index) {
+        const $slotGroup = $(this);
         
-        const dateStart = $slot.find('.edit-slot-start-input').val();
-        const dateEnd = $slot.find('.edit-slot-end-input').val();
+        let dateStart, dateEnd;
+        
+        // Пытаемся получить даты из полей ввода (для новых слотов)
+        const $dateInput = $slotGroup.find('.slot-date-input');
+        const $startTimeInput = $slotGroup.find('.slot-time-start-input');
+        const $endTimeInput = $slotGroup.find('.slot-time-end-input');
+        
+        if ($dateInput.length && $startTimeInput.length && $endTimeInput.length) {
+            // Новый слот с полями ввода
+            const dateStr = $dateInput.val();
+            const startTimeStr = $startTimeInput.val();
+            const endTimeStr = $endTimeInput.val();
+            
+            if (dateStr && startTimeStr && endTimeStr) {
+                dateStart = `${dateStr}T${startTimeStr}`;
+                dateEnd = `${dateStr}T${endTimeStr}`;
+            } else {
+                showNotification(`Ошибка: не указаны даты для слота ${index + 1}`, 'error');
+                hasError = true;
+                return false;
+            }
+        } else {
+            // Существующий слот - берем из отображаемых данных
+            const $dateSpan = $slotGroup.find('.slot-date-display');
+            const $timeSpan = $slotGroup.find('.slot-time-display');
+            
+            if ($dateSpan.length && $timeSpan.length) {
+                const dateText = $dateSpan.text().trim();
+                const timeText = $timeSpan.text().trim();
+                const [startTime, endTime] = timeText.split(' - ');
+                
+                // Парсим дату из формата "DD.MM.YYYY"
+                const dateParts = dateText.split('.');
+                if (dateParts.length === 3) {
+                    const year = dateParts[2];
+                    const month = dateParts[1];
+                    const day = dateParts[0];
+                    dateStart = `${year}-${month}-${day}T${startTime}`;
+                    dateEnd = `${year}-${month}-${day}T${endTime}`;
+                } else {
+                    showNotification(`Ошибка: не удалось распознать дату для слота ${index + 1}`, 'error');
+                    hasError = true;
+                    return false;
+                }
+            } else {
+                showNotification(`Ошибка: не удалось распознать дату для слота ${index + 1}`, 'error');
+                hasError = true;
+                return false;
+            }
+        }
         
         if (!dateStart || !dateEnd) {
             showNotification(`Ошибка: не указаны даты для слота ${index + 1}`, 'error');
@@ -972,16 +2071,17 @@ const saveEditedSlotsOrder = async () => {
             return false;
         }
         
+        // Собираем оборудование
         const equipment = [];
-        $slot.find('.edit-slot-equipment-item').each(function() {
-            const $eq = $(this);
-            const eqId = $eq.data('eq-id');
-            const eqName = $eq.find('span').first().text().trim();
-            const eqType = $eq.data('type-name') || 'Оборудование';
-            const quantity = parseInt($eq.find('.edit-slot-qty').val());
-            const isCommon = $eq.data('is-common') === true;
+        $slotGroup.find('.edit-slot-qty').each(function() {
+            const $input = $(this);
+            const eqId = $input.data('eq-id');
+            const eqName = $input.data('equipment-name');
+            const eqType = $input.data('type-name');
+            const quantity = parseInt($input.val());
+            const isCommon = $input.data('is-common') === true;
             
-            if (quantity > 0) {
+            if (quantity > 0 && !isNaN(quantity)) {
                 equipment.push({
                     equipment_id: eqId,
                     equipment_name: eqName,
@@ -1018,18 +2118,22 @@ const saveEditedSlotsOrder = async () => {
     saveBtn.prop('disabled', true).text('Сохранение...');
     
     try {
-        const response = await api.updateOrder(currentEditingOrderId, {
+        const updateData = {
             date_time_start: newCommonStart,
             date_time_end: newCommonEnd,
             comment: newComment,
             slots: newSlots,
             type: 'slots'
-        });
+        };
+        
+        console.log('Отправляем данные на сервер:', updateData);
+        
+        const response = await api.updateOrder(currentEditingOrderId, updateData);
         
         if (response.success) {
             showNotification('Заказ успешно обновлен', 'success');
             $('#editOrderModal').hide();
-            loadOrders(); // Перезагружаем список заявок
+            loadOrders();
         } else {
             showNotification(response.error || 'Ошибка при обновлении', 'error');
         }
@@ -1039,6 +2143,26 @@ const saveEditedSlotsOrder = async () => {
     } finally {
         saveBtn.prop('disabled', false).text(originalText);
     }
+};
+
+// Вспомогательная функция для парсинга русской даты
+const parseRussianDate = (dateStr) => {
+    const months = {
+        'января': '01', 'февраля': '02', 'марта': '03', 'апреля': '04',
+        'мая': '05', 'июня': '06', 'июля': '07', 'августа': '08',
+        'сентября': '09', 'октября': '10', 'ноября': '11', 'декабря': '12'
+    };
+    
+    const match = dateStr.match(/(\d+)\s+(\w+)/);
+    if (match) {
+        const day = match[1].padStart(2, '0');
+        const month = months[match[2]];
+        const year = new Date().getFullYear();
+        if (month) {
+            return `${year}-${month}-${day}`;
+        }
+    }
+    return null;
 };
 
 // Добавление нового пустого слота

@@ -2830,7 +2830,7 @@ def get_application_detail(request, app_id):
 
 @login_required
 def get_order_details(request, order_id):
-    """Получение деталей заказа для редактирования с проверкой прав"""
+    """Получение деталей заказа для редактирования с проверкой прав (группировка слотов)"""
     try:
         order = Order.objects.get(id=order_id)
         
@@ -2842,27 +2842,71 @@ def get_order_details(request, order_id):
             }, status=403)
         
         items = OrderItem.objects.filter(order=order)
-        equipment_list = []
+        
+        # Разделяем на обычные позиции и слоты
+        regular_equipment = []
+        slots_map = {}  # Используем словарь для группировки слотов по времени
         
         for item in items:
-            if item.equipment_location:
-                equipment_list.append({
-                    'equipment_id': item.equipment_location.id_equipments.id,
-                    'equipment_name': item.equipment_location.id_equipments.name,
-                    'type_name': item.equipment_location.id_types_equipments.name,
-                    'quantity': item.quantity,
-                    'is_common': False,
-                    'max_quantity': item.equipment_location.quantity
-                })
-            elif item.common_equipment_location:
-                equipment_list.append({
-                    'equipment_id': item.common_equipment_location.id_equipments.id,
-                    'equipment_name': item.common_equipment_location.id_equipments.name,
-                    'type_name': item.common_equipment_location.id_types_equipments.name,
-                    'quantity': item.quantity,
-                    'is_common': True,
-                    'max_quantity': item.common_equipment_location.quantity
-                })
+            if item.is_slot:
+                # Ключ для группировки - дата и время слота
+                if item.slot_date_start and item.slot_date_end:
+                    slot_key = f"{item.slot_date_start.isoformat()}|{item.slot_date_end.isoformat()}"
+                    
+                    if slot_key not in slots_map:
+                        slots_map[slot_key] = {
+                            'date_start': item.slot_date_start.isoformat(),
+                            'date_end': item.slot_date_end.isoformat(),
+                            'equipment': []
+                        }
+                    
+                    # Добавляем оборудование в слот
+                    if item.equipment_location:
+                        slots_map[slot_key]['equipment'].append({
+                            'equipment_id': item.equipment_location.id_equipments.id,
+                            'equipment_name': item.equipment_location.id_equipments.name,
+                            'type_name': item.equipment_location.id_types_equipments.name,
+                            'quantity': item.quantity,
+                            'max_quantity': item.equipment_location.quantity,
+                            'is_common': False,
+                            'order_item_id': item.id
+                        })
+                    elif item.common_equipment_location:
+                        slots_map[slot_key]['equipment'].append({
+                            'equipment_id': item.common_equipment_location.id_equipments.id,
+                            'equipment_name': item.common_equipment_location.id_equipments.name,
+                            'type_name': item.common_equipment_location.id_types_equipments.name,
+                            'quantity': item.quantity,
+                            'max_quantity': item.common_equipment_location.quantity,
+                            'is_common': True,
+                            'order_item_id': item.id
+                        })
+            else:
+                # Обычная позиция (не слот)
+                if item.equipment_location:
+                    regular_equipment.append({
+                        'equipment_id': item.equipment_location.id_equipments.id,
+                        'equipment_name': item.equipment_location.id_equipments.name,
+                        'type_name': item.equipment_location.id_types_equipments.name,
+                        'quantity': item.quantity,
+                        'is_common': False,
+                        'max_quantity': item.equipment_location.quantity,
+                        'order_item_id': item.id
+                    })
+                elif item.common_equipment_location:
+                    regular_equipment.append({
+                        'equipment_id': item.common_equipment_location.id_equipments.id,
+                        'equipment_name': item.common_equipment_location.id_equipments.name,
+                        'type_name': item.common_equipment_location.id_types_equipments.name,
+                        'quantity': item.quantity,
+                        'is_common': True,
+                        'max_quantity': item.common_equipment_location.quantity,
+                        'order_item_id': item.id
+                    })
+        
+        # Преобразуем словарь в список и сортируем по дате начала
+        slots_list = list(slots_map.values())
+        slots_list.sort(key=lambda x: x['date_start'])
         
         return JsonResponse({
             'success': True,
@@ -2873,13 +2917,18 @@ def get_order_details(request, order_id):
                 'date_time_start': order.date_time_start.isoformat() if order.date_time_start else None,
                 'date_time_end': order.date_time_end.isoformat() if order.date_time_end else None,
                 'comment': order.comment or '',
-                'equipment': equipment_list,
+                'equipment': regular_equipment,
+                'slots': slots_list,  # Теперь это сгруппированные слоты
+                'has_slots': len(slots_list) > 0,
                 'can_edit': (order.id_user == request.user) or user_can_edit_all_applications(request.user)
             }
         })
     except Order.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'Заказ не найден'}, status=404)
     except Exception as e:
+        print(f"Ошибка в get_order_details: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 
@@ -2887,7 +2936,7 @@ def get_order_details(request, order_id):
 @csrf_exempt
 @require_http_methods(["POST"])
 def update_order(request, order_id):
-    """Обновление заказа с проверкой прав"""
+    """Обновление заказа с проверкой прав (поддержка слотов)"""
     try:
         data = json.loads(request.body)
         order = Order.objects.get(id=order_id)
@@ -2906,6 +2955,7 @@ def update_order(request, order_id):
             }, status=400)
         
         with transaction.atomic():
+            # Обновляем основные поля заказа
             if 'date_time_start' in data:
                 order.date_time_start = data['date_time_start']
             if 'date_time_end' in data:
@@ -2914,43 +2964,133 @@ def update_order(request, order_id):
                 order.comment = data['comment']
             order.save()
             
-            if 'equipment' in data:
-                OrderItem.objects.filter(order=order).delete()
-                for eq_data in data['equipment']:
-                    if eq_data.get('quantity', 0) > 0:
-                        if eq_data.get('is_common', False):
+            # Удаляем старые позиции
+            OrderItem.objects.filter(order=order).delete()
+            
+            items_added = 0
+            
+            # ========== ОБРАБОТКА СЛОТОВ ==========
+            slots_data = data.get('slots', [])
+            is_slots_order = data.get('type') == 'slots' or len(slots_data) > 0
+            
+            if is_slots_order and slots_data:
+                for slot in slots_data:
+                    slot_date_start = slot.get('date_start')
+                    slot_date_end = slot.get('date_end')
+                    slot_equipment = slot.get('equipment', [])
+                    
+                    if not slot_date_start or not slot_date_end:
+                        continue
+                    
+                    for eq in slot_equipment:
+                        equipment_id = eq.get('equipment_id')
+                        quantity = eq.get('quantity', 0)
+                        is_common = eq.get('is_common', False)
+                        
+                        if quantity <= 0:
+                            continue
+                        
+                        if is_common:
                             common_equipment = CommonEquipmentLocation.objects.filter(
-                                id_equipments_id=eq_data['equipment_id']
+                                id_equipments_id=equipment_id
                             ).first()
                             if common_equipment:
                                 OrderItem.objects.create(
                                     order=order,
                                     common_equipment_location=common_equipment,
-                                    quantity=min(eq_data['quantity'], common_equipment.quantity)
+                                    quantity=min(quantity, common_equipment.quantity),
+                                    is_slot=True,
+                                    slot_date_start=slot_date_start,
+                                    slot_date_end=slot_date_end
                                 )
+                                items_added += 1
                         else:
                             if order.id_location:
                                 equipment_location = EquipmentLocation.objects.filter(
                                     id_locations_id=order.id_location.id,
-                                    id_equipments_id=eq_data['equipment_id']
+                                    id_equipments_id=equipment_id
                                 ).first()
                                 if equipment_location:
                                     OrderItem.objects.create(
                                         order=order,
                                         equipment_location=equipment_location,
-                                        quantity=min(eq_data['quantity'], equipment_location.quantity)
+                                        quantity=min(quantity, equipment_location.quantity),
+                                        is_slot=True,
+                                        slot_date_start=slot_date_start,
+                                        slot_date_end=slot_date_end
                                     )
+                                    items_added += 1
+            
+            # ========== ОБЫЧНОЕ ОБОРУДОВАНИЕ (НЕ СЛОТЫ) ==========
+            equipment_data = data.get('equipment', [])
+            for eq_data in equipment_data:
+                quantity = eq_data.get('quantity', 0)
+                if quantity <= 0:
+                    continue
+                
+                if eq_data.get('is_common', False):
+                    common_equipment = CommonEquipmentLocation.objects.filter(
+                        id_equipments_id=eq_data['equipment_id']
+                    ).first()
+                    if common_equipment:
+                        OrderItem.objects.create(
+                            order=order,
+                            common_equipment_location=common_equipment,
+                            quantity=min(quantity, common_equipment.quantity),
+                            is_slot=False
+                        )
+                        items_added += 1
+                else:
+                    if order.id_location:
+                        equipment_location = EquipmentLocation.objects.filter(
+                            id_locations_id=order.id_location.id,
+                            id_equipments_id=eq_data['equipment_id']
+                        ).first()
+                        if equipment_location:
+                            OrderItem.objects.create(
+                                order=order,
+                                equipment_location=equipment_location,
+                                quantity=min(quantity, equipment_location.quantity),
+                                is_slot=False
+                            )
+                            items_added += 1
+            
+            # Если нет ни одной позиции, удаляем заказ
+            if items_added == 0:
+                order.delete()
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Не добавлено ни одной позиции'
+                }, status=400)
+            
+            # Обновляем согласования для заявки
+            if order.id_application:
+                # Собираем типы оборудования из обновленного заказа
+                equipment_types = set()
+                new_items = OrderItem.objects.filter(order=order)
+                for item in new_items:
+                    if item.equipment_location:
+                        equipment_types.add(item.equipment_location.id_types_equipments.id)
+                    elif item.common_equipment_location:
+                        equipment_types.add(item.common_equipment_location.id_types_equipments.id)
+                
+                # Обновляем согласования
+                from .views_helpers import update_application_approvals_for_types
+                update_application_approvals_for_types(order.id_application, equipment_types)
             
             HistoryService.add_entry(
                 request.user,
-                f"Редактирован заказ #{order.id} для локации {order.id_location.name if order.id_location else 'Общее оборудование'}"
+                f"Редактирован заказ #{order.id} для локации {order.id_location.name if order.id_location else 'Общее оборудование'} (слотов: {len(slots_data)})"
             )
         
-        return JsonResponse({'success': True, 'message': 'Заказ успешно обновлен'})
+        return JsonResponse({'success': True, 'message': 'Заказ успешно обновлен', 'items_added': items_added})
     
     except Order.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'Заказ не найден'}, status=404)
     except Exception as e:
+        print(f"Ошибка в update_order: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 
