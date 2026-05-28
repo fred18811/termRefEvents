@@ -64,7 +64,7 @@ const generateEquipmentEditHtml = (item, availabilityMap) => {
             const availability = availabilityMap.get(eq.equipment_id);
             const availableQty = availability ? availability.available : eq.max_quantity;
             const currentQty = Math.min(eq.quantity, availableQty);
-            const commonBadge = eq.is_common ? '<span class="common-badge-small">🌍 Общее</span>' : '';
+            const commonBadge = eq.is_common ? '<span class="common-badge-small"><i class="fa fa-globe" aria-hidden="true"></i> Общее</span>' : '';
             
             equipmentHtml += `
                 <div class="edit-equipment-item" data-eq-id="${eq.equipment_id}" data-is-common="${eq.is_common || false}">

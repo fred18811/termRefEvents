@@ -733,12 +733,23 @@ const initAllDatePickers = () => {
     initDateFields();
 };
 
+//инициализация даты мерорийтий при загрузке
+const initDataApplication = () => {
+    const dateStart = localStorage.getItem('date_start');
+    dateStart != "" ? $('#dateStart').val(dateStart) : "";
+
+    const dateEnd =localStorage.getItem('date_end');
+    dateEnd != "" ? $('#dateEnd').val(dateEnd) : "";
+}
 // ========== ИНИЦИАЛИЗАЦИЯ ОБРАБОТЧИКОВ ==========
 export const initEventHandlers = () => {
     console.log('Инициализация обработчиков событий');
     
     setupAjax();
     
+    // Инициализация дата мероприятия
+    initDataApplication();
+
     // Инициализируем все календари
     initAllDatePickers();
     
@@ -815,6 +826,11 @@ export const initEventHandlers = () => {
         
         const dateStart = $('#dateStart').val();
         const dateEnd = $('#dateEnd').val();
+
+        dateStart != "" ? localStorage.setItem('date_start',dateStart): "";
+        dateEnd != "" ? localStorage.setItem('date_end',dateEnd): "";
+
+        console.log(dateEnd)
         
         if (dateStart && dateEnd) {
             const dateValid = validateDates();

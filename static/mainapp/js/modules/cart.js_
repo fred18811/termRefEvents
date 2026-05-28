@@ -1,4 +1,4 @@
-// static/mainapp/js/modules/cart.js
+// static/mainapp/ common-badge-smalljs/modules/cart.js
 
 import { state, saveCart, clearCart } from './state.js';
 import { escapeHtml, formatDate, showNotification, validateDates } from './utils.js';

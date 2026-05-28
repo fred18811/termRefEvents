@@ -48,8 +48,12 @@ const generateSlotsEditHtml = (item) => {
             const displayTypeName = eq.type_name || 'Оборудование';
             
             equipmentHtml += `
-                <div class="edit-slot-equipment-item" data-eq-id="${eq.equipment_id}" data-type-name="${escapeHtml(displayTypeName)}">
-                    <span>${escapeHtml(eq.equipment_name)} ${escapeHtml(displayTypeName)}</span>
+                <div class="edit-slot-equipment-item" 
+                data-eq-id="${eq.equipment_id}" 
+                data-type-name="${escapeHtml(displayTypeName)}"
+                data-is-common="${eq.is_common || false}">
+                    <span>${escapeHtml(eq.equipment_name)}</span>
+                    <span>${escapeHtml(displayTypeName)}</span>
                     <input type="number" 
                            min="0" 
                            max="${eq.max_quantity || eq.quantity}" 
@@ -170,7 +174,8 @@ export const saveEditedSlots = () => {
                 eqType = $(this).find('span').first().text().match(/\((.*?)\)/)?.[1] || 'Оборудование';
             }
             const quantity = parseInt($(this).find('.edit-slot-qty').val());
-            
+            const isCommon = $(this).data('is-common') === true;
+
             if (quantity > 0) {
                 equipment.push({
                     equipment_id: eqId,
@@ -178,7 +183,7 @@ export const saveEditedSlots = () => {
                     type_name: eqType,
                     quantity: quantity,
                     max_quantity: quantity,
-                    is_common: false
+                    is_common: isCommon
                 });
             }
         });

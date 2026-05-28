@@ -1742,6 +1742,9 @@ nav {
 .cart-item-equipment {
     font-size: 0.7rem;
     color: var(--gray-600);
+    display: flex;
+    justify-content: space-between;
+    flex-direction: column;
 }
 
 .cart-item-comment {
@@ -2761,4 +2764,16 @@ nav {
     font-size: 0.875rem;
     transition: all var(--transition-base);
     background: white;
+}
+
+.equipment-type-badge {
+    color: var(--gray-400);
+}
+
+.edit-equipment-available {
+    font-size: 0.75rem;
+}
+
+.location-order-info {
+    font-size: 0.9rem;
 }

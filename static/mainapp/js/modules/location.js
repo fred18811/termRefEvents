@@ -417,7 +417,7 @@ export const displayEquipmentList = (equipment) => {
                     <div class="equipment-name">
                         ${displayName}
                         ${commonBadge}
-                        <span class="equipment-type"> | ${escapeHtml(item.type_name)}</span>
+                        <span class="equipment-type">${escapeHtml(item.type_name)}</span>
                     </div>
                     <div class="equipment-quantity">
                         <strong class="${isUnavailable ? 'text-danger' : 'text-success'}">${availableQty}</strong> шт.
@@ -608,7 +608,7 @@ export const addToCart = () => {
             return;
         }
     }
-    
+
     // Валидация дат
     const dateValid = validateDates(dateStart, dateEnd);
     if (!dateValid.valid) {

@@ -108,6 +108,15 @@ export const clearCart = () => {
     $('.location-item').removeClass('disabled');
     // Снимаем выделение с типов
     $('.type-item input').prop('checked', false);
+
+    $('dateStart').val('');
+    document.getElementById('dateStart').nextElementSibling.value = "";
+
+    $('dateEnd').val('');
+    document.getElementById('dateEnd').nextElementSibling.value = "";
+
+    localStorage.setItem('date_end','');
+    localStorage.setItem('date_start','');
     
     console.log('Корзина очищена');
 };

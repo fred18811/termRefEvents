@@ -101,6 +101,7 @@ const addEquipmentToSlot = (slotIndex) => {
         const eqName = $(this).find('.available-equipment-name').clone().children().remove().end().text().trim();
         const qty = parseInt($(this).find('.equipment-select-qty').val());
         const maxQty = parseInt($(this).find('.equipment-select-qty').data('max'));
+        const isCommon = $(this).data('is-common') || false;
         
         let eqType = $(this).find('.available-equipment-type').text().trim();
         if (!eqType || eqType === 'Оборудование') {
@@ -120,7 +121,10 @@ const addEquipmentToSlot = (slotIndex) => {
                 $input.val(finalQty);
             } else {
                 const equipmentHtml = `
-                    <div class="edit-slot-equipment-item" data-eq-id="${eqId}" data-type-name="${escapeHtml(eqType)}">
+                    <div class="edit-slot-equipment-item" 
+                    data-eq-id="${eqId}" 
+                    data-type-name="${escapeHtml(eqType)}"
+                    data-is-common="${isCommon}">
                         <span>${escapeHtml(eqName)} (${escapeHtml(eqType)})</span>
                         <input type="number" 
                                min="0" 

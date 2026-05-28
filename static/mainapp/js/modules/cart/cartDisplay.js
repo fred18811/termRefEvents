@@ -70,7 +70,7 @@ const renderRegularCartItem = (item, index) => {
                     <i class="fa fa-calendar"></i> ${startDate} - ${endDate}
                 </div>
                 <div class="cart-item-equipment">
-                    ${item.equipment.map(e => `• ${escapeHtml(e.equipment_name)}: ${e.quantity} шт.`).join('<br>')}
+                    ${item.equipment.map(e => `<span>• ${escapeHtml(e.equipment_name)}  -  ${e.quantity} шт.</span>`).join('')}
                 </div>
                 ${item.comment ? `<div class="cart-item-comment"><i class="fa fa-comment-o" aria-hidden="true"></i> ${escapeHtml(item.comment)}</div>` : ''}
             </div>
