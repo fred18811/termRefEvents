@@ -79,7 +79,7 @@ const getUserRole = (user) => {
 // Инициализация авторизации
 export const initAuth = () => {
     // Показываем модальное окно
-    $('#authModal').show();
+    $('#authModal').css('display', 'flex');
     
     // Скрываем все страницы
     $('#mainPage, #ordersPage, #roomsPage').hide();
@@ -151,7 +151,7 @@ export const register = async (userData) => {
 
 // Полная инициализация с переключением форм
 export const initAuthWithRegister = () => {
-    $('#authModal').show();
+    $('#authModal').css('display', 'flex');
     $('#mainPage, #ordersPage, #roomsPage').hide();
     $('#userInfo').hide();
     

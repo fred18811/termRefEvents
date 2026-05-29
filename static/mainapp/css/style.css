@@ -846,7 +846,8 @@ nav {
     align-items: center;
     justify-content: space-between;
     gap: 0.5rem;
-    white-space: nowrap;
+    white-space: normal;
+    text-align: left;
 }
 
 .equipment-quantity-badge {
