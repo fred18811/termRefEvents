@@ -999,11 +999,11 @@ def get_room_details(request):
         }, status=400)
         
 
-@login_required        
+@login_required
 @csrf_exempt
 @require_http_methods(["POST"])
 def export_orders_to_excel(request):
-    """Экспорт выбранных заявок в Excel с поддержкой слотов (локация объединена для всего заказа)"""
+    """Экспорт выбранных заявок в Excel (с учетом прав просмотра)"""
     try:
         data = json.loads(request.body)
         order_ids = data.get('order_ids', [])
@@ -1011,6 +1011,7 @@ def export_orders_to_excel(request):
         print("=" * 60)
         print("ЭКСПОРТ ЗАЯВОК В EXCEL")
         print(f"ID заявок: {order_ids}")
+        print(f"Пользователь: {request.user.username}")
         
         if not order_ids:
             return JsonResponse({
@@ -1018,19 +1019,27 @@ def export_orders_to_excel(request):
                 'error': 'Не выбраны заявки для экспорта'
             }, status=400)
         
-        applications = Application.objects.filter(id__in=order_ids, id_user=request.user).order_by('-created_at')
+        # Проверяем права пользователя
+        from .views_helpers import user_can_view_all_applications
+        
+        if user_can_view_all_applications(request.user):
+            # Пользователь может видеть все заявки
+            applications = Application.objects.filter(id__in=order_ids).order_by('-created_at')
+        else:
+            # Обычный пользователь - только свои заявки
+            applications = Application.objects.filter(id__in=order_ids, id_user=request.user).order_by('-created_at')
         
         if not applications.exists():
             return JsonResponse({
                 'success': False,
-                'error': 'Заявки не найдены или не принадлежат вам'
+                'error': 'Заявки не найдены или у вас нет прав для их просмотра'
             }, status=400)
         
         wb = openpyxl.Workbook()
         ws = wb.active
         ws.title = "Заявки"
         
-        # Стили
+        # Стили (как в вашей существующей функции)
         header_font = Font(bold=True, color="FFFFFF", size=11)
         header_fill = PatternFill(start_color="1a56db", end_color="1a56db", fill_type="solid")
         header_alignment = Alignment(horizontal="center", vertical="center")
@@ -1064,6 +1073,11 @@ def export_orders_to_excel(request):
             ws.cell(row=current_row, column=2, value=app.created_at.strftime('%d.%m.%Y %H:%M') if app.created_at else "-")
             ws.cell(row=current_row, column=3, value="Статус:").font = Font(bold=True)
             ws.cell(row=current_row, column=4, value=dict(Application._meta.get_field('status').choices).get(app.status, app.status))
+            
+            # Добавляем информацию о пользователе (для админов)
+            if user_can_view_all_applications(request.user):
+                ws.cell(row=current_row, column=5, value="Пользователь:").font = Font(bold=True)
+                ws.cell(row=current_row, column=6, value=app.id_user.username)
             current_row += 1
             
             if app.comment:
@@ -1082,7 +1096,7 @@ def export_orders_to_excel(request):
                     'common_equipment_location__id_types_equipments'
                 ).all()
                 
-                # Разделяем на обычные и слоты
+                # Разделяем на обычные и слоты (как в вашей существующей функции)
                 regular_items = []
                 slot_groups = []
                 
@@ -1165,7 +1179,7 @@ def export_orders_to_excel(request):
                 location_name = order.id_location.name if order.id_location else "Не указана"
                 table_start_row = current_row
                 
-                # ========== ФУНКЦИЯ ДЛЯ ПРЕОБРАЗОВАНИЯ ОБОРУДОВАНИЯ В МАТРИЦУ ==========
+                # Функция для преобразования оборудования в матрицу
                 def equipment_to_matrix(equipment_items):
                     if not equipment_items:
                         return []
@@ -1191,7 +1205,7 @@ def export_orders_to_excel(request):
                     
                     max_rows = max((len(types_data.get(t, [])) for t in types_list), default=0)
                     
-                    rows = []
+                    rows_data = []
                     for row_idx in range(max_rows):
                         row_cells = []
                         for type_name in types_list:
@@ -1201,11 +1215,11 @@ def export_orders_to_excel(request):
                                 row_cells.append(f"{eq['name']} - {eq['quantity']} шт.")
                             else:
                                 row_cells.append("—")
-                        rows.append(row_cells)
+                        rows_data.append(row_cells)
                     
-                    return rows
+                    return rows_data
                 
-                # ========== СОБИРАЕМ ВСЕ СТРОКИ ТАБЛИЦЫ ==========
+                # Собираем все строки таблицы
                 all_table_rows = []
                 
                 # Обычные позиции
@@ -1224,16 +1238,13 @@ def export_orders_to_excel(request):
                     for row_cells in slot_matrix:
                         all_table_rows.append({'type': 'equipment', 'cells': row_cells})
                 
-                # ========== ВЫВОД ВСЕХ СТРОК ==========
-                # Сначала записываем все строки, заполняя колонку A пустыми значениями
+                # Вывод всех строк
                 for row_data in all_table_rows:
                     if row_data['type'] == 'slot_header':
-                        # Заголовок слота: колонка A пустая (будет объединена позже)
                         empty_cell = ws.cell(row=current_row, column=1, value="")
                         empty_cell.border = thin_border
                         empty_cell.fill = location_fill
                         
-                        # Объединяем колонки со 2 по последнюю
                         ws.merge_cells(f'B{current_row}:{last_col_letter}{current_row}')
                         slot_cell = ws.cell(row=current_row, column=2, value=row_data['text'])
                         slot_cell.font = slot_header_font
@@ -1242,12 +1253,10 @@ def export_orders_to_excel(request):
                         slot_cell.border = thin_border
                         current_row += 1
                     else:
-                        # Строка с оборудованием: колонка A пустая (будет объединена позже)
                         empty_cell = ws.cell(row=current_row, column=1, value="")
                         empty_cell.border = thin_border
                         empty_cell.fill = location_fill
                         
-                        # Колонки типов
                         for col_idx, cell_value in enumerate(row_data['cells'], start=2):
                             if cell_value == "—":
                                 cell = ws.cell(row=current_row, column=col_idx, value=cell_value)
@@ -1260,25 +1269,24 @@ def export_orders_to_excel(request):
                         
                         current_row += 1
                 
-                # ========== ЗАПОЛНЯЕМ ПЕРВУЮ СТРОКУ ЛОКАЦИЕЙ ==========
-                # После того как все строки записаны, ставим название локации в первую ячейку
+                # Заполняем первую строку локацией
                 first_data_row = table_start_row
-                location_cell = ws.cell(row=first_data_row, column=1, value=location_name)
-                location_cell.alignment = left_alignment
-                location_cell.border = thin_border
-                location_cell.fill = location_fill
-                location_cell.font = Font(bold=True)
-                
-                # ========== ОБЪЕДИНЯЕМ ЯЧЕЙКИ ЛОКАЦИИ ДЛЯ ВСЕГО ЗАКАЗА ==========
-                if current_row > table_start_row + 1:
-                    ws.merge_cells(
-                        start_row=table_start_row,
-                        start_column=1,
-                        end_row=current_row - 1,
-                        end_column=1
-                    )
-                    merged_cell = ws.cell(row=table_start_row, column=1)
-                    merged_cell.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
+                if current_row > table_start_row:
+                    location_cell = ws.cell(row=first_data_row, column=1, value=location_name)
+                    location_cell.alignment = left_alignment
+                    location_cell.border = thin_border
+                    location_cell.fill = location_fill
+                    location_cell.font = Font(bold=True)
+                    
+                    if current_row > table_start_row + 1:
+                        ws.merge_cells(
+                            start_row=table_start_row,
+                            start_column=1,
+                            end_row=current_row - 1,
+                            end_column=1
+                        )
+                        merged_cell = ws.cell(row=table_start_row, column=1)
+                        merged_cell.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
                 
                 current_row += 2
             
@@ -1287,6 +1295,7 @@ def export_orders_to_excel(request):
         # Настройка ширины колонок
         ws.column_dimensions['A'].width = 35
         
+        # Определяем максимальное количество типов для ширины колонок
         max_types_count = 0
         for app in applications:
             for order in Order.objects.filter(id_application=app):

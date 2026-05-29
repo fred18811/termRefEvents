@@ -1,7 +1,7 @@
 'use strict';
 
 import { state } from './state.js';
-import { escapeHtml, formatDate, showNotification, debounce, formatDateTimeForDisplay, convertToServerDateFormat   } from './utils.js';
+import { escapeHtml, formatDate, showNotification, debounce, convertToServerDateFormat   } from './utils.js';
 import { api } from './api.js';
 import { showConfirm } from './modal.js';
 
@@ -2321,7 +2321,7 @@ export const exportOrdersToExcel = async () => {
     const orderIds = Array.from(state.selectedOrders);
     console.log('Экспорт заявок:', orderIds);
     
-    $('#exportOrdersBtn').prop('disabled', true).text('<i class="fa fa-hourglass-half" aria-hidden="true"></i> Экспорт...');
+    $('#exportOrdersBtn').prop('disabled', true).text('Экспорт...');
     
     try {
         // Получаем CSRF токен
