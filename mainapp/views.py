@@ -1003,7 +1003,7 @@ def get_room_details(request):
 @csrf_exempt
 @require_http_methods(["POST"])
 def export_orders_to_excel(request):
-    """Экспорт выбранных заявок в Excel (с учетом прав просмотра)"""
+    """Экспорт выбранных заявок в Excel с учетом согласования"""
     try:
         data = json.loads(request.body)
         order_ids = data.get('order_ids', [])
@@ -1023,10 +1023,8 @@ def export_orders_to_excel(request):
         from .views_helpers import user_can_view_all_applications
         
         if user_can_view_all_applications(request.user):
-            # Пользователь может видеть все заявки
             applications = Application.objects.filter(id__in=order_ids).order_by('-created_at')
         else:
-            # Обычный пользователь - только свои заявки
             applications = Application.objects.filter(id__in=order_ids, id_user=request.user).order_by('-created_at')
         
         if not applications.exists():
@@ -1039,7 +1037,7 @@ def export_orders_to_excel(request):
         ws = wb.active
         ws.title = "Заявки"
         
-        # Стили (как в вашей существующей функции)
+        # Стили
         header_font = Font(bold=True, color="FFFFFF", size=11)
         header_fill = PatternFill(start_color="1a56db", end_color="1a56db", fill_type="solid")
         header_alignment = Alignment(horizontal="center", vertical="center")
@@ -1048,6 +1046,7 @@ def export_orders_to_excel(request):
         location_fill = PatternFill(start_color="E6F0FA", end_color="E6F0FA", fill_type="solid")
         slot_header_fill = PatternFill(start_color="FFA500", end_color="FFA500", fill_type="solid")
         slot_header_font = Font(bold=True, color="FFFFFF", size=10)
+        agreed_fill = PatternFill(start_color="D4EDDA", end_color="D4EDDA", fill_type="solid")  # Зеленый для согласованных
         
         thin_border = Border(
             left=Side(style='thin'),
@@ -1074,7 +1073,6 @@ def export_orders_to_excel(request):
             ws.cell(row=current_row, column=3, value="Статус:").font = Font(bold=True)
             ws.cell(row=current_row, column=4, value=dict(Application._meta.get_field('status').choices).get(app.status, app.status))
             
-            # Добавляем информацию о пользователе (для админов)
             if user_can_view_all_applications(request.user):
                 ws.cell(row=current_row, column=5, value="Пользователь:").font = Font(bold=True)
                 ws.cell(row=current_row, column=6, value=app.id_user.username)
@@ -1096,11 +1094,26 @@ def export_orders_to_excel(request):
                     'common_equipment_location__id_types_equipments'
                 ).all()
                 
-                # Разделяем на обычные и слоты (как в вашей существующей функции)
+                # Разделяем на обычные и слоты
                 regular_items = []
                 slot_groups = []
                 
                 for item in items:
+                    # Определяем итоговое количество (с учетом согласования)
+                    if item.is_agreed and item.can_provide > 0:
+                        final_quantity = item.can_provide
+                        is_agreed = True
+                    else:
+                        final_quantity = item.quantity
+                        is_agreed = False
+                    
+                    item_data = {
+                        'item': item,
+                        'final_quantity': final_quantity,
+                        'is_agreed': is_agreed,
+                        'original_quantity': item.quantity
+                    }
+                    
                     if item.is_slot:
                         existing = None
                         for sg in slot_groups:
@@ -1108,28 +1121,30 @@ def export_orders_to_excel(request):
                                 existing = sg
                                 break
                         if existing:
-                            existing['items'].append(item)
+                            existing['items'].append(item_data)
                         else:
                             slot_groups.append({
                                 'start': item.slot_date_start,
                                 'end': item.slot_date_end,
-                                'items': [item]
+                                'items': [item_data]
                             })
                     else:
-                        regular_items.append(item)
+                        regular_items.append(item_data)
                 
                 slot_groups.sort(key=lambda x: x['start'])
                 
                 # Собираем все типы оборудования
                 all_types = set()
-                for item in regular_items:
+                for item_data in regular_items:
+                    item = item_data['item']
                     if item.equipment_location:
                         all_types.add(item.equipment_location.id_types_equipments.name)
                     else:
                         all_types.add(item.common_equipment_location.id_types_equipments.name)
                 
                 for slot_group in slot_groups:
-                    for item in slot_group['items']:
+                    for item_data in slot_group['items']:
+                        item = item_data['item']
                         if item.equipment_location:
                             all_types.add(item.equipment_location.id_types_equipments.name)
                         else:
@@ -1179,13 +1194,18 @@ def export_orders_to_excel(request):
                 location_name = order.id_location.name if order.id_location else "Не указана"
                 table_start_row = current_row
                 
-                # Функция для преобразования оборудования в матрицу
+                # Функция для преобразования оборудования в матрицу (с учетом согласования)
                 def equipment_to_matrix(equipment_items):
                     if not equipment_items:
                         return []
                     
                     types_data = {}
-                    for item in equipment_items:
+                    for item_data in equipment_items:
+                        item = item_data['item']
+                        final_qty = item_data['final_quantity']
+                        is_agreed = item_data['is_agreed']
+                        original_qty = item_data['original_quantity']
+                        
                         if item.equipment_location:
                             type_name = item.equipment_location.id_types_equipments.name
                             equipment_name = item.equipment_location.id_equipments.name
@@ -1195,9 +1215,20 @@ def export_orders_to_excel(request):
                         
                         if type_name not in types_data:
                             types_data[type_name] = []
+                        
+                        # Добавляем информацию о согласовании в название
+                        if is_agreed and final_qty != original_qty:
+                            display_name = f"{equipment_name} (согласовано: {final_qty} из {original_qty})"
+                        elif is_agreed:
+                            display_name = f"{equipment_name} ✅ (согласовано: {final_qty})"
+                        else:
+                            display_name = f"{equipment_name} (запрошено: {final_qty})"
+                        
                         types_data[type_name].append({
-                            'name': equipment_name,
-                            'quantity': item.quantity
+                            'name': display_name,
+                            'quantity': final_qty,
+                            'is_agreed': is_agreed,
+                            'original_quantity': original_qty
                         })
                     
                     for t_name in types_data:
@@ -1212,9 +1243,22 @@ def export_orders_to_excel(request):
                             equipment_list = types_data.get(type_name, [])
                             if row_idx < len(equipment_list):
                                 eq = equipment_list[row_idx]
-                                row_cells.append(f"{eq['name']} - {eq['quantity']} шт.")
+                                # Форматируем ячейку с учетом согласования
+                                if eq['is_agreed'] and eq['quantity'] != eq.get('original_quantity', eq['quantity']):
+                                    cell_value = f"{eq['name']}"
+                                elif eq['is_agreed']:
+                                    cell_value = f"{eq['name']}"
+                                else:
+                                    cell_value = f"{eq['name']}"
+                                row_cells.append({
+                                    'value': cell_value,
+                                    'is_agreed': eq['is_agreed']
+                                })
                             else:
-                                row_cells.append("—")
+                                row_cells.append({
+                                    'value': "—",
+                                    'is_agreed': False
+                                })
                         rows_data.append(row_cells)
                     
                     return rows_data
@@ -1257,15 +1301,18 @@ def export_orders_to_excel(request):
                         empty_cell.border = thin_border
                         empty_cell.fill = location_fill
                         
-                        for col_idx, cell_value in enumerate(row_data['cells'], start=2):
-                            if cell_value == "—":
-                                cell = ws.cell(row=current_row, column=col_idx, value=cell_value)
+                        for col_idx, cell_data in enumerate(row_data['cells'], start=2):
+                            if cell_data['value'] == "—":
+                                cell = ws.cell(row=current_row, column=col_idx, value=cell_data['value'])
                                 cell.alignment = center_alignment
                                 cell.border = thin_border
                             else:
-                                cell = ws.cell(row=current_row, column=col_idx, value=cell_value)
+                                cell = ws.cell(row=current_row, column=col_idx, value=cell_data['value'])
                                 cell.alignment = left_alignment
                                 cell.border = thin_border
+                                # Подсветка согласованных позиций
+                                if cell_data.get('is_agreed'):
+                                    cell.fill = agreed_fill
                         
                         current_row += 1
                 
@@ -1310,7 +1357,7 @@ def export_orders_to_excel(request):
         
         for col_idx in range(2, max_types_count + 3):
             col_letter = openpyxl.utils.get_column_letter(col_idx)
-            ws.column_dimensions[col_letter].width = 35
+            ws.column_dimensions[col_letter].width = 40  # Немного шире для отображения статуса согласования
         
         buffer = BytesIO()
         wb.save(buffer)
