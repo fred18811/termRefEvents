@@ -1,7 +1,8 @@
-Django==6.0.3
+Django==6.0.1
 Pillow==12.2.0
 et-xmlfile==2.0.0
 openpyxl==3.1.5
-djangorestframework==6.0.3
-django-cors-headers==3.11.1
-ckeditor
+djangorestframework==3.17.1
+django-cors-headers==4.9.0
+django-ckeditor==6.7.3
+python-dotenv

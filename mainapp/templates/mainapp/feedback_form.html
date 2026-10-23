@@ -8,8 +8,9 @@
     <link rel="stylesheet" href="{% static 'mainapp/css/googleapis_css2.css' %}">
     <link rel="stylesheet" href="{% static 'mainapp/css/style.css' %}">
     <style>
+        /* --- Общие стили контейнера --- */
         .feedback-form-container {
-            max-width: 600px;
+            max-width: 1000px;
             margin: 2rem auto;
             background: white;
             border-radius: 28px;
@@ -31,55 +32,174 @@
             background: linear-gradient(135deg, #0039a6, #da291c);
             color: white;
             display: inline-block;
-            padding: 0.3rem 1rem;
+            padding: 0.3rem 1.5rem;
             border-radius: 40px;
+            font-size: 0.95rem;
+            font-weight: 600;
+        }
+
+        /* --- Таблица оценок --- */
+        .feedback-table-wrapper {
+            overflow-x: auto;
+            margin-bottom: 2rem;
+            border-radius: 16px;
+            border: 1px solid #e2e8f0;
+        }
+
+        .feedback-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.95rem;
+            min-width: 600px;
+        }
+
+        .feedback-table thead th {
+            background: #f1f5f9;
+            color: #0039a6;
+            font-weight: 700;
+            padding: 1rem 0.75rem;
+            text-align: left;
+            border-bottom: 2px solid #e2e8f0;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        .feedback-table thead th:first-child {
+            min-width: 200px;
+            width: 30%;
+        }
+
+        .feedback-table thead th:not(:first-child) {
+            text-align: center;
+            min-width: 120px;
+        }
+
+        .feedback-table tbody td {
+            padding: 0.75rem;
+            border-bottom: 1px solid #f1f5f9;
+            vertical-align: middle;
+        }
+
+        .feedback-table tbody td:first-child {
+            font-weight: 600;
+            color: #1e293b;
+            background: #fafbfc;
+        }
+
+        .feedback-table tbody td:not(:first-child) {
+            text-align: center;
+        }
+
+        .feedback-table tbody tr:hover {
+            background: #f8fafc;
+        }
+
+        .feedback-table tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+        .feedback-table .question-text {
+            display: block;
             font-size: 0.9rem;
+            line-height: 1.4;
+            color: #1e293b;
         }
-        
-        .rating-stars {
+
+        .feedback-table .question-number {
+            display: inline-block;
+            background: #0039a6;
+            color: white;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            text-align: center;
+            line-height: 24px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            margin-right: 0.5rem;
+            flex-shrink: 0;
+        }
+
+        .feedback-table .question-header {
             display: flex;
+            align-items: flex-start;
             gap: 0.5rem;
-            margin: 0.5rem 0 1rem;
-            justify-content: center;
         }
-        
+
+        /* --- Звездный рейтинг в таблице --- */
+        .rating-stars {
+            display: inline-flex;
+            gap: 0.15rem;
+            justify-content: center;
+            align-items: center;
+        }
+
         .rating-star {
-            font-size: 2.5rem;
+            font-size: 1.5rem;
             cursor: pointer;
             color: #cbd5e1;
-            transition: all 0.2s ease;
+            transition: all 0.15s ease;
+            line-height: 1;
+            user-select: none;
         }
-        
+
         .rating-star:hover,
         .rating-star.active {
             color: #ffc107;
-            transform: scale(1.1);
+            transform: scale(1.15);
         }
-        
-        .rating-hint {
-            text-align: center;
-            font-size: 0.8rem;
+
+        .rating-star.active {
+            text-shadow: 0 0 8px rgba(255, 193, 7, 0.3);
+        }
+
+        .rating-value {
+            display: inline-block;
+            min-width: 20px;
+            font-size: 0.85rem;
+            font-weight: 700;
             color: #64748b;
-            margin-bottom: 1rem;
+            margin-left: 0.25rem;
         }
-        
+
+        .rating-error {
+            color: #da291c;
+            font-size: 0.7rem;
+            display: none;
+            margin-top: 0.15rem;
+        }
+
+        .cell-with-error {
+            position: relative;
+        }
+
+        .cell-with-error .rating-error {
+            position: absolute;
+            bottom: -18px;
+            left: 50%;
+            transform: translateX(-50%);
+            white-space: nowrap;
+            background: #fff5f5;
+            padding: 0 0.5rem;
+            border-radius: 4px;
+            font-size: 0.65rem;
+        }
+
+        /* --- Общие элементы формы --- */
         .form-group {
             margin-bottom: 1.5rem;
         }
-        
         .form-group label {
             display: block;
             font-weight: 700;
             color: #0039a6;
             margin-bottom: 0.5rem;
         }
-        
         .form-group label .required {
             color: #da291c;
             margin-left: 0.25rem;
         }
-        
-        .form-group input,
         .form-group textarea {
             width: 100%;
             padding: 0.85rem;
@@ -88,34 +208,37 @@
             font-family: inherit;
             font-size: 0.95rem;
             transition: all 0.3s ease;
+            resize: vertical;
         }
-        
-        .form-group input:focus,
         .form-group textarea:focus {
             outline: none;
             border-color: #0039a6;
             box-shadow: 0 0 0 3px rgba(0, 57, 166, 0.1);
         }
-        
-        .form-group input.error,
         .form-group textarea.error {
             border-color: #da291c;
             background: #fff5f5;
         }
-        
+
         .error-message {
             color: #da291c;
             font-size: 0.75rem;
             margin-top: 0.25rem;
             display: none;
         }
-        
+
+        .form-hint {
+            font-size: 0.8rem;
+            color: #64748b;
+            margin-bottom: 0.5rem;
+        }
+
+        /* --- Кнопки --- */
         .form-actions {
             display: flex;
             gap: 1rem;
             margin-top: 2rem;
         }
-        
         .btn-submit {
             flex: 2;
             background: linear-gradient(135deg, #28a745, #1e7e34);
@@ -128,12 +251,10 @@
             cursor: pointer;
             transition: all 0.3s ease;
         }
-        
         .btn-submit:hover {
             transform: translateY(-2px);
             box-shadow: 0 8px 20px rgba(40, 167, 69, 0.3);
         }
-        
         .btn-cancel {
             flex: 1;
             background: #6c757d;
@@ -148,12 +269,12 @@
             text-decoration: none;
             text-align: center;
         }
-        
         .btn-cancel:hover {
             background: #5a6268;
             transform: translateY(-2px);
         }
-        
+
+        /* --- Загрузка и уведомления --- */
         .loading-overlay {
             position: fixed;
             top: 0;
@@ -166,7 +287,6 @@
             align-items: center;
             z-index: 1000;
         }
-        
         .loading-spinner {
             background: white;
             padding: 1.5rem;
@@ -176,7 +296,6 @@
             align-items: center;
             gap: 1rem;
         }
-        
         .loading-spinner::before {
             content: '';
             width: 40px;
@@ -186,11 +305,10 @@
             border-radius: 50%;
             animation: spin 0.8s linear infinite;
         }
-        
         @keyframes spin {
             to { transform: rotate(360deg); }
         }
-        
+
         .notification {
             position: fixed;
             top: 20px;
@@ -201,28 +319,77 @@
             font-weight: 600;
             z-index: 1100;
             animation: slideIn 0.3s ease;
+            max-width: 400px;
         }
-        
         .notification.success { background: linear-gradient(135deg, #28a745, #1e7e34); }
         .notification.error { background: linear-gradient(135deg, #da291c, #b52015); }
-        
         @keyframes slideIn {
             from { transform: translateX(100px); opacity: 0; }
             to { transform: translateX(0); opacity: 1; }
         }
-        
-        @media (max-width: 640px) {
+
+        .loading-departments {
+            text-align: center;
+            padding: 3rem;
+            color: #64748b;
+        }
+        .loading-departments .spinner {
+            display: inline-block;
+            width: 30px;
+            height: 30px;
+            border: 3px solid #e2e8f0;
+            border-top-color: #0039a6;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-bottom: 1rem;
+        }
+
+        .no-departments {
+            text-align: center;
+            padding: 3rem;
+            color: #64748b;
+        }
+        .no-departments .icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+        }
+
+        /* --- Адаптив --- */
+        @media (max-width: 768px) {
             .feedback-form-container {
-                margin: 1rem;
-                padding: 1.5rem;
+                margin: 0.5rem;
+                padding: 1rem;
             }
-            
             .form-actions {
                 flex-direction: column;
             }
-            
             .rating-star {
-                font-size: 1.8rem;
+                font-size: 1.2rem;
+            }
+            .feedback-table {
+                font-size: 0.85rem;
+                min-width: 400px;
+            }
+            .feedback-table thead th:first-child {
+                min-width: 120px;
+            }
+            .feedback-table thead th:not(:first-child) {
+                min-width: 80px;
+            }
+            .feedback-table .question-text {
+                font-size: 0.8rem;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .rating-star {
+                font-size: 1rem;
+            }
+            .feedback-table thead th {
+                padding: 0.5rem;
+            }
+            .feedback-table tbody td {
+                padding: 0.4rem 0.3rem;
             }
         }
     </style>
@@ -231,40 +398,25 @@
     <div class="feedback-form-container">
         <div class="feedback-title">
             <h1>📝 Обратная связь</h1>
-            <div class="application-name" id="applicationName"></div>
+            <div class="application-name" id="applicationName">Загрузка...</div>
         </div>
         
         <form id="feedbackForm">
             {% csrf_token %}
-            <input type="hidden" id="applicationId" name="application_id">
+            <input type="hidden" id="applicationId" name="application_id" value="{{ application_id }}">
             
-            <div class="form-group">
-                <label>⭐ Как прошло мероприятие? <span class="required">*</span></label>
-                <div class="rating-stars" id="ratingStars">
-                    <span class="rating-star" data-value="1">★</span>
-                    <span class="rating-star" data-value="2">★</span>
-                    <span class="rating-star" data-value="3">★</span>
-                    <span class="rating-star" data-value="4">★</span>
-                    <span class="rating-star" data-value="5">★</span>
-                    <span class="rating-star" data-value="6">★</span>
-                    <span class="rating-star" data-value="7">★</span>
-                    <span class="rating-star" data-value="8">★</span>
-                    <span class="rating-star" data-value="9">★</span>
-                    <span class="rating-star" data-value="10">★</span>
+            <!-- Контейнер для таблицы оценок -->
+            <div id="departmentsContainer">
+                <div class="loading-departments">
+                    <div class="spinner"></div>
+                    <p>Загрузка подразделений...</p>
                 </div>
-                <div class="rating-hint" id="ratingHint">Нажмите на звезду, чтобы оценить (1-10)</div>
-                <div class="error-message" id="ratingError">Пожалуйста, оцените мероприятие</div>
             </div>
-            
-            <div class="form-group">
-                <label>💬 Как прошло мероприятие? <span class="required">*</span></label>
-                <textarea id="eventFeedback" rows="3" placeholder="Расскажите, как прошло мероприятие, что понравилось, что можно улучшить..."></textarea>
-                <div class="error-message" id="eventFeedbackError">Пожалуйста, напишите отзыв о проведении мероприятия</div>
-            </div>
-            
+
+            <!-- Общий комментарий -->
             <div class="form-group">
                 <label>📝 Дополнительный комментарий <span class="required">*</span></label>
-                <textarea id="comment" rows="3" placeholder="Оставьте любой дополнительный комментарий или пожелание..."></textarea>
+                <textarea id="comment" name="comment" rows="3" placeholder="Оставьте любой дополнительный комментарий или пожелание..."></textarea>
                 <div class="error-message" id="commentError">Пожалуйста, оставьте комментарий</div>
             </div>
             
@@ -282,145 +434,371 @@
     </div>
     
     <script>
-        const applicationId = {{ application_id }};
-        const applicationName = "{{ application_name|escapejs }}";
-        
-        // Показываем название заявки
-        document.getElementById('applicationName').textContent = applicationName;
-        document.getElementById('applicationId').value = applicationId;
-        
-        // Система звездного рейтинга
-        let selectedRating = 0;
-        const stars = document.querySelectorAll('.rating-star');
-        const ratingHint = document.getElementById('ratingHint');
-        
-        stars.forEach(star => {
-            star.addEventListener('click', function() {
-                selectedRating = parseInt(this.dataset.value);
-                updateStars(selectedRating);
-                ratingHint.textContent = `Оценка: ${selectedRating} из 10`;
-                document.getElementById('ratingError').style.display = 'none';
-            });
-            
-            star.addEventListener('mouseenter', function() {
-                const value = parseInt(this.dataset.value);
-                updateStars(value);
-            });
-            
-            star.addEventListener('mouseleave', function() {
-                updateStars(selectedRating);
-            });
-        });
-        
-        function updateStars(rating) {
-            stars.forEach(star => {
-                const value = parseInt(star.dataset.value);
-                if (value <= rating) {
-                    star.classList.add('active');
-                } else {
-                    star.classList.remove('active');
-                }
-            });
-        }
-        
-        // Валидация
-        function validateForm() {
-            let isValid = true;
-            
-            if (selectedRating === 0) {
-                document.getElementById('ratingError').style.display = 'block';
-                isValid = false;
-            } else {
-                document.getElementById('ratingError').style.display = 'none';
-            }
-            
-            const eventFeedback = document.getElementById('eventFeedback').value.trim();
-            if (!eventFeedback) {
-                document.getElementById('eventFeedbackError').style.display = 'block';
-                document.getElementById('eventFeedback').classList.add('error');
-                isValid = false;
-            } else {
-                document.getElementById('eventFeedbackError').style.display = 'none';
-                document.getElementById('eventFeedback').classList.remove('error');
-            }
-            
-            const comment = document.getElementById('comment').value.trim();
-            if (!comment) {
-                document.getElementById('commentError').style.display = 'block';
-                document.getElementById('comment').classList.add('error');
-                isValid = false;
-            } else {
-                document.getElementById('commentError').style.display = 'none';
-                document.getElementById('comment').classList.remove('error');
-            }
-            
-            return isValid;
-        }
-        
-        function showNotification(message, type) {
-            const notification = document.createElement('div');
-            notification.className = `notification ${type}`;
-            notification.textContent = message;
-            document.body.appendChild(notification);
-            
-            setTimeout(() => {
-                notification.remove();
-            }, 4000);
-        }
-        
-        // Отправка формы
-        document.getElementById('feedbackForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            
-            if (!validateForm()) {
-                showNotification('Пожалуйста, заполните все обязательные поля', 'error');
-                return;
-            }
-            
+        (function() {
+            'use strict';
+
+            // --- DOM элементы ---
+            const departmentsContainer = document.getElementById('departmentsContainer');
+            const applicationId = parseInt('{{ application_id }}', 10);
+            const applicationName = "{{ application_name|escapejs }}";
+            const form = document.getElementById('feedbackForm');
             const loadingOverlay = document.getElementById('loadingOverlay');
-            loadingOverlay.style.display = 'flex';
-            
-            const eventFeedback = document.getElementById('eventFeedback').value.trim();
-            const comment = document.getElementById('comment').value.trim();
-            
-            try {
-                const response = await fetch('/api/feedback/event-feedback/', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
-                    },
-                    credentials: 'include',
-                    body: JSON.stringify({
-                        application_id: applicationId,
-                        event_rating: selectedRating,
-                        event_feedback: eventFeedback,
-                        comment: comment
-                    })
+
+            // Показываем название заявки
+            document.getElementById('applicationName').textContent = applicationName;
+            document.getElementById('applicationId').value = applicationId;
+
+            // --- Вопросы (общие для всех подразделений) ---
+            const QUESTIONS = [
+                'Насколько оперативно и своевременно подразделение реагировало на запросы организатора?',
+                'Насколько профессионально и компетентно сотрудники подразделения решали поставленные задачи?',
+                'Насколько комфортно и понятно было взаимодействие с сотрудниками подразделения?',
+                'Насколько вы удовлетворены работой подразделения в целом?'
+            ];
+
+            // --- Функция экранирования HTML ---
+            function escapeHtml(text) {
+                if (!text) return '';
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            }
+
+            // --- Функция для создания звездного рейтинга в ячейке ---
+            function initStarRating(cell, departmentId, questionIndex) {
+                const stars = cell.querySelectorAll('.rating-star');
+                const valueDisplay = cell.querySelector('.rating-value');
+                const errorMsg = cell.querySelector('.rating-error');
+                let selectedRating = 0;
+
+                function updateStars(rating) {
+                    stars.forEach(star => {
+                        const value = parseInt(star.dataset.value, 10);
+                        star.classList.toggle('active', value <= rating);
+                    });
+                    if (valueDisplay) {
+                        valueDisplay.textContent = rating > 0 ? rating : '—';
+                    }
+                    // Скрываем ошибку при выборе
+                    if (errorMsg && rating > 0) {
+                        errorMsg.style.display = 'none';
+                    }
+                }
+
+                stars.forEach(star => {
+                    star.addEventListener('click', function(e) {
+                        e.stopPropagation();
+                        selectedRating = parseInt(this.dataset.value, 10);
+                        updateStars(selectedRating);
+                    });
+
+                    star.addEventListener('mouseenter', function() {
+                        const value = parseInt(this.dataset.value, 10);
+                        updateStars(value);
+                    });
+
+                    star.addEventListener('mouseleave', function() {
+                        updateStars(selectedRating);
+                    });
                 });
-                
-                const data = await response.json();
-                
-                if (data.success) {
+
+                // Возвращаем функцию для получения текущей оценки
+                return function getRating() {
+                    return selectedRating;
+                };
+            }
+
+            // --- Создание таблицы с подразделениями ---
+            function createFeedbackTable(departments) {
+                const wrapper = document.createElement('div');
+                wrapper.className = 'feedback-table-wrapper';
+
+                const table = document.createElement('table');
+                table.className = 'feedback-table';
+
+                // --- Заголовок таблицы ---
+                const thead = document.createElement('thead');
+                const headerRow = document.createElement('tr');
+
+                // Первая колонка - вопросы
+                const questionHeader = document.createElement('th');
+                questionHeader.textContent = 'Вопросы / Подразделения';
+                headerRow.appendChild(questionHeader);
+
+                // Колонки для каждого подразделения
+                departments.forEach(dept => {
+                    const th = document.createElement('th');
+                    th.textContent = dept.name;
+                    th.title = dept.name;
+                    headerRow.appendChild(th);
+                });
+
+                thead.appendChild(headerRow);
+                table.appendChild(thead);
+
+                // --- Тело таблицы ---
+                const tbody = document.createElement('tbody');
+
+                // Сохраняем геттеры для валидации
+                const ratingGetters = [];
+
+                QUESTIONS.forEach((question, qIndex) => {
+                    const row = document.createElement('tr');
+
+                    // Ячейка с вопросом
+                    const questionCell = document.createElement('td');
+                    questionCell.innerHTML = `
+                        <div class="question-header">
+                            <span class="question-number">${qIndex + 1}</span>
+                            <span class="question-text">${escapeHtml(question)}</span>
+                        </div>
+                    `;
+                    row.appendChild(questionCell);
+
+                    // Ячейки для каждого подразделения
+                    departments.forEach((dept, dIndex) => {
+                        const cell = document.createElement('td');
+                        cell.className = 'cell-with-error';
+                        cell.dataset.departmentId = dept.id;
+                        cell.dataset.questionIndex = qIndex;
+
+                        // Создаем звезды
+                        const starsContainer = document.createElement('div');
+                        starsContainer.className = 'rating-stars';
+
+                        for (let i = 1; i <= 5; i++) {
+                            const star = document.createElement('span');
+                            star.className = 'rating-star';
+                            star.dataset.value = i;
+                            star.textContent = '★';
+                            starsContainer.appendChild(star);
+                        }
+
+                        // Отображение выбранной оценки
+                        const valueDisplay = document.createElement('span');
+                        valueDisplay.className = 'rating-value';
+                        valueDisplay.textContent = '—';
+
+                        // Ошибка
+                        const errorMsg = document.createElement('div');
+                        errorMsg.className = 'rating-error';
+                        errorMsg.textContent = 'Оцените!';
+
+                        cell.appendChild(starsContainer);
+                        cell.appendChild(valueDisplay);
+                        cell.appendChild(errorMsg);
+
+                        // Инициализируем рейтинг
+                        const getRating = initStarRating(cell, dept.id, qIndex);
+                        
+                        // Сохраняем геттер с информацией о подразделении и вопросе
+                        ratingGetters.push({
+                            getRating: getRating,
+                            departmentId: dept.id,
+                            departmentName: dept.name,
+                            questionIndex: qIndex,
+                            cell: cell
+                        });
+
+                        row.appendChild(cell);
+                    });
+
+                    tbody.appendChild(row);
+                });
+
+                table.appendChild(tbody);
+                wrapper.appendChild(table);
+
+                // Сохраняем геттеры на wrapper для валидации
+                wrapper._ratingGetters = ratingGetters;
+
+                return wrapper;
+            }
+
+            // --- Загрузка подразделений с API ---
+            async function loadDepartments() {
+                try {
+                    const response = await fetch('/api/departments/');
+                    
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    
+                    const data = await response.json();
+
+                    if (!data.success || !data.departments || data.departments.length === 0) {
+                        departmentsContainer.innerHTML = `
+                            <div class="no-departments">
+                                <div class="icon">😕</div>
+                                <p>Нет подразделений для оценки</p>
+                            </div>
+                        `;
+                        return;
+                    }
+
+                    // Очищаем контейнер
+                    departmentsContainer.innerHTML = '';
+
+                    // Добавляем подсказку
+                    const hint = document.createElement('p');
+                    hint.className = 'form-hint';
+                    hint.innerHTML = '⭐ Оцените работу каждого подразделения по шкале от 1 до 5';
+                    departmentsContainer.appendChild(hint);
+
+                    // Создаем таблицу
+                    const table = createFeedbackTable(data.departments);
+                    departmentsContainer.appendChild(table);
+
+                } catch (error) {
+                    console.error('Ошибка загрузки подразделений:', error);
+                    departmentsContainer.innerHTML = `
+                        <div style="text-align:center; padding:2rem; color:#da291c;">
+                            <p>❌ Ошибка загрузки подразделений. Попробуйте обновить страницу.</p>
+                            <p style="font-size:0.8rem; margin-top:0.5rem; color:#64748b;">${escapeHtml(error.message)}</p>
+                        </div>
+                    `;
+                }
+            }
+
+            // --- Валидация формы ---
+            function validateForm() {
+                let isValid = true;
+
+                // Получаем все геттеры из таблицы
+                const tableWrapper = departmentsContainer.querySelector('.feedback-table-wrapper');
+                if (tableWrapper && tableWrapper._ratingGetters) {
+                    tableWrapper._ratingGetters.forEach(item => {
+                        const rating = item.getRating();
+                        const errorMsg = item.cell.querySelector('.rating-error');
+                        if (errorMsg) {
+                            if (rating === 0) {
+                                errorMsg.style.display = 'block';
+                                isValid = false;
+                            } else {
+                                errorMsg.style.display = 'none';
+                            }
+                        }
+                    });
+                }
+
+                // Проверяем общий комментарий
+                const comment = document.getElementById('comment').value.trim();
+                const commentError = document.getElementById('commentError');
+                if (!comment) {
+                    commentError.style.display = 'block';
+                    document.getElementById('comment').classList.add('error');
+                    isValid = false;
+                } else {
+                    commentError.style.display = 'none';
+                    document.getElementById('comment').classList.remove('error');
+                }
+
+                return isValid;
+            }
+
+            // --- Сбор данных для отправки ---
+            function collectFeedbackData() {
+                const departmentsData = [];
+                const tableWrapper = departmentsContainer.querySelector('.feedback-table-wrapper');
+
+                if (tableWrapper && tableWrapper._ratingGetters) {
+                    // Группируем оценки по подразделениям
+                    const deptMap = new Map();
+
+                    tableWrapper._ratingGetters.forEach(item => {
+                        const deptId = item.departmentId;
+                        const deptName = item.departmentName;
+                        const rating = item.getRating();
+
+                        if (!deptMap.has(deptId)) {
+                            deptMap.set(deptId, {
+                                department_id: deptId,
+                                department_name: deptName,
+                                ratings: []
+                            });
+                        }
+                        deptMap.get(deptId).ratings.push(rating);
+                    });
+
+                    // Преобразуем Map в массив
+                    deptMap.forEach((value) => {
+                        departmentsData.push(value);
+                    });
+                }
+
+                return {
+                    application_id: applicationId,
+                    departments: departmentsData,
+                    comment: document.getElementById('comment').value.trim()
+                };
+            }
+
+            // --- Отправка формы ---
+            async function submitFeedback(data) {
+                try {
+                    const response = await fetch('/api/feedback/event-feedback/', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                        },
+                        credentials: 'include',
+                        body: JSON.stringify(data)
+                    });
+
+                    const result = await response.json();
+                    return result;
+                } catch (error) {
+                    console.error('Ошибка отправки:', error);
+                    return { success: false, error: 'Ошибка соединения с сервером' };
+                }
+            }
+
+            // --- Показ уведомлений ---
+            function showNotification(message, type) {
+                const notification = document.createElement('div');
+                notification.className = `notification ${type}`;
+                notification.textContent = message;
+                document.body.appendChild(notification);
+                setTimeout(() => {
+                    notification.remove();
+                }, 4000);
+            }
+
+            // --- Обработчик отправки формы ---
+            form.addEventListener('submit', async (e) => {
+                e.preventDefault();
+
+                if (!validateForm()) {
+                    showNotification('Пожалуйста, оцените все подразделения и заполните комментарий', 'error');
+                    return;
+                }
+
+                const data = collectFeedbackData();
+                loadingOverlay.style.display = 'flex';
+
+                const result = await submitFeedback(data);
+
+                if (result.success) {
                     showNotification('Спасибо за обратную связь!', 'success');
                     setTimeout(() => {
                         window.location.href = '/';
                     }, 1500);
                 } else {
-                    showNotification(data.error || 'Ошибка при отправке', 'error');
+                    showNotification(result.error || 'Ошибка при отправке', 'error');
                     loadingOverlay.style.display = 'none';
                 }
-            } catch (error) {
-                console.error('Ошибка:', error);
-                showNotification('Ошибка соединения с сервером', 'error');
-                loadingOverlay.style.display = 'none';
-            }
-        });
-        
-        // Кнопка отмены
-        document.getElementById('cancelBtn').addEventListener('click', () => {
-            window.location.href = '/';
-        });
+            });
+
+            // --- Кнопка отмены ---
+            document.getElementById('cancelBtn').addEventListener('click', () => {
+                window.location.href = '/';
+            });
+
+            // --- Загружаем подразделения при старте ---
+            loadDepartments();
+
+        })();
     </script>
 </body>
 </html>

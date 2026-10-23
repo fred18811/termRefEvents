@@ -326,11 +326,30 @@ def create_feedback(request):
 
 @login_required
 @csrf_exempt
-@require_http_methods(["POST"])
+@require_http_methods(["GET", "POST"])
 def submit_event_feedback(request):
     """
     Отправка обратной связи по завершённому мероприятию
     """
+    
+     # Если это GET запрос - просто показываем страницу
+    if request.method == 'GET':
+        app_id = request.GET.get('application_id')
+        if not app_id:
+            return JsonResponse({'success': False, 'error': 'Не указана заявка'}, status=400)
+        
+        try:
+            application = Application.objects.get(id=app_id, id_user=request.user)
+            context = {
+                'application_id': application.id,
+                'application_name': application.name,
+            }
+            return render(request, 'mainapp/feedback_form.html', context)
+        except Application.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Заявка не найдена'}, status=404)
+    
+    # Если это POST - обрабатываем отправку
+    
     try:
         data = json.loads(request.body)
         
